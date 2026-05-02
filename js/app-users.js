@@ -356,7 +356,7 @@ const USRMGR = (() => {
           <div style="display:flex;flex-wrap:wrap;gap:6px;padding:10px;background:var(--bg3);border-radius:var(--r);border:1px solid var(--border)" id="mEmpresasChips">
             ${DATA.state.empresas.map(e => {
               const clr = DATA.getEmpresaColor(e);
-              return `<div class="chip active" data-emp="${e}" style="--chip-r:${clr.r};--chip-g:${clr.g};--chip-b:${clr.b}" onclick="this.classList.toggle('active')">${e}</div>`;
+              return `<div class="chip active" data-emp="${e}" style="--chip-r:${clr.r};--chip-g:${clr.g};--chip-b:${clr.b}" onclick="this.classList.toggle('active');USRMGR.refreshBasesSelect('mEmpresasChips','mBase','')">${e}</div>`;
             }).join('')}
           </div>
           <p style="font-size:11px;color:var(--text3);margin-top:4px">Solo se mostrarán datos de las empresas seleccionadas</p>
@@ -379,6 +379,17 @@ const USRMGR = (() => {
     if (!input) return;
     input.type = input.type === 'password' ? 'text' : 'password';
     btn.textContent = input.type === 'password' ? '👁' : '🙈';
+  }
+
+  // Recalcula el <select> de bases segun las empresas activas
+  function refreshBasesSelect(chipsId, selectId, currentBase) {
+    const empresasActivas = [...document.querySelectorAll(`#${chipsId} .chip.active`)].map(c => c.dataset.emp);
+    const bases = [...new Set(empresasActivas.flatMap(e => DATA.getSel("base", e)))];
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const valorActual = sel.value || currentBase || "";
+    sel.innerHTML = `<option value="">— Sin base específica —</option>` +
+      bases.map(b => `<option value="${b}"${b === valorActual ? " selected" : ""}>${b}</option>`).join("");
   }
 
   async function doCreate() {
@@ -461,7 +472,7 @@ const USRMGR = (() => {
             ${DATA.state.empresas.map(e => {
               const clr  = DATA.getEmpresaColor(e);
               const isOn = (u.empresas || []).includes(e);
-              return `<div class="chip${isOn?' active':''}" data-emp="${e}" style="--chip-r:${clr.r};--chip-g:${clr.g};--chip-b:${clr.b}" onclick="this.classList.toggle('active')">${e}</div>`;
+              return `<div class="chip${isOn?' active':''}" data-emp="${e}" style="--chip-r:${clr.r};--chip-g:${clr.g};--chip-b:${clr.b}" onclick="this.classList.toggle('active');USRMGR.refreshBasesSelect('emEmpresasChips','emBase','${u.base||''}')">${e}</div>`;
             }).join('')}
           </div>
         </div>
@@ -584,7 +595,7 @@ const USRMGR = (() => {
   return {
     renderUsuarios, applyUIFilters, clearFilters,
     toggleEmpresaFilter, clearEmpresaFilter,
-    openCreateModal, toggleModalPass, doCreate,
+    openCreateModal, toggleModalPass, refreshBasesSelect, doCreate,
     openEditModal, doEdit,
     openResetPassModal, doResetPass,
     toggleUser, deleteUser, togglePassDisp
