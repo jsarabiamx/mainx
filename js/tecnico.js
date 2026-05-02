@@ -343,7 +343,17 @@ const TECH = (() => {
     await refreshSharedData();
     const session = await AUTH.checkSessionAsync();
     if (!session) { window.location.href = 'index.html'; return; }
+
+    // Si tiene first_login pendiente, regresar al login para completar datos
+    if (session.firstLogin) { window.location.replace('index.html'); return; }
+
     if (session.role !== AUTH.ROLES.TECH) { window.location.href = 'app.html'; return; }
+
+    // Bloquear el botón "atrás" del navegador
+    history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', () => {
+      history.pushState(null, '', window.location.href);
+    });
 
     state.session  = session;
     state.empresas = (session.empresas && session.empresas.length > 0) ? session.empresas : ['GHO'];
