@@ -4,12 +4,12 @@
    + Módulo de validación en proceso
    + Técnico por base en campos de selección
 ═══════════════════════════════════════════════ */
-
+ 
 const APP = (() => {
-
+ 
   let currentModule = 'atencion';
   let notifPollInterval = null;
-
+ 
   async function init() {
     try {
       await DATA.init();
@@ -18,23 +18,32 @@ const APP = (() => {
     }
     const session = await AUTH.checkSessionAsync();
     if (!session) { window.location.href = 'index.html'; return; }
-
+ 
+    // Si tiene first_login pendiente, regresar al login para completar datos
+    if (session.firstLogin) { window.location.replace('index.html'); return; }
+ 
     if (session.role === AUTH.ROLES.TECH) {
       window.location.href = 'tecnico.html'; return;
     }
-
+ 
+    // Bloquear el botón "atrás" del navegador — evita entrar sin autenticación
+    history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', () => {
+      history.pushState(null, '', window.location.href);
+    });
+ 
     await AUTH.trackDeviceInfo();
-
+ 
     UI.renderNav(session);
     UI.renderEmpresaStrip(session);
     UI.updateHeaderUser(session);
     UI.updateClock();
     setInterval(UI.updateClock, 1000);
-
+ 
     // Inject notification bell for admin/master
     injectNotifBell();
     startNotifPoll();
-
+ 
     const chip = document.getElementById('userChip');
     if (chip) {
       chip.addEventListener('click', () => {
@@ -54,20 +63,20 @@ const APP = (() => {
         }
       });
     }
-
+ 
     const isMaster = session.role === AUTH.ROLES.MASTER;
     const isAdmin  = session.role === AUTH.ROLES.ADMIN;
     const defaultMod = (isMaster || isAdmin) ? 'dashboard' : 'atencion';
     await showModule(defaultMod);
-
+ 
     await AUTH.log('PAGE_LOAD', `Cargó el sistema (${AUTH.ROLE_LABELS[session.role]})`);
   }
-
+ 
   /* ─── CAMPANA NOTIFICACIONES ADMIN ──────────── */
   function injectNotifBell() {
     const headerRight = document.querySelector('.header-right');
     if (!headerRight || document.getElementById('adminNotifWrap')) return;
-
+ 
     const wrap = document.createElement('div');
     wrap.id = 'adminNotifWrap';
     wrap.style.cssText = 'position:relative;display:flex;align-items:center';
@@ -104,7 +113,7 @@ const APP = (() => {
     headerRight.insertBefore(wrap, userChip);
     updateNotifBadge();
   }
-
+ 
   function updateNotifBadge() {
     const raw = DATA.getNotificacionesNoLeidas().filter(n => n.destino === 'admin' || n.tipo === 'TECH_ATENDIENDO');
     // Deduplicar por reporteId+tipo
@@ -123,7 +132,7 @@ const APP = (() => {
       badge.style.display = 'none';
     }
   }
-
+ 
   function startNotifPoll() {
     notifPollInterval = setInterval(async () => {
       updateNotifBadge();
@@ -131,7 +140,7 @@ const APP = (() => {
       DATA.state.notificaciones = await DS.getNotificaciones();
     }, 8000);
   }
-
+ 
   function toggleNotif() {
     const drop = document.getElementById('adminNotifDropdown');
     if (!drop) return;
@@ -139,7 +148,7 @@ const APP = (() => {
     drop.style.display = isOpen ? 'none' : 'block';
     if (!isOpen) renderNotifList();
   }
-
+ 
   function renderNotifList() {
     const cont = document.getElementById('adminNotifList');
     if (!cont) return;
@@ -152,12 +161,12 @@ const APP = (() => {
       if (!seen.has(key)) { seen.set(key, true); all.push(n); }
     }
     const allSliced = all.slice(0, 30);
-
+ 
     if (!allSliced.length) {
       cont.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Sin notificaciones pendientes</div>`;
       return;
     }
-
+ 
     cont.innerHTML = allSliced.map(n => {
       const isAtend = n.tipo === 'TECH_ATENDIENDO';
       return `
@@ -199,21 +208,21 @@ const APP = (() => {
         </div>`;
     }).join('');
   }
-
+ 
   function fmtDt(s) {
     if (!s) return '—';
     const d = new Date(s);
     return d.toLocaleDateString('es-MX', { day:'2-digit', month:'short' }) +
            ' ' + d.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
   }
-
+ 
   async function onNotifClick(notifId, reporteId) {
     await DATA.marcarNotificacionLeida(notifId);
     updateNotifBadge();
     renderNotifList();
     if (reporteId) irAReporte(reporteId);
   }
-
+ 
   function irAReporte(reporteId) {
     const drop = document.getElementById('adminNotifDropdown');
     if (drop) drop.style.display = 'none';
@@ -224,11 +233,11 @@ const APP = (() => {
       }
     }, 100);
   }
-
+ 
   async function validarDesdeNotif(reporteId) {
     const falla = DATA.state.fallas.find(f => f.id === reporteId);
     if (!falla) { UI.toast('Reporte no encontrado', 'err'); return; }
-
+ 
     try {
       // Resolver el label de "atendido" según la empresa del reporte (GHO='Atendidos', ETN='Atendidos', etc.)
       const listaEst = DATA.getSel('estatus', falla.empresa);
@@ -243,22 +252,22 @@ const APP = (() => {
       UI.toast(error.message || 'No se pudo validar el reporte', 'err');
       return;
     }
-
+ 
     updateNotifBadge();
     renderNotifList();
     UI.toast(`Unidad ${falla.unidad} validada y atendida ✓`);
     UI.updateHeaderCounts();
-
+ 
     // Refresh current module
     if (currentModule === 'atencion') await showModule('atencion');
   }
-
+ 
   async function marcarTodasLeidas() {
     await DATA.marcarTodasLeidas(n => n.destino === 'admin' || n.tipo === 'TECH_ATENDIENDO');
     updateNotifBadge();
     renderNotifList();
   }
-
+ 
   function showValidacionModule() {
     const drop = document.getElementById('adminNotifDropdown');
     if (drop) drop.style.display = 'none';
@@ -268,12 +277,12 @@ const APP = (() => {
       UI.toast('Mostrando reportes en proceso — busca "En proceso" en la lista', 'warn');
     }, 200);
   }
-
+ 
   /* ─── MODULE ROUTING ─────────────────────────── */
   async function showModule(mod) {
     const session = await AUTH.checkSessionAsync();
     if (!session) { window.location.href = 'index.html'; return; }
-
+ 
     const perms = {
       registro:  AUTH.can('addReports'),
       atencion:  true,
@@ -283,21 +292,21 @@ const APP = (() => {
       usuarios:  AUTH.can('manageUsers'),
       historial: AUTH.can('viewAudit'),
     };
-
+ 
     if (!perms[mod]) {
       UI.toast('Sin permisos para acceder a este módulo', 'err');
       return;
     }
-
+ 
     currentModule = mod;
-
+ 
     document.querySelectorAll('.nav-btn').forEach(b => {
       b.classList.toggle('active', b.id === 'nav-' + mod);
     });
-
+ 
     const main = document.getElementById('mainContent');
     if (!main) return;
-
+ 
     switch (mod) {
       case 'registro':
         main.innerHTML = MODS.renderRegistro(session);
@@ -323,11 +332,11 @@ const APP = (() => {
         main.innerHTML = MODS.renderHistorial(session);
         break;
     }
-
+ 
     UI.updateHeaderCounts();
     updateNotifBadge();
   }
-
+ 
   async function refreshPlatform() {
     const btn = document.getElementById('refreshBtn');
     if (btn) {
@@ -341,7 +350,7 @@ const APP = (() => {
     updateNotifBadge();
     UI.toast('Plataforma actualizada');
   }
-
+ 
   async function changeEmpresa(emp) {
     DATA.state.currentEmpresa = emp;
     DATA.state.viewMode = 'individual';
@@ -353,7 +362,7 @@ const APP = (() => {
     UI.renderEmpresaStrip(AUTH.checkSession());
     await showModule(currentModule);
   }
-
+ 
   async function setViewMode(mode) {
     DATA.state.viewMode = mode;
     await DATA.persistAll();
@@ -364,16 +373,16 @@ const APP = (() => {
     UI.renderEmpresaStrip(AUTH.checkSession());
     await showModule(currentModule);
   }
-
+ 
   function closeModal(e) { UI.closeModal(e); }
-
+ 
   async function logout() {
     if (!confirm('¿Cerrar sesión?')) return;
     clearInterval(notifPollInterval);
     await AUTH.logout();
     window.location.href = 'index.html';
   }
-
+ 
   return {
     init, showModule, refreshPlatform, changeEmpresa, setViewMode, closeModal, logout,
     // Notifications
@@ -381,5 +390,5 @@ const APP = (() => {
     updateNotifBadge
   };
 })();
-
+ 
 document.addEventListener('DOMContentLoaded', APP.init);
