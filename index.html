@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>CCTV Fleet Control — Acceso</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/login.css">
+</head>
+<body>
+
+<div class="login-root" id="loginRoot">
+
+  <!-- Fondo animado -->
+  <div class="login-bg">
+    <div class="bg-grid"></div>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+    <div class="bg-scanline"></div>
+  </div>
+
+  <div class="login-wrap">
+
+    <!-- Logo / marca -->
+    <div class="login-brand">
+      <div class="brand-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-title">CCTV Fleet Control</span>
+        <span class="brand-sub">Sistema de Mantenimiento · v6.0</span>
+      </div>
+      <div class="brand-status">
+        <span class="status-dot"></span>
+        <span>SISTEMA ACTIVO</span>
+      </div>
+    </div>
+
+    <!-- ═══ CARD ════════════════════════════════ -->
+    <div class="login-card" id="loginCard">
+
+      <!-- ── PANTALLA 1: Login normal ───────── -->
+      <div id="formLogin">
+        <div class="login-card-header">
+          <h2>Iniciar Sesión</h2>
+          <p>Autenticación requerida para continuar</p>
+        </div>
+
+        <div class="login-body">
+          <div class="field-group">
+            <label for="loginUser">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+              Usuario
+            </label>
+            <input type="text" id="loginUser" placeholder="Ingresa tu usuario"
+                   autocomplete="username" autofocus
+                   onkeydown="if(event.key==='Enter') document.getElementById('loginPass').focus()">
+          </div>
+
+          <div class="field-group">
+            <label for="loginPass">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+              Contraseña
+            </label>
+            <div class="pass-wrap">
+              <input type="password" id="loginPass" placeholder="Contraseña"
+                     autocomplete="current-password"
+                     onkeydown="if(event.key==='Enter') doLogin()">
+              <button class="pass-toggle" onclick="togglePassVis('loginPass', this)" type="button" tabindex="-1">
+                <svg class="eye-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Enlace olvidé contraseña — visible solo cuando detecta usuario SA -->
+          <div id="forgotPassLink" class="forgot-pass-link" style="display:none" onclick="showForgotPassword()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            ¿Olvidaste la contraseña?
+          </div>
+
+          <div class="login-error" id="loginError"></div>
+
+          <button class="btn-login" onclick="doLogin()" id="btnLogin">
+            <span class="btn-login-text">Acceder al Sistema</span>
+            <svg class="btn-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+
+          <div class="login-footer-note">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            Acceso restringido · Solo personal autorizado
+          </div>
+        </div>
+      </div>
+
+      <!-- ── PANTALLA 2: Cambio contraseña forzado ── -->
+      <div id="formChangePass" style="display:none">
+        <div class="login-card-header">
+          <div class="change-pass-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h2>Configurar Contraseña</h2>
+          <p>Por seguridad debes establecer una nueva contraseña antes de continuar</p>
+        </div>
+
+        <div class="login-body">
+          <div class="change-pass-alert">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Primer acceso detectado. Esta acción es obligatoria y no puede omitirse.
+          </div>
+
+          <div class="field-group first-admin-field" data-first-field="admin">
+            <label for="firstNombre">Nombre completo</label>
+            <input type="text" id="firstNombre" placeholder="Nombre completo del Administrador Master" autocomplete="name">
+          </div>
+
+          <div class="field-group first-admin-field" data-first-field="admin">
+            <label for="firstBase">Base donde pertenece</label>
+            <input type="text" id="firstBase" placeholder="Base operativa">
+          </div>
+
+          <div class="field-group first-admin-field" data-first-field="admin">
+            <label for="firstEmail">Correo electrónico</label>
+            <input type="email" id="firstEmail" placeholder="correo@empresa.com" autocomplete="email">
+          </div>
+
+          <div class="field-group first-required-field" data-first-field="all">
+            <label for="firstTelefono">Número telefónico</label>
+            <input type="tel" id="firstTelefono" placeholder="Número telefónico" autocomplete="tel">
+          </div>
+
+          <div class="field-group first-admin-field" data-first-field="admin">
+            <label for="firstFechaNacimiento">Fecha de nacimiento</label>
+            <input type="date" id="firstFechaNacimiento">
+          </div>
+
+          <div class="field-group first-required-field" data-first-field="all">
+            <label for="firstEmpleadoId">ID de empleado</label>
+            <input type="text" id="firstEmpleadoId" placeholder="ID de empleado">
+          </div>
+          <div class="field-group">
+            <label for="newPass1">Nueva contraseña</label>
+            <div class="pass-wrap">
+              <input type="password" id="newPass1" placeholder="Mínimo 6 caracteres">
+              <button class="pass-toggle" onclick="togglePassVis('newPass1', this)" type="button" tabindex="-1">
+                <svg class="eye-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label for="newPass2">Confirmar contraseña</label>
+            <div class="pass-wrap">
+              <input type="password" id="newPass2" placeholder="Repite la contraseña"
+                     onkeydown="if(event.key==='Enter') doChangePass()">
+              <button class="pass-toggle" onclick="togglePassVis('newPass2', this)" type="button" tabindex="-1">
+                <svg class="eye-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="pass-strength-wrap" id="passStrengthWrap" style="display:none">
+            <div class="pass-strength-bar"><div class="pass-strength-fill" id="passStrengthFill"></div></div>
+
+            <span class="pass-strength-label" id="passStrengthLabel"></span>
+          </div>
+
+          <div class="login-error" id="changePassError"></div>
+
+          <button class="btn-login btn-login-secure" onclick="doChangePass()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span class="btn-login-text">Establecer Contraseña y Acceder</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── PANTALLA 3: Solicitar código de recuperación ── -->
+      <div id="formRecoverySend" style="display:none">
+        <div class="login-card-header">
+          <div class="change-pass-icon recovery-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </div>
+          <h2>Recuperar Acceso</h2>
+          <p>Se enviará un código de verificación al correo del administrador</p>
+        </div>
+
+        <div class="login-body">
+          <div class="change-pass-alert recovery-info-alert">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <div>
+              Se enviará un código temporal de 6 dígitos al correo registrado del administrador principal. El código tiene vigencia de <strong>10 minutos</strong>.
+            </div>
+          </div>
+          <div class="field-group">
+            <label for="recoveryEmailInput">Correo electrónico registrado</label>
+            <input type="email" id="recoveryEmailInput" placeholder="Ingresa el correo del Administrador Master" autocomplete="email">
+          </div>
+
+
+          <div class="login-error" id="recoverySendError"></div>
+
+          <button class="btn-login btn-login-amber" onclick="doSendRecoveryCode()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            <span class="btn-login-text">Enviar Código de Verificación</span>
+          </button>
+
+          <button class="btn-back" onclick="backToLogin()">← Volver al inicio de sesión</button>
+        </div>
+      </div>
+
+      <!-- ── PANTALLA 4: Ingresar código ────── -->
+      <div id="formRecoveryCode" style="display:none">
+        <div class="login-card-header">
+          <div class="change-pass-icon recovery-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
+          </div>
+          <h2>Ingresar Código</h2>
+          <p>Revisa tu correo e ingresa el código de 6 dígitos</p>
+        </div>
+
+        <div class="login-body">
+
+          <!-- Info destino -->
+          <div class="recovery-email-info">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <span>Código enviado a: <strong id="recoveryEmailDisplay">—</strong></span>
+          </div>
+
+          <!-- Nota de desarrollo — QUITAR EN PRODUCCIÓN -->
+          <div id="devCodeNote" class="dev-code-note" style="display:none">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <span>DEV — Código: <strong class="dev-code-value">———</strong></span>
+          </div>
+
+          <!-- Countdown -->
+          <div class="recovery-countdown-wrap">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>Expira en: <span id="recoveryCountdown" class="countdown-value">10:00</span></span>
+          </div>
+
+          <div class="field-group">
+            <label for="recoveryCodeInput">Código de verificación</label>
+            <input type="text" id="recoveryCodeInput" placeholder="6 dígitos"
+                   maxlength="6" inputmode="numeric" pattern="[0-9]*"
+                   class="code-input"
+                   onkeydown="if(event.key==='Enter') doValidateRecoveryCode()">
+          </div>
+
+          <div class="login-error" id="recoveryCodeError"></div>
+
+          <button class="btn-login btn-login-amber" onclick="doValidateRecoveryCode()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            <span class="btn-login-text">Verificar Código</span>
+          </button>
+
+          <button class="btn-back" onclick="showScreen('recovery-send')">← Solicitar nuevo código</button>
+        </div>
+      </div>
+
+      <!-- ── PANTALLA 5: Nueva contraseña tras recuperación ── -->
+      <div id="formRecoveryNewPass" style="display:none">
+        <div class="login-card-header">
+          <div class="change-pass-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+          </div>
+          <h2>Nueva Contraseña</h2>
+          <p>Código verificado. Establece tu nueva contraseña de acceso.</p>
+        </div>
+
+        <div class="login-body">
+          <div class="change-pass-alert" style="background:rgba(34,197,94,0.08);border-color:rgba(34,197,94,0.25);color:var(--green);">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Identidad verificada correctamente. Puedes establecer tu nueva contraseña.
+          </div>
+
+          <div class="field-group">
+            <label for="recoverNewPass1">Nueva contraseña</label>
+            <div class="pass-wrap">
+              <input type="password" id="recoverNewPass1" placeholder="Mínimo 6 caracteres">
+              <button class="pass-toggle" onclick="togglePassVis('recoverNewPass1', this)" type="button" tabindex="-1">
+                <svg class="eye-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label for="recoverNewPass2">Confirmar contraseña</label>
+            <div class="pass-wrap">
+              <input type="password" id="recoverNewPass2" placeholder="Repite la contraseña"
+                     onkeydown="if(event.key==='Enter') doSetRecoveredPassword()">
+              <button class="pass-toggle" onclick="togglePassVis('recoverNewPass2', this)" type="button" tabindex="-1">
+                <svg class="eye-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="pass-strength-wrap" id="recoverStrengthWrap" style="display:none">
+            <div class="pass-strength-bar"><div class="pass-strength-fill" id="recoverStrengthFill"></div></div>
+            <span class="pass-strength-label" id="recoverStrengthLabel"></span>
+          </div>
+
+          <div class="login-error" id="recoveryNewPassError"></div>
+
+          <button class="btn-login btn-login-secure" onclick="doSetRecoveredPassword()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span class="btn-login-text">Guardar Nueva Contraseña</span>
+          </button>
+        </div>
+      </div>
+
+    </div><!-- /login-card -->
+
+    <!-- Info pie -->
+    <div class="login-meta">
+      <span>CCTV Fleet Control © 2025</span>
+      <span class="meta-sep">·</span>
+      <span>GHO · ETN · AERS · AMEALSENSE</span>
+      <span class="meta-sep">·</span>
+      <span id="loginClock"></span>
+    </div>
+
+  </div><!-- /login-wrap -->
+</div><!-- /login-root -->
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/supabaseService.js"></script>
+<script src="js/dataService.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/login.js"></script>
+</body>
+</html>
