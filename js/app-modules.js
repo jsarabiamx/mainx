@@ -502,21 +502,47 @@ const MODS = (() => {
               <div class="select-wrap">
                 <select id="atenTecnico">
                   ${(() => {
-                    const tecs = DATA.getTecnicosPorBase(f.empresa || DATA.state.currentEmpresa, f.base || '');
+                    const emp = f.empresa || DATA.state.currentEmpresa;
+                    // Mostrar TODOS los técnicos de la empresa, sin filtrar por base
+                    // para que el admin pueda ver y seleccionar a técnicos de apoyo
+                    const todosLosTecs = DATA.getTecnicosPorBase(emp, '');
                     let opts = '<option value="">— Sin asignar —</option>';
-                    tecs.forEach(t => {
-                      const label = t.base ? `${t.nombre} (${t.base})` : t.nombre;
-                      const sel = (f.tecnico === t.nombre || f.tecnico === label) ? ' selected' : '';
+
+                    // Técnicos de la misma base primero
+                    const tecsBase   = todosLosTecs.filter(t => t.base === f.base);
+                    const tecsOtros  = todosLosTecs.filter(t => t.base !== f.base);
+
+                    if (tecsBase.length) opts += `<optgroup label="Técnicos base ${f.base || 'del reporte'}">`;
+                    tecsBase.forEach(t => {
+                      const label = t.nombre + (t.base ? ` (${t.base})` : '');
+                      const sel = (f.tecnico === t.nombre) ? ' selected' : '';
                       opts += `<option value="${t.nombre}" data-username="${t.username || t.nombre}"${sel}>${label}</option>`;
                     });
-                    // Add current tecnico if not in list
-                    if (f.tecnico && !tecs.find(t => t.nombre === f.tecnico || (t.base && `${t.nombre} (${t.base})` === f.tecnico))) {
+                    if (tecsBase.length) opts += '</optgroup>';
+
+                    if (tecsOtros.length) opts += `<optgroup label="Técnicos de otras bases">`;
+                    tecsOtros.forEach(t => {
+                      const label = t.nombre + (t.base ? ` (${t.base})` : '');
+                      // Marcar al técnico de apoyo si ya atendió
+                      const esApoyo = f.tecnicoApoyoNombre === t.nombre;
+                      const sel = (f.tecnico === t.nombre || esApoyo) ? ' selected' : '';
+                      const sufijo = esApoyo ? ' ⚡apoyo' : '';
+                      opts += `<option value="${t.nombre}" data-username="${t.username || t.nombre}"${sel}>${label}${sufijo}</option>`;
+                    });
+                    if (tecsOtros.length) opts += '</optgroup>';
+
+                    // Si el técnico actual no está en la lista, agregarlo
+                    if (f.tecnico && !todosLosTecs.find(t => t.nombre === f.tecnico)) {
                       opts += `<option value="${f.tecnico}" data-username="${f.tecnicoUsername || f.tecnico}" selected>${f.tecnico}</option>`;
                     }
                     return opts;
                   })()}
                 </select>
               </div>
+              ${f.esApoyo && f.tecnicoApoyoNombre ? `
+              <div style="font-size:11px;color:#f59e0b;margin-top:4px;padding:4px 8px;background:rgba(245,158,11,0.08);border-radius:4px;border-left:2px solid #f59e0b">
+                ⚡ Atendido por apoyo: <strong>${f.tecnicoApoyoNombre}</strong> (base ${DATA.getTecnicosPorBase(f.empresa||'','').find(t=>t.nombre===f.tecnicoApoyoNombre)?.base || '—'})
+              </div>` : ''}
               <div style="font-size:11px;color:var(--text3);margin-top:4px" id="atenTecnicoHint">Técnicos de la base ${f.base || '—'} (${f.empresa || ''})</div>
             </div>
             <div class="form-group">
