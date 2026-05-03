@@ -1313,25 +1313,33 @@ const MODS = (() => {
 
     if (_techMode === 'base') {
       // ── MODO BASE: técnicos de la misma base del usuario activo ──
-      // Si es master/admin ve la base activa; si es técnico ve su propia base
-      const baseActiva = session?.base || '';
-      const tecBase    = baseActiva
+      // Master y admin ven TODOS los técnicos
+      // Un técnico ve solo los de su propia base
+      const isMasterOrAdmin = session && (session.role === 'master' || session.role === 'admin');
+      const isMasterAdmin = session?.role === 'master' || session?.role === 'admin';
+      const baseActiva = (!isMasterAdmin && session?.base) ? session.base : '';
+
+      const tecBase = baseActiva
         ? tecnicos.filter(u => (u.base || '').toUpperCase() === baseActiva.toUpperCase())
-        : tecnicos;
+        : tecnicos; // sin filtro de base → todos los técnicos
 
       if (tecBase.length === 0) {
-        if (wrap) wrap.innerHTML = '<p style="color:var(--text3);font-size:12px;padding:20px;text-align:center">Sin técnicos en esta base</p>';
+        if (wrap) wrap.innerHTML = '<p style="color:var(--text3);font-size:12px;padding:20px;text-align:center">Sin técnicos registrados</p>';
         if (cards) cards.innerHTML = '';
         return;
       }
 
+      // Buscar fallas por tecnicoUsername O por nombre (compatibilidad con registros viejos)
+      const _fallasTec = (u) => fallasFiltradas.filter(f =>
+        f.tecnicoUsername === u.username || f.tecnico === (u.nombre || u.username)
+      );
       const labels     = tecBase.map(u => u.nombre || u.username);
-      const correctivos= tecBase.map(u => fallasFiltradas.filter(f => f.tecnicoUsername === u.username && /correctiv/i.test(f.tipo)).length);
-      const preventivos= tecBase.map(u => fallasFiltradas.filter(f => f.tecnicoUsername === u.username && /preventiv/i.test(f.tipo)).length);
-      const atendidos  = tecBase.map(u => fallasFiltradas.filter(f => f.tecnicoUsername === u.username && _isAtendidoEst(f.estatus, f.empresa)).length);
+      const correctivos= tecBase.map(u => _fallasTec(u).filter(f => /correctiv/i.test(f.tipo)).length);
+      const preventivos= tecBase.map(u => _fallasTec(u).filter(f => /preventiv/i.test(f.tipo)).length);
+      const atendidos  = tecBase.map(u => _fallasTec(u).filter(f => _isAtendidoEst(f.estatus, f.empresa)).length);
 
       _renderTechBarChart(labels, correctivos, preventivos, atendidos);
-      _renderTechCards(tecBase, fallasFiltradas, baseActiva ? `Técnicos · Base ${baseActiva}` : 'Todos los técnicos');
+      _renderTechCards(tecBase, fallasFiltradas, (!isMasterAdmin && baseActiva) ? `Técnicos · Base ${baseActiva}` : 'Todos los técnicos');
 
     } else {
       // ── MODO VS BASES: top 1 técnico de cada base compiten entre sí ──
@@ -1345,12 +1353,17 @@ const MODS = (() => {
 
       const topPorBase = Object.entries(baseMap).map(([base, tecList]) => {
         // Elegir el técnico con más atendidos en esta base
-        const scored = tecList.map(u => ({
-          u,
-          atendidos: fallasFiltradas.filter(f => f.tecnicoUsername === u.username && _isAtendidoEst(f.estatus, f.empresa)).length,
-          correctivos: fallasFiltradas.filter(f => f.tecnicoUsername === u.username && /correctiv/i.test(f.tipo)).length,
-          preventivos: fallasFiltradas.filter(f => f.tecnicoUsername === u.username && /preventiv/i.test(f.tipo)).length,
-        }));
+        const scored = tecList.map(u => {
+          const ff = fallasFiltradas.filter(f =>
+            f.tecnicoUsername === u.username || f.tecnico === (u.nombre || u.username)
+          );
+          return {
+            u,
+            atendidos:   ff.filter(f => _isAtendidoEst(f.estatus, f.empresa)).length,
+            correctivos: ff.filter(f => /correctiv/i.test(f.tipo)).length,
+            preventivos: ff.filter(f => /preventiv/i.test(f.tipo)).length,
+          };
+        });
         scored.sort((a, b) => b.atendidos - a.atendidos);
         return { base, top: scored[0] };
       }).filter(b => b.top);
@@ -1416,10 +1429,11 @@ const MODS = (() => {
     if (!cards) return;
 
     const stats = tecBase.map(u => {
-      const aten = fallas.filter(f => f.tecnicoUsername === u.username && _isAtendidoEst(f.estatus, f.empresa)).length;
-      const corr = fallas.filter(f => f.tecnicoUsername === u.username && /correctiv/i.test(f.tipo)).length;
-      const prev = fallas.filter(f => f.tecnicoUsername === u.username && /preventiv/i.test(f.tipo)).length;
-      const total= fallas.filter(f => f.tecnicoUsername === u.username).length;
+      const ff   = fallas.filter(f => f.tecnicoUsername === u.username || f.tecnico === (u.nombre || u.username));
+      const aten = ff.filter(f => _isAtendidoEst(f.estatus, f.empresa)).length;
+      const corr = ff.filter(f => /correctiv/i.test(f.tipo)).length;
+      const prev = ff.filter(f => /preventiv/i.test(f.tipo)).length;
+      const total= ff.length;
       const efic = total > 0 ? Math.round(aten / total * 100) : 0;
       return { u, aten, corr, prev, total, efic };
     }).sort((a, b) => b.efic - a.efic);
@@ -1480,9 +1494,9 @@ const MODS = (() => {
       aten: top.atendidos,
       corr: top.correctivos,
       prev: top.preventivos,
-      total: fallas.filter(f => f.tecnicoUsername === top.u.username).length,
-      efic: fallas.filter(f => f.tecnicoUsername === top.u.username).length > 0
-        ? Math.round(top.atendidos / fallas.filter(f => f.tecnicoUsername === top.u.username).length * 100) : 0
+      total: fallas.filter(f => f.tecnicoUsername === top.u.username || f.tecnico === (top.u.nombre || top.u.username)).length,
+      efic: fallas.filter(f => f.tecnicoUsername === top.u.username || f.tecnico === (top.u.nombre || top.u.username)).length > 0
+        ? Math.round(top.atendidos / fallas.filter(f => f.tecnicoUsername === top.u.username || f.tecnico === (top.u.nombre || top.u.username)).length * 100) : 0
     })).sort((a, b) => b.efic - a.efic);
 
     if (stats.length === 0) { cards.innerHTML = ''; return; }
