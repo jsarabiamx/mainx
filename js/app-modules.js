@@ -1921,10 +1921,22 @@ const MODS = (() => {
     });
     if (!nuevo || nuevo === old) return;
     const trimmed = nuevo.trim();
+    const emp = DATA.state.currentEmpresa;
+    const session = AUTH.checkSession();
+
+    // Actualizar en la tabla relacional de Supabase
+    try {
+      await DS.updateSelectorItem(emp, key, old, trimmed, { usuario: session ? session.username : 'sistema' });
+    } catch(e) {
+      UI.toast('Error al actualizar: ' + (e.message || e), 'err');
+      return;
+    }
+
+    // Reflejo local en memoria
     opts[idx] = trimmed;
-    if (key === 'categoria' && DATA.state.selectores[DATA.state.currentEmpresa].componente[old]) {
-      DATA.state.selectores[DATA.state.currentEmpresa].componente[trimmed] = DATA.state.selectores[DATA.state.currentEmpresa].componente[old];
-      delete DATA.state.selectores[DATA.state.currentEmpresa].componente[old];
+    if (key === 'categoria' && DATA.state.selectores[emp].componente[old]) {
+      DATA.state.selectores[emp].componente[trimmed] = DATA.state.selectores[emp].componente[old];
+      delete DATA.state.selectores[emp].componente[old];
     }
     await DATA.persistAll();
     await APP.showModule('config');
