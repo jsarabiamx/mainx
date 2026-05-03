@@ -251,6 +251,18 @@ const USRMGR = (() => {
         }).join('')}
       </div>
 
+
+      <!-- Datos del perfil técnico -->
+      ${(u.role === 'tecnico' || u.role === 'admin') ? `
+      <div style="margin:6px 0;padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r)">
+        ${u.telefono || u.empleadoId || u.email ? `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px">
+          ${u.telefono ? '<div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Teléfono</div><div style="font-size:11px;font-family:var(--mono);color:var(--text2)">' + u.telefono + '</div></div>' : ''}
+          ${u.empleadoId ? '<div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">ID Empleado</div><div style="font-size:11px;font-family:var(--mono);color:var(--text2)">' + u.empleadoId + '</div></div>' : ''}
+          ${u.email ? '<div style="grid-column:1/-1"><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Email</div><div style="font-size:11px;font-family:var(--mono);color:var(--text2)">' + u.email + '</div></div>' : ''}
+        </div>` : '<div style="font-size:10px;color:#f59e0b">⏳ Pendiente primer acceso — aún no completa su perfil</div>'}
+      </div>` : ''}
+
       <!-- Contraseña visible para Master -->
       <div style="margin:8px 0;padding:6px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);display:flex;align-items:center;justify-content:space-between">
         <span style="font-size:10px;color:var(--text3);font-family:var(--mono)">Autenticación:</span>
