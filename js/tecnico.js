@@ -1090,7 +1090,7 @@ const TECH = (() => {
       } else {
         nombre = sel.value;
         // Buscar el username del técnico seleccionado
-        const allUsers = AUTH.getUsers().list || [];
+        const allUsers = AUTH.getUsers() || [];
         const found = allUsers.find(u => (u.nombre || u.username) === nombre);
         if (found) username = found.username;
       }
