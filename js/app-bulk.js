@@ -450,43 +450,30 @@ const BULK = (() => {
     const omitidas  = state.unidades.filter(u => u.status === 'pending');
 
     let txt = '';
-    txt += `📡 *ESTADO DE UNIDADES ${emp}*
-`;
-    txt += `📅 Barrido ${fecha} / ${hora}
-
-`;
+    txt += '📡 *ESTADO DE UNIDADES ' + emp + '*\n';
+    txt += '📅 Barrido ' + fecha + ' / ' + hora + '\n\n';
 
     if (enLinea.length > 0) {
-      txt += `✅ *En línea:*
-`;
-      enLinea.forEach(u => { txt += `${u.numero} (en línea)
-`; });
-      txt += '
-';
+      txt += '✅ *En línea:*\n';
+      enLinea.forEach(u => { txt += u.numero + ' (en línea)\n'; });
+      txt += '\n';
     }
     if (conFalla.length > 0) {
-      txt += `🔴 *Con falla:*
-`;
+      txt += '🔴 *Con falla:*\n';
       conFalla.forEach(u => {
-        const r = DATA.state.fallas.find(f => f.folio === u.folio);
+        const r = (DATA.state.fallas || []).find(f => f.folio === u.folio);
         const desc = r ? (r.componente || r.categoria || r.descripcion || 'falla') : 'falla';
-        txt += `${u.numero} — ${desc}
-`;
+        txt += u.numero + ' — ' + desc + '\n';
       });
-      txt += '
-';
+      txt += '\n';
     }
     if (sinFalla.length > 0) {
-      txt += `🟢 *Sin falla:*
-`;
-      sinFalla.forEach(u => { txt += `${u.numero}
-`; });
-      txt += '
-';
+      txt += '🟢 *Sin falla:*\n';
+      sinFalla.forEach(u => { txt += u.numero + '\n'; });
+      txt += '\n';
     }
     if (omitidas.length > 0) {
-      txt += `⏩ *Omitidas:* ${omitidas.map(u => u.numero).join(', ')}
-`;
+      txt += '⏩ *Omitidas:* ' + omitidas.map(u => u.numero).join(', ') + '\n';
     }
 
     return txt.trim();
