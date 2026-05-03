@@ -567,8 +567,9 @@ const BULK = (() => {
       .filter(s => s.length > 0);
     const dups = rawParts.length - count;
 
-    // Contar cuáles ya están registradas en el sistema
-    const registered = DATA.state.fallas.filter(f =>
+    // Contar cuáles ya están registradas en el sistema (con guard por si fallas aún no cargó)
+    const fallas = DATA.state.fallas || [];
+    const registered = fallas.filter(f =>
       f.empresa === DATA.state.currentEmpresa && units.includes(f.unidad)
     ).map(f => f.unidad);
     const existingSet = new Set(registered);
