@@ -1979,6 +1979,10 @@ const MODS = (() => {
           <h2 class="mod-title">Configuración</h2>
           <span class="mod-subtitle">Administra opciones, empresas y selectores — <strong style="color:var(--accent)">${emp}</strong></span>
         </div>
+        ${canEdit ? `<button class="btn btn-primary btn-sm" style="margin-left:auto;gap:6px;display:flex;align-items:center" onclick="MODS.openBulkConfig()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          Carga Masiva
+        </button>` : ''}
       </div>
 
       <div class="config-layout">
@@ -2137,6 +2141,132 @@ const MODS = (() => {
         </div>`;
       }).join('')}
     </div>`;
+  }
+
+
+  // ══════════════════════════════════════════════════════
+  // CARGA MASIVA DE SELECTORES — múltiples empresas
+  // ══════════════════════════════════════════════════════
+  function openBulkConfig() {
+    const empresas  = DATA.state.empresas || [];
+    const sections  = [
+      { key: 'base',      label: '📍 Bases Operativas' },
+      { key: 'servicio',  label: '🚌 Tipos de Servicio' },
+      { key: 'estatus',   label: '🏷 Estatus' },
+      { key: 'tipo',      label: '🔧 Tipos de Incidencia' },
+      { key: 'piso',      label: '🏢 Opciones de Piso' },
+      { key: 'proveedor', label: '📡 Proveedores de Equipo' },
+      { key: 'categoria', label: '📷 Categorías' },
+    ];
+
+    UI.openModal(`
+      <h3 class="modal-title">Carga Masiva de Configuración</h3>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:16px">Agrega items a múltiples empresas a la vez. Solo se añaden los que no existan — no reemplaza lo que ya hay.</p>
+
+      <div class="form-group">
+        <label>Tipo de selector</label>
+        <div class="select-wrap">
+          <select id="bulkKey">
+            ${sections.map(s => `<option value="${s.key}">${s.label}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Items a agregar <span style="color:var(--text3);font-weight:400">(separar con coma)</span></label>
+        <textarea id="bulkItems" rows="4" placeholder="Ej: GDLJ, TAP, MTY, PUEB" style="width:100%;resize:vertical;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;color:var(--text1);font-family:var(--mono);font-size:12px"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Aplicar a empresas</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;padding:10px;background:var(--bg3);border-radius:var(--r);border:1px solid var(--border)" id="bulkEmpresasChips">
+          ${empresas.map(e => {
+            const clr = DATA.getEmpresaColor(e);
+            return `<div class="chip active" data-emp="${e}" style="--chip-r:${clr.r};--chip-g:${clr.g};--chip-b:${clr.b};cursor:pointer" onclick="this.classList.toggle('active')">${e}</div>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button class="btn btn-ghost btn-sm" onclick="document.querySelectorAll('#bulkEmpresasChips .chip').forEach(c=>c.classList.add('active'))">Todas</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.querySelectorAll('#bulkEmpresasChips .chip').forEach(c=>c.classList.remove('active'))">Ninguna</button>
+        </div>
+      </div>
+
+      <div id="bulkPreview" style="display:none;margin-bottom:12px;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);font-size:11px;font-family:var(--mono);color:var(--text2)"></div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+        <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
+        <button class="btn btn-ghost btn-sm" onclick="MODS.previewBulkConfig()">👁 Vista previa</button>
+        <button class="btn btn-primary" onclick="MODS.doBulkConfig()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          Aplicar carga masiva
+        </button>
+      </div>
+    `);
+  }
+
+  function previewBulkConfig() {
+    const key      = document.getElementById('bulkKey')?.value;
+    const raw      = document.getElementById('bulkItems')?.value || '';
+    const empresas = [...document.querySelectorAll('#bulkEmpresasChips .chip.active')].map(c => c.dataset.emp);
+    const values   = raw.split(',').map(v => v.trim()).filter(Boolean);
+    const preview  = document.getElementById('bulkPreview');
+    if (!preview) return;
+
+    if (!values.length || !empresas.length) {
+      preview.style.display = 'block';
+      preview.innerHTML = '<span style="color:#f59e0b">⚠ Ingresa items y selecciona al menos una empresa</span>';
+      return;
+    }
+
+    const lines = empresas.map(emp => {
+      const existing = DATA.getSel(key, emp);
+      const nuevos   = values.filter(v => !existing.includes(v));
+      const duplos   = values.filter(v =>  existing.includes(v));
+      return `<div style="margin-bottom:4px"><strong style="color:var(--accent)">${emp}</strong> → ` +
+        (nuevos.length ? `<span style="color:var(--green)">+${nuevos.join(', ')}</span>` : '<span style="color:var(--text3)">sin cambios</span>') +
+        (duplos.length ? ` <span style="color:var(--text3)">(ya existen: ${duplos.join(', ')})</span>` : '') +
+        '</div>';
+    });
+
+    preview.style.display = 'block';
+    preview.innerHTML = '<div style="font-weight:600;margin-bottom:6px;color:var(--text2)">Vista previa:</div>' + lines.join('');
+  }
+
+  async function doBulkConfig() {
+    const key      = document.getElementById('bulkKey')?.value;
+    const raw      = document.getElementById('bulkItems')?.value || '';
+    const empresas = [...document.querySelectorAll('#bulkEmpresasChips .chip.active')].map(c => c.dataset.emp);
+    const values   = raw.split(',').map(v => v.trim()).filter(Boolean);
+
+    if (!values.length) { UI.toast('Ingresa al menos un item', 'err'); return; }
+    if (!empresas.length) { UI.toast('Selecciona al menos una empresa', 'err'); return; }
+
+    const session = AUTH.checkSession();
+    let totalAgregados = 0, totalSkipped = 0;
+
+    for (const emp of empresas) {
+      if (!DATA.state.selectores[emp]) continue;
+      for (const val of values) {
+        const lista = DATA.state.selectores[emp][key];
+        if (!Array.isArray(lista)) continue;
+        if (lista.includes(val)) { totalSkipped++; continue; }
+        try {
+          await DS.upsertSelectorItem(emp, key, val, { usuario: session ? session.username : 'sistema' });
+          lista.push(val);
+          totalAgregados++;
+        } catch(e) {
+          UI.toast(`Error al guardar "${val}" en ${emp}: ${e.message}`, 'err');
+        }
+      }
+    }
+
+    UI.closeModal();
+    await APP.showModule('config');
+
+    const msg = totalAgregados > 0
+      ? `✅ ${totalAgregados} item${totalAgregados>1?'s':''} agregado${totalAgregados>1?'s':''} en ${empresas.length} empresa${empresas.length>1?'s':''}`
+      : `Sin cambios — todos los items ya existían`;
+    UI.toast(msg + (totalSkipped ? ` (${totalSkipped} duplicados ignorados)` : ''), totalAgregados > 0 ? 'ok' : 'warn');
   }
 
   async function addConfigItem(key) {
@@ -2592,6 +2722,7 @@ const MODS = (() => {
     updateFolioPreview, selChip, selPrio, onCategoriaChange, limpiarRegistro, guardarRegistro,
     onBaseChangeRegistro, onTecnicoSelChange, getRegistroTecnicoValue,
     toggleConfigGrid, toggleConfigSec,
+    openBulkConfig, previewBulkConfig, doBulkConfig,
     addConfigItem, delConfigItem, editConfigItem, clearModuleItems,
     addComponente, delComponente, addEmpresa, renameEmpresa, delEmpresa,
     clearEmpresaData, clearAllData, resetSystem,
