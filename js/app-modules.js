@@ -1314,6 +1314,81 @@ const MODS = (() => {
   // ══════════════════════════════════════════════════════════
   let _techMode    = 'base'; // 'base' | 'vs' | 'general'
   let _techBaseFilter = '';  // base seleccionada en dropdown
+  let _techSelected   = null; // username del técnico seleccionado
+
+  function selectTecnico(username) {
+    // Toggle — si ya estaba seleccionado, deseleccionar
+    if (_techSelected === username) {
+      _techSelected = null;
+    } else {
+      _techSelected = username;
+    }
+    const fallas = getPeriodoFallas();
+
+    if (_techSelected) {
+      // Mostrar solo este técnico
+      const allUsers  = AUTH.getUsers() || [];
+      const u = allUsers.find(u => u.username === _techSelected);
+      if (!u) { _techSelected = null; _buildTechChart(fallas); return; }
+
+      if (techChart) { techChart.destroy(); techChart = null; }
+      const wrap = document.getElementById('techChartWrap');
+      if (wrap) wrap.innerHTML = '<canvas id="techChart"></canvas>';
+
+      const ff = fallas.filter(f =>
+        f.tecnicoUsername === u.username || f.tecnico === (u.nombre || u.username)
+      );
+      const correctivos = ff.filter(f => /correctiv/i.test(f.tipo)).length;
+      const preventivos = ff.filter(f => /preventiv/i.test(f.tipo)).length;
+      const atendidos   = ff.filter(f => _isAtendidoEst(f.estatus, f.empresa)).length;
+
+      // Gráfica detallada: desglose por empresa para este técnico
+      const empresas = DATA.state.empresas || [];
+      const labelsEmp  = empresas;
+      const corrEmp    = empresas.map(e => ff.filter(f => f.empresa === e && /correctiv/i.test(f.tipo)).length);
+      const prevEmp    = empresas.map(e => ff.filter(f => f.empresa === e && /preventiv/i.test(f.tipo)).length);
+      const atenEmp    = empresas.map(e => ff.filter(f => f.empresa === e && _isAtendidoEst(f.estatus, f.empresa)).length);
+
+      const tc = document.getElementById('techChart');
+      if (tc) {
+        techChart = new Chart(tc, {
+          type: 'bar',
+          data: {
+            labels: labelsEmp,
+            datasets: [
+              { label: 'Correctivos', data: corrEmp, backgroundColor: '#ef4444', borderRadius: 4, borderSkipped: false },
+              { label: 'Preventivos', data: prevEmp, backgroundColor: '#22c55e', borderRadius: 4, borderSkipped: false },
+              { label: 'Atendidos',   data: atenEmp, backgroundColor: '#4f8ef7', borderRadius: 4, borderSkipped: false },
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { display: true, labels: { color: '#7c8ba1', font: { size: 10 } } },
+              title: { display: true, text: `${u.nombre || u.username} — por empresa`, color: '#7c8ba1', font: { size: 11 } }
+            },
+            scales: {
+              x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#7c8ba1', font: { size: 10 } } },
+              y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#7c8ba1', font: { size: 10 } }, beginAtZero: true }
+            }
+          }
+        });
+      }
+
+      // Actualizar tarjetas con indicador de selección
+      const cards = document.getElementById('techResumenCards');
+      if (cards) {
+        cards.querySelectorAll('.tech-card').forEach(c => {
+          const isSelected = c.dataset.username === _techSelected;
+          c.style.border = isSelected ? '2px solid var(--accent)' : '1px solid var(--border)';
+          c.style.boxShadow = isSelected ? '0 0 0 2px rgba(79,142,247,0.2)' : 'none';
+        });
+      }
+    } else {
+      // Deseleccionar — volver al modo normal
+      _buildTechChart(fallas);
+    }
+  }
 
   function _poblarBaseSelect() {
     const sel = document.getElementById('techBaseSelect');
@@ -1557,7 +1632,7 @@ const MODS = (() => {
             ? '<span style="font-size:9px;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);border-radius:4px;padding:1px 5px">↓ MENOR</span>'
             : '';
           const barColor = s.efic >= 70 ? '#22c55e' : s.efic >= 40 ? '#f59e0b' : '#ef4444';
-          return `<div style="flex:1;min-width:160px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px">
+          return `<div class="tech-card" data-username="${s.u.username}" onclick="MODS.selectTecnico('${s.u.username}')" style="flex:1;min-width:160px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;transition:border .15s,box-shadow .15s" onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="if('${s.u.username}'!==MODS._getSelectedTech())this.style.borderColor='var(--border)'">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
               <div style="width:34px;height:34px;border-radius:50%;background:var(--bg4);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -1615,7 +1690,7 @@ const MODS = (() => {
             ? '<span style="font-size:9px;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);border-radius:4px;padding:1px 5px">↓ REZAGADA</span>'
             : '';
           const barColor = s.efic >= 70 ? '#22c55e' : s.efic >= 40 ? '#f59e0b' : '#ef4444';
-          return `<div style="flex:1;min-width:160px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px">
+          return `<div class="tech-card" data-username="${s.top.u.username}" onclick="MODS.selectTecnico('${s.top.u.username}')" style="flex:1;min-width:160px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;transition:border .15s" onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="if('${s.top.u.username}'!==MODS._getSelectedTech())this.style.borderColor='var(--border)'">
             <div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:6px;text-transform:uppercase">${s.base} ${badge}</div>
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
               <div style="width:30px;height:30px;border-radius:50%;background:var(--bg4);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -2723,6 +2798,7 @@ const MODS = (() => {
     onBaseChangeRegistro, onTecnicoSelChange, getRegistroTecnicoValue,
     toggleConfigGrid, toggleConfigSec,
     openBulkConfig, previewBulkConfig, doBulkConfig,
+    selectTecnico, _getSelectedTech: () => _techSelected,
     addConfigItem, delConfigItem, editConfigItem, clearModuleItems,
     addComponente, delComponente, addEmpresa, renameEmpresa, delEmpresa,
     clearEmpresaData, clearAllData, resetSystem,
