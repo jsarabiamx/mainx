@@ -1059,6 +1059,38 @@
     return true;
   }
 
+  async function updateSelectorItem(empresa, modulo, valorViejo, valorNuevo, meta = {}) {
+    const tabla = MODULO_TABLA[modulo];
+    if (!tabla) throw new Error(`Módulo "${modulo}" no tiene tabla asignada`);
+    const sb = getClient();
+    const empresa_id = await _getEmpresaId(empresa);
+
+    if (modulo === 'componente') {
+      if (!meta.categoria) throw new Error('Para componentes se requiere meta.categoria');
+      const { data: catRow } = await sb
+        .from('categorias').select('id').eq('nombre', meta.categoria).eq('empresa_id', empresa_id).maybeSingle();
+      if (!catRow) throw new Error(`Categoría "${meta.categoria}" no encontrada`);
+      const { error } = await sb.from('componentes')
+        .update({ nombre: valorNuevo })
+        .eq('nombre', valorViejo).eq('empresa_id', empresa_id).eq('categoria_id', catRow.id);
+      if (error) throw error;
+    } else {
+      const { error } = await sb.from(tabla)
+        .update({ nombre: valorNuevo })
+        .eq('nombre', valorViejo).eq('empresa_id', empresa_id);
+      if (error) throw error;
+    }
+
+    await logAudit({
+      accion: 'CATALOG_EDIT',
+      tabla,
+      valorAnterior: { empresa, modulo, valor: valorViejo },
+      valorNuevo: { empresa, modulo, valor: valorNuevo },
+      usuario: meta.usuario || 'sistema'
+    });
+    return true;
+  }
+
   async function deleteSelectorItem(empresa, modulo, valor, meta = {}) {
     const tabla = MODULO_TABLA[modulo];
     if (!tabla) return false;
@@ -1459,6 +1491,7 @@
     getSelectores,
     saveSelectores,
     upsertSelectorItem,
+    updateSelectorItem,
     deleteSelectorItem,
 
     getNotificaciones,
