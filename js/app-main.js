@@ -370,6 +370,10 @@ const APP = (() => {
     const mg = document.getElementById('modeGeneral');
     if (mi) mi.classList.toggle('active', mode === 'individual');
     if (mg) mg.classList.toggle('active', mode === 'general');
+    // Sincronizar modo de la gráfica de técnicos con el viewMode
+    if (typeof MODS !== 'undefined' && MODS.setTechMode) {
+      MODS.setTechMode(mode === 'general' ? 'general' : 'base');
+    }
     UI.renderEmpresaStrip(AUTH.checkSession());
     await showModule(currentModule);
   }
