@@ -376,6 +376,10 @@ const BULK = (() => {
                     <div class="bulk-estado-dot" style="background:var(--green)"></div>
                     Sin falla
                   </div>
+                  <div class="bulk-estado-btn" id="bulkEstadoBarrido" onclick="BULK.selEstado('barrido')" style="border:1px solid var(--border);border-radius:8px;padding:8px 16px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text2);background:var(--bg3);transition:all .15s">
+                    <div class="bulk-estado-dot" style="background:#4f8ef7"></div>
+                    Barrido
+                  </div>
                 </div>
               </div>
 
@@ -435,31 +439,110 @@ const BULK = (() => {
     </div>`;
   }
 
+  function _generarTextoBarrido() {
+    const emp      = DATA.state.currentEmpresa;
+    const fecha    = new Date().toLocaleDateString('es-MX', { day:'2-digit', month:'2-digit', year:'2-digit' });
+    const hora     = new Date().toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', hour12: false });
+
+    const enLinea   = state.unidades.filter(u => u.status === 'barrido');
+    const conFalla  = state.unidades.filter(u => u.status === 'done' && u.folio);
+    const sinFalla  = state.unidades.filter(u => u.status === 'done' && !u.folio);
+    const omitidas  = state.unidades.filter(u => u.status === 'pending');
+
+    let txt = '';
+    txt += `📡 *ESTADO DE UNIDADES ${emp}*
+`;
+    txt += `📅 Barrido ${fecha} / ${hora}
+
+`;
+
+    if (enLinea.length > 0) {
+      txt += `✅ *En línea:*
+`;
+      enLinea.forEach(u => { txt += `${u.numero} (en línea)
+`; });
+      txt += '
+';
+    }
+    if (conFalla.length > 0) {
+      txt += `🔴 *Con falla:*
+`;
+      conFalla.forEach(u => {
+        const r = DATA.state.fallas.find(f => f.folio === u.folio);
+        const desc = r ? (r.componente || r.categoria || r.descripcion || 'falla') : 'falla';
+        txt += `${u.numero} — ${desc}
+`;
+      });
+      txt += '
+';
+    }
+    if (sinFalla.length > 0) {
+      txt += `🟢 *Sin falla:*
+`;
+      sinFalla.forEach(u => { txt += `${u.numero}
+`; });
+      txt += '
+';
+    }
+    if (omitidas.length > 0) {
+      txt += `⏩ *Omitidas:* ${omitidas.map(u => u.numero).join(', ')}
+`;
+    }
+
+    return txt.trim();
+  }
+
+  function copiarBarrido() {
+    const txt = _generarTextoBarrido();
+    navigator.clipboard.writeText(txt).then(() => {
+      UI.toast('✅ Barrido copiado al portapapeles');
+    }).catch(() => {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      UI.toast('✅ Barrido copiado');
+    });
+  }
+
   function renderValidacionCompleta() {
-    const total = state.unidades.length;
-    const done  = getDoneCount();
+    const total     = state.unidades.length;
+    const done      = getDoneCount();
+    const barridos  = state.unidades.filter(u => u.status === 'barrido').length;
+    const conFalla  = state.unidades.filter(u => u.status === 'done' && u.folio).length;
+    const omitidas  = state.unidades.filter(u => u.status === 'pending').length;
+    const textoBarrido = _generarTextoBarrido();
 
     return `
-    <div id="mod-validacion-done" class="module active">
-      <div class="validacion-completa-wrap">
+    <div id="mod-validacion-done" class="module active" style="padding:20px">
+      <div class="validacion-completa-wrap" style="max-width:680px;margin:0 auto">
         <div class="vc-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
-        <h2 class="vc-title">¡Carga masiva completada!</h2>
-        <p class="vc-sub">Se procesaron <strong style="color:var(--accent)">${done}</strong> de <strong>${total}</strong> unidades correctamente.</p>
-        <div class="vc-stats">
-          <div class="vc-stat">
-            <div class="vc-stat-val" style="color:var(--green)">${done}</div>
-            <div class="vc-stat-lbl">Registros creados</div>
-          </div>
-          <div class="vc-stat">
-            <div class="vc-stat-val" style="color:var(--text2)">${total - done}</div>
-            <div class="vc-stat-lbl">Omitidas</div>
-          </div>
+        <h2 class="vc-title">¡Barrido completado!</h2>
+
+        <div class="vc-stats" style="margin-bottom:20px">
+          <div class="vc-stat"><div class="vc-stat-val" style="color:#4f8ef7">${barridos}</div><div class="vc-stat-lbl">En línea</div></div>
+          <div class="vc-stat"><div class="vc-stat-val" style="color:var(--red)">${conFalla}</div><div class="vc-stat-lbl">Con falla</div></div>
+          <div class="vc-stat"><div class="vc-stat-val" style="color:var(--green)">${done - conFalla}</div><div class="vc-stat-lbl">Sin falla</div></div>
+          <div class="vc-stat"><div class="vc-stat-val" style="color:var(--text3)">${omitidas}</div><div class="vc-stat-lbl">Omitidas</div></div>
         </div>
-        <div style="display:flex;gap:10px;margin-top:10px">
+
+        <!-- Resumen tipo WhatsApp -->
+        <div style="background:#0d1117;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;text-align:left">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <span style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Resumen para compartir</span>
+            <button class="btn btn-primary btn-sm" onclick="BULK.copiarBarrido()" style="gap:6px;display:flex;align-items:center">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+              Copiar
+            </button>
+          </div>
+          <pre id="barridoTexto" style="font-family:var(--mono);font-size:12px;color:var(--text1);white-space:pre-wrap;margin:0;line-height:1.6">${textoBarrido.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
           <button class="btn btn-ghost" onclick="APP.showModule('atencion')">Ver Atención Técnica</button>
           <button class="btn btn-primary" onclick="APP.showModule('registro')">Nuevo Registro</button>
         </div>
@@ -617,15 +700,19 @@ const BULK = (() => {
   function selEstado(tipo) {
     const fb = document.getElementById('bulkEstadoFalla');
     const sb = document.getElementById('bulkEstadoSinFalla');
+    const bb = document.getElementById('bulkEstadoBarrido');
     const fallaSection = document.getElementById('bulkFallaSection');
+
+    [fb, sb, bb].forEach(b => b && b.classList.remove('active'));
 
     if (tipo === 'falla') {
       if (fb) fb.classList.add('active');
-      if (sb) sb.classList.remove('active');
       if (fallaSection) fallaSection.style.display = '';
+    } else if (tipo === 'barrido') {
+      if (bb) { bb.classList.add('active'); bb.style.borderColor = '#4f8ef7'; bb.style.color = '#4f8ef7'; }
+      if (fallaSection) fallaSection.style.display = 'none';
     } else {
       if (sb) sb.classList.add('active');
-      if (fb) fb.classList.remove('active');
       if (fallaSection) fallaSection.style.display = 'none';
     }
     state.chipState.estado = tipo;
@@ -726,7 +813,23 @@ const BULK = (() => {
       return;
     }
 
-    // Crear reporte
+    // Si es barrido: no guardar en Supabase, solo marcar en línea localmente
+    if (estado === 'barrido') {
+      state.unidades[state.currentIdx].status  = 'barrido';
+      state.unidades[state.currentIdx].enLinea = true;
+      UI.toast(`📶 Unidad ${current.numero} marcada en línea`);
+      UI.updateHeaderCounts();
+      const nextPend = state.unidades.findIndex((u, i) => i > state.currentIdx && u.status === 'pending');
+      if (nextPend !== -1) { state.currentIdx = nextPend; renderCurrentValidacion(); }
+      else {
+        const anyPend = state.unidades.findIndex(u => u.status === 'pending');
+        if (anyPend !== -1) { state.currentIdx = anyPend; renderCurrentValidacion(); }
+        else { const main = document.getElementById('mainContent'); if (main) main.innerHTML = renderValidacionCompleta(); UI.updateHeaderCounts(); }
+      }
+      return;
+    }
+
+    // Crear reporte en Supabase (Con falla / Sin falla)
     const session = AUTH.checkSession();
     let nuevo;
     try {
@@ -852,6 +955,7 @@ const BULK = (() => {
     refreshList,
     enviarAlSistema,
     volverALista,
+    copiarBarrido,
     state,
     onBaseChange,
     onTecnicoChange,
