@@ -1445,6 +1445,18 @@ const MODS = (() => {
 
     cards.innerHTML = `
       <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:8px 0 4px">${titulo}</div>
+      ${(() => {
+        const apoyos = fallas.filter(f => f.esApoyo && f.tecnicoApoyoUsername);
+        if (!apoyos.length) return '';
+        const apoyoStats = {};
+        apoyos.forEach(f => {
+          const k = f.tecnicoApoyoNombre || f.tecnicoApoyoUsername;
+          if (!apoyoStats[k]) apoyoStats[k] = 0;
+          apoyoStats[k]++;
+        });
+        return '<div style="font-size:10px;color:#f59e0b;padding:4px 0">⚡ Apoyos registrados: ' +
+          Object.entries(apoyoStats).map(([n,c]) => n + ' (' + c + ')').join(', ') + '</div>';
+      })()}
       <div style="display:flex;flex-wrap:wrap;gap:8px">
         ${stats.map((s, i) => {
           const isMejor = i === 0 && stats.length > 1;
