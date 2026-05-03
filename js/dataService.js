@@ -307,6 +307,21 @@ const DS = (() => {
       return true;
     },
 
+    async updateSelectorItem(empresa, modulo, valorViejo, valorNuevo, meta = {}) {
+      const sels = lsGet('gho_selectores', {});
+      if (!sels[empresa] || !sels[empresa][modulo]) return false;
+      const lista = sels[empresa][modulo];
+      if (Array.isArray(lista)) {
+        const idx = lista.indexOf(valorViejo);
+        if (idx !== -1) lista[idx] = valorNuevo;
+      } else if (meta.categoria && lista[meta.categoria]) {
+        const idx = lista[meta.categoria].indexOf(valorViejo);
+        if (idx !== -1) lista[meta.categoria][idx] = valorNuevo;
+      }
+      lsSet('gho_selectores', sels);
+      return true;
+    },
+
     async deleteSelectorItem(empresa, modulo, valor, meta = {}) {
       const sels = lsGet('gho_selectores', {});
       if (!sels[empresa] || !sels[empresa][modulo]) return false;
@@ -458,6 +473,7 @@ const DS = (() => {
       getSelectores: strictMissing('getSelectores'),
       saveSelectores: strictMissing('saveSelectores'),
       upsertSelectorItem: strictMissing('upsertSelectorItem'),
+      updateSelectorItem: strictMissing('updateSelectorItem'),
       deleteSelectorItem: strictMissing('deleteSelectorItem'),
       getNotificaciones: strictMissing('getNotificaciones'),
       saveNotificaciones: strictMissing('saveNotificaciones'),
@@ -528,6 +544,7 @@ const DS = (() => {
     getSelectores:      ()               => a.getSelectores(),
     saveSelectores:     (d)              => a.saveSelectores(d),
     upsertSelectorItem: (e, m, v, meta)  => a.upsertSelectorItem(e, m, v, meta),
+    updateSelectorItem: (e, m, vv, vn, meta) => a.updateSelectorItem(e, m, vv, vn, meta),
     deleteSelectorItem: (e, m, v, meta)  => a.deleteSelectorItem(e, m, v, meta),
 
     /* Notificaciones */
@@ -590,4 +607,3 @@ const DS = (() => {
 })();
 
 window.DS = DS;
-
