@@ -405,28 +405,47 @@ const DATA = (() => {
   }
 
   // Técnico presiona "Atender"
-  async function tecnicoAtender(id, tecnicoNombre, tecnicoUsername) {
+  async function tecnicoAtender(id, tecnicoNombre, tecnicoUsername, esApoyo = false, apoyoNombre = '', apoyoUsername = '') {
     const session = AUTH.checkSession();
     const idx = state.fallas.findIndex(f => f.id === id);
     if (idx < 0) return null;
 
+    const falla = state.fallas[idx];
+
+    // Determinar si es apoyo: técnico de diferente base al reporte
+    const baseReporte = (falla.base || '').toUpperCase();
+    const allUsers    = AUTH.getUsers().list || [];
+    const userInfo    = allUsers.find(u => u.username === tecnicoUsername);
+    const baseTecnico = (userInfo?.base || '').toUpperCase();
+    const detectApoyo = esApoyo || (baseTecnico && baseReporte && baseTecnico !== baseReporte);
+
+    const accion  = detectApoyo ? 'Técnico de apoyo atendiendo' : 'Técnico atendiendo';
+    const detalle = detectApoyo
+      ? `${apoyoNombre || tecnicoNombre} (apoyo desde ${baseTecnico}) apoya en atención`
+      : `Técnico ${tecnicoNombre} inició atención`;
+
     const atenderChanges = {
       estatus:             'En proceso',
-      tecnico:             tecnicoNombre,
-      tecnicoUsername:     tecnicoUsername || (session ? session.username : ''),
+      // Si es apoyo: el técnico original del reporte se mantiene, solo registramos el apoyo
+      tecnico:             detectApoyo ? (falla.tecnico || tecnicoNombre) : tecnicoNombre,
+      tecnicoUsername:     detectApoyo ? (falla.tecnicoUsername || tecnicoUsername) : tecnicoUsername,
+      // Campos de apoyo
+      tecnicoApoyoNombre:   detectApoyo ? (apoyoNombre || tecnicoNombre) : '',
+      tecnicoApoyoUsername: detectApoyo ? (apoyoUsername || tecnicoUsername) : '',
+      esApoyo:              detectApoyo,
       fechaInicioAtencion: new Date().toISOString(),
       historial: [{
         fecha:   new Date().toISOString(),
-        accion:  'Técnico atendiendo',
-        usuario: tecnicoNombre || (session ? session.username : 'técnico'),
-        detalle: `Técnico ${tecnicoNombre} inició atención`
-      }, ...(state.fallas[idx].historial || [])],
+        accion,
+        usuario: apoyoNombre || tecnicoNombre || (session ? session.username : 'técnico'),
+        detalle
+      }, ...(falla.historial || [])],
     };
 
-    const updated = await DS.updateReporte(id, atenderChanges, { usuario: tecnicoNombre || (session ? session.username : 'sistema') });
+    const updated = await DS.updateReporte(id, atenderChanges, { usuario: apoyoNombre || tecnicoNombre || (session ? session.username : 'sistema') });
     state.fallas[idx] = { ...updated };
-    await notificarTecnicoAtendiendo(state.fallas[idx], tecnicoNombre);
-    await AUTH.log('TECH_ATENDER', `Técnico ${tecnicoNombre} atiende ${state.fallas[idx].folio}`, tecnicoNombre);
+    await notificarTecnicoAtendiendo(state.fallas[idx], apoyoNombre || tecnicoNombre);
+    await AUTH.log('TECH_ATENDER', `${detectApoyo ? 'APOYO' : 'Técnico'} ${apoyoNombre || tecnicoNombre} atiende ${falla.folio}`, apoyoNombre || tecnicoNombre);
     return state.fallas[idx];
   }
 
