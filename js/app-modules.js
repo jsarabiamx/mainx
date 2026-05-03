@@ -1814,11 +1814,20 @@ const MODS = (() => {
     const session = AUTH.checkSession();
     const values = raw.split(',').map(v => v.trim()).filter(v => v.length > 0);
     const added = [], skipped = [];
+
+    // Todos los selectores son globales: se aplican a TODAS las empresas del sistema
+    const empresasDestino = DATA.state.empresas;
+
     for (const val of values) {
       if (opts.includes(val)) { skipped.push(val); continue; }
       try {
-        await DS.upsertSelectorItem(emp, key, val, { usuario: session ? session.username : 'sistema' });
-        opts.push(val);
+        for (const e of empresasDestino) {
+          if (!DATA.state.selectores[e]) continue;
+          const lista = DATA.state.selectores[e][key];
+          if (!Array.isArray(lista) || lista.includes(val)) continue;
+          await DS.upsertSelectorItem(e, key, val, { usuario: session ? session.username : 'sistema' });
+          lista.push(val);
+        }
         if (key === 'categoria') DATA.state.selectores[emp].componente[val] = [];
         added.push(val);
       } catch(e) {
@@ -1865,18 +1874,29 @@ const MODS = (() => {
     if (!ok) return;
 
     const session = AUTH.checkSession();
+
+    // Todos los selectores son globales: borrar de TODAS las empresas
+    const empresasDestino = DATA.state.empresas;
+
     try {
-      await DS.deleteSelectorItem(emp, key, val, {
-        usuario: session ? session.username : 'sistema',
-        force: true, // el usuario ya confirmó
-      });
+      for (const e of empresasDestino) {
+        if (!DATA.state.selectores[e]) continue;
+        const lista = DATA.state.selectores[e][key];
+        if (!Array.isArray(lista) || !lista.includes(val)) continue;
+        await DS.deleteSelectorItem(e, key, val, {
+          usuario: session ? session.username : 'sistema',
+          force: true,
+        });
+        const i = lista.indexOf(val);
+        if (i !== -1) lista.splice(i, 1);
+      }
     } catch (e) {
       UI.toast(e.message, 'err'); return;
     }
 
-    // Reflejo local
+    // Reflejo local empresa activa
     if (key === 'categoria') delete DATA.state.selectores[emp].componente[val];
-    opts.splice(idx, 1);
+    // opts ya fue mutado en el loop arriba si emp está en empresasDestino
     await AUTH.log('CONFIG_EDIT', `Opción eliminada en ${key}: ${val}`);
     await APP.showModule('config');
     UI.toast('Opción eliminada');
@@ -1894,13 +1914,16 @@ const MODS = (() => {
     });
     if (!ok) return;
     const session = AUTH.checkSession();
-    // Actualizar selectores via DS
-    if (key === 'categoria') DATA.state.selectores[emp].componente = {};
-    DATA.state.selectores[emp][key] = [];
+    // Aplicar a TODAS las empresas (selectores globales)
+    for (const e of DATA.state.empresas) {
+      if (!DATA.state.selectores[e]) continue;
+      if (key === 'categoria') DATA.state.selectores[e].componente = {};
+      DATA.state.selectores[e][key] = [];
+    }
     await DS.saveSelectores(DATA.state.selectores);
-    await AUTH.log('CONFIG_CLEAR', `Todos los items de ${key} eliminados para ${emp}`, session ? session.username : 'sistema');
+    await AUTH.log('CONFIG_CLEAR', `Todos los items de ${key} eliminados (global)`, session ? session.username : 'sistema');
     await APP.showModule('config');
-    UI.toast(`Items de "${key}" eliminados para ${emp}`);
+    UI.toast(`Items de "${key}" eliminados para todas las empresas`);
   }
 
   async function editConfigItem(key, idx) {
@@ -1921,14 +1944,21 @@ const MODS = (() => {
     });
     if (!nuevo || nuevo === old) return;
     const trimmed = nuevo.trim();
-    opts[idx] = trimmed;
-    if (key === 'categoria' && DATA.state.selectores[DATA.state.currentEmpresa].componente[old]) {
-      DATA.state.selectores[DATA.state.currentEmpresa].componente[trimmed] = DATA.state.selectores[DATA.state.currentEmpresa].componente[old];
-      delete DATA.state.selectores[DATA.state.currentEmpresa].componente[old];
+    // Propagar edición a TODAS las empresas (selectores globales)
+    for (const e of DATA.state.empresas) {
+      if (!DATA.state.selectores[e]) continue;
+      const lista = DATA.state.selectores[e][key];
+      if (!Array.isArray(lista)) continue;
+      const i = lista.indexOf(old);
+      if (i !== -1) lista[i] = trimmed;
+      if (key === 'categoria' && DATA.state.selectores[e].componente?.[old]) {
+        DATA.state.selectores[e].componente[trimmed] = DATA.state.selectores[e].componente[old];
+        delete DATA.state.selectores[e].componente[old];
+      }
     }
     await DATA.persistAll();
     await APP.showModule('config');
-    UI.toast('Opción actualizada');
+    UI.toast('Opción actualizada en todas las empresas');
   }
 
   async function addComponente(emp, cat) {
@@ -1944,8 +1974,14 @@ const MODS = (() => {
     for (const val of values) {
       if (list.includes(val)) { skipped.push(val); continue; }
       try {
-        await DS.upsertSelectorItem(emp, 'componente', val, { categoria: cat, usuario: session ? session.username : 'sistema' });
-        list.push(val);
+        // Propagar componente a TODAS las empresas
+        for (const e of DATA.state.empresas) {
+          if (!DATA.state.selectores[e]) continue;
+          if (!DATA.state.selectores[e].componente[cat]) DATA.state.selectores[e].componente[cat] = [];
+          if (DATA.state.selectores[e].componente[cat].includes(val)) continue;
+          await DS.upsertSelectorItem(e, 'componente', val, { categoria: cat, usuario: session ? session.username : 'sistema' });
+          DATA.state.selectores[e].componente[cat].push(val);
+        }
         added.push(val);
       } catch(e) {
         UI.toast('Error al guardar "' + val + '": ' + (e.message || e), 'err');
@@ -1978,15 +2014,22 @@ const MODS = (() => {
     if (!ok) return;
     try {
       const session = AUTH.checkSession();
-      await DS.deleteSelectorItem(emp, 'componente', val, { categoria: cat, force: true, usuario: session ? session.username : 'sistema' });
-      DATA.state.selectores[emp].componente[cat].splice(cidx, 1);
+      // Propagar eliminación a TODAS las empresas
+      for (const e of DATA.state.empresas) {
+        if (!DATA.state.selectores[e]?.componente?.[cat]) continue;
+        const lista = DATA.state.selectores[e].componente[cat];
+        if (!lista.includes(val)) continue;
+        await DS.deleteSelectorItem(e, 'componente', val, { categoria: cat, force: true, usuario: session ? session.username : 'sistema' });
+        const i = lista.indexOf(val);
+        if (i !== -1) lista.splice(i, 1);
+      }
     } catch(e) {
       UI.toast('Error al eliminar componente: ' + (e.message || e), 'err');
       console.error('delComponente error:', e);
       return;
     }
     await APP.showModule('config');
-    UI.toast('Componente eliminado');
+    UI.toast('Componente eliminado de todas las empresas');
   }
 
   async function addEmpresa() {
