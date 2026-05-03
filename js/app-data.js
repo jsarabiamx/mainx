@@ -320,14 +320,7 @@ const DATA = (() => {
       prioridad:   data.prioridad || 'Media',
       tecnico:     data.tecnico || '',
       tecnicoUsername: data.tecnicoUsername || '',
-      estatus:     (() => {
-        // Usar el primer estatus de la lista configurada que NO sea de cierre/especial
-        const emp = data.empresa || state.currentEmpresa;
-        const lista = getSel('estatus', emp);
-        const EXCLUIR = /atendid|vandaliz|venta|sin sim|sin operac|renta|en operaci/i;
-        const inicial = lista.find(e => !EXCLUIR.test(e));
-        return inicial || 'Pendiente';
-      })(),
+      estatus:     'Pendiente',
       fechaAtencion: null,
       resultado:   '',
       notas:       '',
