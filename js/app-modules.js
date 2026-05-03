@@ -1327,7 +1327,7 @@ const MODS = (() => {
     const cards = document.getElementById('techResumenCards');
 
     // Solo técnicos (role === 'tecnico') — excluir master y admin
-    const allUsers  = AUTH.getUsers().list || [];
+    const allUsers  = AUTH.getUsers() || [];  // getUsers() ya devuelve el array
     const tecnicos  = allUsers.filter(u => u.role === 'tecnico' && u.activo !== false);
 
     // Sesión actual para saber qué base mostrar en modo BASE
