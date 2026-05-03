@@ -1022,7 +1022,7 @@ const TECH = (() => {
               Base de atención: <strong style="color:#4f8ef7">${base||'No especificada'}</strong>
             </div>
             <div style="font-size:10px;color:${hintColor};margin-bottom:10px">${hintText}</div>
-            <label style="display:block;font-size:11px;font-weight:700;color:#7c8ba1;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Técnico que atiende</label>
+            <label id="atenderTecLabel" style="display:block;font-size:11px;font-weight:700;color:#7c8ba1;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Técnico que atiende</label>
             <select id="atenderTecSel" style="width:100%;background:#0f1320;border:1px solid #1a2035;border-radius:8px;color:#e2e8f0;font-size:13px;padding:9px 12px;outline:none;box-sizing:border-box">
               ${tecOptions}
             </select>
@@ -1047,21 +1047,49 @@ const TECH = (() => {
 
     overlay.querySelector('#atenderCancelBtn').onclick = () => overlay.remove();
 
+    // Detectar si este técnico es de otra base (modo apoyo)
+    const myBase      = (session.base || '').toUpperCase();
+    const reporteBase = (f.base || '').toUpperCase();
+    const esApoyo     = myBase && reporteBase && myBase !== reporteBase;
+
+    // Actualizar label y hint si es apoyo
+    if (esApoyo) {
+      const lbl = overlay.querySelector('#atenderTecLabel');
+      if (lbl) { lbl.textContent = 'Apoyo a atender'; lbl.style.color = '#f59e0b'; }
+      const nota = overlay.querySelector('strong[style*="4f8ef7"]');
+      // Agregar nota de apoyo al banner informativo
+      const banner = overlay.querySelector('div[style*="rgba(79,142,247,0.07)"]');
+      if (banner) banner.innerHTML += `<br><span style="color:#f59e0b;font-weight:600">⚡ Apoyo: eres de base ${myBase}, el reporte es de ${reporteBase}. El conteo irá al técnico asignado.</span>`;
+    }
+
     overlay.querySelector('#atenderConfirmBtn').onclick = async () => {
-      let nombre = '';
+      let nombre = '', username = session.username;
       if (sel.value === '__self__' || sel.value === '') {
         nombre = myName;
       } else if (sel.value === '__otro__') {
         nombre = otroInp.value.trim();
         if (!nombre) { otroInp.style.borderColor='#ef4444'; otroInp.focus(); return; }
+        username = nombre; // para "Otro" no hay username conocido
       } else {
         nombre = sel.value;
+        // Buscar el username del técnico seleccionado
+        const allUsers = AUTH.getUsers().list || [];
+        const found = allUsers.find(u => (u.nombre || u.username) === nombre);
+        if (found) username = found.username;
       }
 
       overlay.remove();
-      const result = await tecnicoAtender(reporteId, nombre, session.username);
+
+      // Si es apoyo: el nombre real que atiende es "yo" (session), el técnico del reporte se mantiene
+      const result = esApoyo
+        ? await DATA.tecnicoAtender(reporteId, f.tecnico || nombre, f.tecnicoUsername || username, true, myName, session.username)
+        : await DATA.tecnicoAtender(reporteId, nombre, username, false, '', '');
+
       if (result) {
-        showToast(`Atendiendo unidad ${result.unidad} — Admin notificado ✓`, 'success');
+        const msg = esApoyo
+          ? `Apoyo registrado — Unidad ${result.unidad} en proceso ✓`
+          : `Atendiendo unidad ${result.unidad} — Admin notificado ✓`;
+        showToast(msg, 'success');
         renderAll();
         renderDetail(reporteId);
       }
