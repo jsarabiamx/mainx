@@ -774,7 +774,10 @@ const MODS = (() => {
           <div class="card-hdr" style="flex-wrap:wrap;gap:6px">
             <div class="card-icon card-icon-purple"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
             <span class="card-title">Productividad por Técnico</span>
-            <div style="margin-left:auto;display:flex;gap:4px">
+            <div style="margin-left:auto;display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+              <select id="techBaseSelect" onchange="MODS.setTechBase(this.value)" style="font-size:10px;padding:2px 6px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text2);height:24px;cursor:pointer">
+                <option value="">Todas las bases</option>
+              </select>
               <button id="techModeBase" onclick="MODS.setTechMode('base')" class="btn btn-sm btn-primary" style="font-size:10px;padding:2px 8px">BASE</button>
               <button id="techModeVs" onclick="MODS.setTechMode('vs')" class="btn btn-sm btn-ghost" style="font-size:10px;padding:2px 8px">VS BASES</button>
             </div>
@@ -1309,67 +1312,92 @@ const MODS = (() => {
   // Solo aplica a técnicos (role === 'tecnico')
   // Admin y Master no entran en la gráfica
   // ══════════════════════════════════════════════════════════
-  let _techMode = 'base'; // 'base' | 'vs'
+  let _techMode    = 'base'; // 'base' | 'vs' | 'general'
+  let _techBaseFilter = '';  // base seleccionada en dropdown
+
+  function _poblarBaseSelect() {
+    const sel = document.getElementById('techBaseSelect');
+    if (!sel) return;
+    const session = AUTH.checkSession();
+    const empActiva = DATA.state.currentEmpresa;
+    const allUsers  = AUTH.getUsers() || [];
+    // Solo técnicos de la empresa activa
+    const tecnicos  = allUsers.filter(u =>
+      u.role === 'tecnico' && u.activo !== false &&
+      (!empActiva || (u.empresas || []).includes(empActiva))
+    );
+    const bases = [...new Set(tecnicos.map(u => (u.base || '').toUpperCase()).filter(Boolean))].sort();
+    const prev  = sel.value;
+    sel.innerHTML = '<option value="">Todas las bases</option>' +
+      bases.map(b => `<option value="${b}"${b === prev ? ' selected' : ''}>${b}</option>`).join('');
+    // Si el selector está vacío y hay bases, pre-seleccionar la primera
+    if (!sel.value && bases.length) sel.value = bases[0];
+    _techBaseFilter = sel.value;
+  }
+
+  function setTechBase(base) {
+    _techBaseFilter = (base || '').toUpperCase();
+    _buildTechChart(getPeriodoFallas());
+  }
 
   function setTechMode(mode) {
     _techMode = mode;
     const btnBase = document.getElementById('techModeBase');
     const btnVs   = document.getElementById('techModeVs');
+    const selBase = document.getElementById('techBaseSelect');
     if (btnBase) { btnBase.className = mode === 'base' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost'; btnBase.style.cssText = 'font-size:10px;padding:2px 8px'; }
     if (btnVs)   { btnVs.className   = mode === 'vs'   ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost'; btnVs.style.cssText   = 'font-size:10px;padding:2px 8px'; }
+    // El dropdown solo aplica en modo BASE
+    if (selBase) selBase.style.display = mode === 'base' ? '' : 'none';
     _buildTechChart(getPeriodoFallas());
   }
 
   function _buildTechChart(fallas) {
     if (techChart) { techChart.destroy(); techChart = null; }
 
-    const wrap = document.getElementById('techChartWrap');
+    const wrap  = document.getElementById('techChartWrap');
     const cards = document.getElementById('techResumenCards');
 
-    // Solo técnicos (role === 'tecnico') — excluir master y admin
-    const allUsers  = AUTH.getUsers() || [];  // getUsers() ya devuelve el array
-    const tecnicos  = allUsers.filter(u => u.role === 'tecnico' && u.activo !== false);
+    _poblarBaseSelect();
 
-    // Sesión actual para saber qué base mostrar en modo BASE
-    const session   = AUTH.checkSession();
-    const isGeneral = DATA.state.viewMode === 'general';
+    const session    = AUTH.checkSession();
+    const empActiva  = DATA.state.currentEmpresa;
+    const isGeneral  = DATA.state.viewMode === 'general';
+    const allUsers   = AUTH.getUsers() || [];
 
-    // Filtrar fallas por empresa activa (modo individual) o todas
-    const fallasFiltradas = fallas;
+    // Solo técnicos — excluir master y admin
+    // Filtrar por empresa activa (técnico debe tener acceso a esa empresa)
+    const tecnicos = allUsers.filter(u =>
+      u.role === 'tecnico' && u.activo !== false &&
+      (!empActiva || isGeneral || (u.empresas || []).includes(empActiva))
+    );
+
+    const _fallasTec = (u) => fallas.filter(f =>
+      f.tecnicoUsername === u.username || f.tecnico === (u.nombre || u.username)
+    );
 
     if (_techMode === 'base') {
-      // ── MODO BASE: técnicos de la misma base del usuario activo ──
-      // Master y admin ven TODOS los técnicos
-      // Un técnico ve solo los de su propia base
-      const isMasterOrAdmin = session && (session.role === 'master' || session.role === 'admin');
-      const isMasterAdmin = session?.role === 'master' || session?.role === 'admin';
-      const baseActiva = (!isMasterAdmin && session?.base) ? session.base : '';
-
-      const tecBase = baseActiva
-        ? tecnicos.filter(u => (u.base || '').toUpperCase() === baseActiva.toUpperCase())
-        : tecnicos; // sin filtro de base → todos los técnicos
+      // ── MODO BASE: técnicos de la base seleccionada en el dropdown ──
+      const baseSeleccionada = _techBaseFilter;
+      const tecBase = baseSeleccionada
+        ? tecnicos.filter(u => (u.base || '').toUpperCase() === baseSeleccionada)
+        : tecnicos;
 
       if (tecBase.length === 0) {
-        if (wrap) wrap.innerHTML = '<p style="color:var(--text3);font-size:12px;padding:20px;text-align:center">Sin técnicos registrados</p>';
-        if (cards) cards.innerHTML = '';
-        return;
+        if (wrap) wrap.innerHTML = '<p style="color:var(--text3);font-size:12px;padding:20px;text-align:center">Sin técnicos en esta base</p>';
+        if (cards) cards.innerHTML = ''; return;
       }
 
-      // Buscar fallas por tecnicoUsername O por nombre (compatibilidad con registros viejos)
-      const _fallasTec = (u) => fallasFiltradas.filter(f =>
-        f.tecnicoUsername === u.username || f.tecnico === (u.nombre || u.username)
-      );
       const labels     = tecBase.map(u => u.nombre || u.username);
       const correctivos= tecBase.map(u => _fallasTec(u).filter(f => /correctiv/i.test(f.tipo)).length);
       const preventivos= tecBase.map(u => _fallasTec(u).filter(f => /preventiv/i.test(f.tipo)).length);
       const atendidos  = tecBase.map(u => _fallasTec(u).filter(f => _isAtendidoEst(f.estatus, f.empresa)).length);
 
       _renderTechBarChart(labels, correctivos, preventivos, atendidos);
-      _renderTechCards(tecBase, fallasFiltradas, (!isMasterAdmin && baseActiva) ? `Técnicos · Base ${baseActiva}` : 'Todos los técnicos');
+      _renderTechCards(tecBase, fallas, baseSeleccionada ? `Técnicos · Base ${baseSeleccionada}` : `Todos los técnicos · ${empActiva || 'Global'}`);
 
-    } else {
-      // ── MODO VS BASES: top 1 técnico de cada base compiten entre sí ──
-      // Agrupar técnicos por base, tomar el que más atendidos tenga en cada base
+    } else if (_techMode === 'vs') {
+      // ── MODO VS BASES: top 1 técnico de cada base, solo bases de la empresa activa ──
       const baseMap = {};
       tecnicos.forEach(u => {
         const base = (u.base || 'Sin base').toUpperCase();
@@ -1378,36 +1406,72 @@ const MODS = (() => {
       });
 
       const topPorBase = Object.entries(baseMap).map(([base, tecList]) => {
-        // Elegir el técnico con más atendidos en esta base
         const scored = tecList.map(u => {
-          const ff = fallasFiltradas.filter(f =>
-            f.tecnicoUsername === u.username || f.tecnico === (u.nombre || u.username)
-          );
-          return {
-            u,
+          const ff = _fallasTec(u);
+          return { u,
             atendidos:   ff.filter(f => _isAtendidoEst(f.estatus, f.empresa)).length,
             correctivos: ff.filter(f => /correctiv/i.test(f.tipo)).length,
             preventivos: ff.filter(f => /preventiv/i.test(f.tipo)).length,
           };
-        });
-        scored.sort((a, b) => b.atendidos - a.atendidos);
+        }).sort((a, b) => b.atendidos - a.atendidos);
         return { base, top: scored[0] };
       }).filter(b => b.top);
 
       if (topPorBase.length === 0) {
-        if (wrap) wrap.innerHTML = '<p style="color:var(--text3);font-size:12px;padding:20px;text-align:center">Sin datos por base</p>';
-        if (cards) cards.innerHTML = '';
-        return;
+        if (wrap) wrap.innerHTML = '<p style="color:var(--text3);font-size:12px;padding:20px;text-align:center">Sin bases con técnicos</p>';
+        if (cards) cards.innerHTML = ''; return;
       }
 
-      const labels     = topPorBase.map(b => b.base);
-      const correctivos= topPorBase.map(b => b.top.correctivos);
-      const preventivos= topPorBase.map(b => b.top.preventivos);
-      const atendidos  = topPorBase.map(b => b.top.atendidos);
+      _renderTechBarChart(
+        topPorBase.map(b => b.base),
+        topPorBase.map(b => b.top.correctivos),
+        topPorBase.map(b => b.top.preventivos),
+        topPorBase.map(b => b.top.atendidos),
+        topPorBase.map(b => b.top.u.nombre || b.top.u.username)
+      );
+      _renderTechCardsVsBases(topPorBase, fallas);
 
-      _renderTechBarChart(labels, correctivos, preventivos, atendidos,
-        topPorBase.map(b => (b.top.u.nombre || b.top.u.username)));
-      _renderTechCardsVsBases(topPorBase, fallasFiltradas);
+    } else {
+      // ── MODO GENERAL (desde botón General en header) ──
+      // Top 1 técnico de cada empresa compiten entre sí
+      const empresas = DATA.state.empresas || [];
+      const topPorEmp = empresas.map(emp => {
+        const tecsEmp = allUsers.filter(u =>
+          u.role === 'tecnico' && u.activo !== false &&
+          (u.empresas || []).includes(emp)
+        );
+        if (!tecsEmp.length) return null;
+        const scored = tecsEmp.map(u => {
+          const ff = fallas.filter(f =>
+            (f.empresa === emp) &&
+            (f.tecnicoUsername === u.username || f.tecnico === (u.nombre || u.username))
+          );
+          return { u, emp,
+            atendidos:   ff.filter(f => _isAtendidoEst(f.estatus, f.empresa)).length,
+            correctivos: ff.filter(f => /correctiv/i.test(f.tipo)).length,
+            preventivos: ff.filter(f => /preventiv/i.test(f.tipo)).length,
+          };
+        }).sort((a, b) => b.atendidos - a.atendidos);
+        return { emp, top: scored[0] };
+      }).filter(Boolean).filter(e => e.top);
+
+      if (topPorEmp.length === 0) {
+        if (wrap) wrap.innerHTML = '<p style="color:var(--text3);font-size:12px;padding:20px;text-align:center">Sin datos por empresa</p>';
+        if (cards) cards.innerHTML = ''; return;
+      }
+
+      _renderTechBarChart(
+        topPorEmp.map(e => e.emp),
+        topPorEmp.map(e => e.top.correctivos),
+        topPorEmp.map(e => e.top.preventivos),
+        topPorEmp.map(e => e.top.atendidos),
+        topPorEmp.map(e => e.top.u.nombre || e.top.u.username)
+      );
+      // Reutilizar _renderTechCardsVsBases con estructura compatible
+      _renderTechCardsVsBases(
+        topPorEmp.map(e => ({ base: e.emp, top: { u: e.top.u, ...e.top } })),
+        fallas, true
+      );
     }
   }
 
@@ -1522,7 +1586,7 @@ const MODS = (() => {
       <p style="font-size:10px;color:var(--text3);margin-top:6px;text-align:center">La eficiencia se calcula: atendidos / total asignados</p>`;
   }
 
-  function _renderTechCardsVsBases(topPorBase, fallas) {
+  function _renderTechCardsVsBases(topPorBase, fallas, isEmpresa = false) {
     const cards = document.getElementById('techResumenCards');
     if (!cards) return;
 
@@ -2521,7 +2585,7 @@ const MODS = (() => {
 
   return {
     renderRegistro, renderAtencion, renderDashboard, renderAtendidos, renderConfig, renderHistorial,
-    setTechMode,
+    setTechMode, setTechBase,
     initDashboard, renderDashTable, renderAtendidosTable, setAtendPeriodo, exportAtendidosCSV, clearAtendFilters,
     clearFilters, exportCSV,
     selAtencion, selAtencionFromDash, eliminarDesideDash, guardarAtencion, onAtenEstatusChange, eliminarAtencion,
