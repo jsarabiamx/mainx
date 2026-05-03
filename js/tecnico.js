@@ -193,46 +193,63 @@ const TECH = (() => {
   }
 
   /* ── Técnico presiona Atender ── */
-  async function tecnicoAtender(reporteId, tecnicoNombre, tecnicoUsername) {
+  async function tecnicoAtender(reporteId, tecnicoNombre, tecnicoUsername, esApoyo = false, apoyoNombre = '', apoyoUsername = '') {
     const fallas = await getFallas();
     const idx = fallas.findIndex(f => f.id === reporteId);
     if (idx < 0) return null;
 
+    const f = fallas[idx];
+    const quienActua = apoyoNombre || tecnicoNombre;
+    const accion  = esApoyo ? 'Técnico de apoyo atendiendo' : 'Técnico atendiendo';
+    const detalle = esApoyo
+      ? `${quienActua} (apoyo) apoya en atención de ${f.base || ''}`
+      : `${tecnicoNombre} inició atención`;
+
     const histEntry = {
       fecha:   new Date().toISOString(),
-      accion:  'Técnico atendiendo',
-      usuario: tecnicoNombre,
-      detalle: `${tecnicoNombre} inició atención`
+      accion,
+      usuario: quienActua,
+      detalle
     };
 
     const changes = {
-      estatus:             'En proceso',
-      tecnico:             tecnicoNombre,
-      tecnicoUsername:     tecnicoUsername || '',
-      fechaInicioAtencion: new Date().toISOString(),
-      historial: [histEntry, ...(fallas[idx].historial || [])],
+      estatus:              'En proceso',
+      // Si es apoyo: mantener técnico original; si no, asignar el nuevo
+      tecnico:              esApoyo ? (f.tecnico || tecnicoNombre) : tecnicoNombre,
+      tecnicoUsername:      esApoyo ? (f.tecnicoUsername || tecnicoUsername) : (tecnicoUsername || ''),
+      tecnicoApoyoNombre:   esApoyo ? quienActua : '',
+      tecnicoApoyoUsername: esApoyo ? (apoyoUsername || tecnicoUsername) : '',
+      esApoyo:              esApoyo,
+      fechaInicioAtencion:  new Date().toISOString(),
+      historial: [histEntry, ...(f.historial || [])],
     };
 
-    // Persistir via DS (registro individual, no lista completa)
-    await DS.updateReporte(reporteId, changes, { usuario: tecnicoNombre });
+    // Persistir via DS
+    await DS.updateReporte(reporteId, changes, { usuario: quienActua });
     // Reflejo local
     Object.assign(fallas[idx], changes);
     state.fallas = fallas;
 
     // Notificar admin
+    const tituloNotif = esApoyo
+      ? `${quienActua} (apoyo) — Unidad ${f.unidad} atendiendo`
+      : `${tecnicoNombre} — Unidad ${f.unidad} atendiendo`;
+    const mensajeNotif = esApoyo
+      ? `${quienActua} está apoyando la unidad ${f.unidad} (${f.folio}). Técnico asignado: ${f.tecnico || tecnicoNombre}.`
+      : `${tecnicoNombre} está atendiendo la unidad ${f.unidad} (${f.folio}). Valida cuando esté listo.`;
+
     await crearNotificacion('TECH_ATENDIENDO', {
-      reporteId: fallas[idx].id,
-      folio:     fallas[idx].folio,
-      unidad:    fallas[idx].unidad,
-      empresa:   fallas[idx].empresa,
-      tecnico:   tecnicoNombre,
+      reporteId: f.id,
+      folio:     f.folio,
+      unidad:    f.unidad,
+      empresa:   f.empresa,
+      tecnico:   quienActua,
       destino:   'admin',
-      titulo:    `${tecnicoNombre} — Unidad ${fallas[idx].unidad} atendiendo`,
-      mensaje:   `${tecnicoNombre} está atendiendo la unidad ${fallas[idx].unidad} (${fallas[idx].folio}). Valida cuando esté listo.`,
+      titulo:    tituloNotif,
+      mensaje:   mensajeNotif,
     });
 
-    // Log
-    await AUTH.log('TECH_ATENDER', `Técnico ${tecnicoNombre} atiende ${fallas[idx].folio}`, tecnicoNombre);
+    await AUTH.log('TECH_ATENDER', `${esApoyo ? 'APOYO' : 'Técnico'} ${quienActua} atiende ${f.folio}`, quienActua);
     return fallas[idx];
   }
 
@@ -1082,8 +1099,8 @@ const TECH = (() => {
 
       // Si es apoyo: el nombre real que atiende es "yo" (session), el técnico del reporte se mantiene
       const result = esApoyo
-        ? await DATA.tecnicoAtender(reporteId, f.tecnico || nombre, f.tecnicoUsername || username, true, myName, session.username)
-        : await DATA.tecnicoAtender(reporteId, nombre, username, false, '', '');
+        ? await tecnicoAtender(reporteId, f.tecnico || nombre, f.tecnicoUsername || username, true, myName, session.username)
+        : await tecnicoAtender(reporteId, nombre, username, false, '', '');
 
       if (result) {
         const msg = esApoyo
