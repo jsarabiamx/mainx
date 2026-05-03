@@ -2776,13 +2776,20 @@ const MODS = (() => {
     if (tl) tl.innerHTML = renderAuditItems(filtered);
   }
 
-  function setRegistroMode(mode) {
+  async function setRegistroMode(mode) {
+    const main = document.getElementById('mainContent');
+    if (!main) return;
+
     if (mode === 'bulk') {
-      const main = document.getElementById('mainContent');
-      if (main) {
-        const session = AUTH.checkSession();
-        main.innerHTML = BULK.renderCargaMasiva(session);
-      }
+      // Mostrar loading mientras verifica sesión
+      main.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:300px;gap:12px;color:var(--text3)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        Cargando carga masiva...
+      </div>`;
+      // Pequeño yield para que el browser pinte el loading
+      await new Promise(r => setTimeout(r, 30));
+      const session = AUTH.checkSession();
+      main.innerHTML = BULK.renderCargaMasiva(session);
     } else {
       APP.showModule('registro');
     }
