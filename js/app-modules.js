@@ -744,12 +744,17 @@ const MODS = (() => {
 
       <!-- ══ GRÁFICAS ROW 2 ══ -->
       <div class="charts-row">
-        <div class="card" style="flex:1">
-          <div class="card-hdr">
+        <div class="card" style="flex:1;min-width:0">
+          <div class="card-hdr" style="flex-wrap:wrap;gap:6px">
             <div class="card-icon card-icon-purple"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
             <span class="card-title">Productividad por Técnico</span>
+            <div style="margin-left:auto;display:flex;gap:4px">
+              <button id="techModeBase" onclick="MODS.setTechMode('base')" class="btn btn-sm btn-primary" style="font-size:10px;padding:2px 8px">BASE</button>
+              <button id="techModeVs" onclick="MODS.setTechMode('vs')" class="btn btn-sm btn-ghost" style="font-size:10px;padding:2px 8px">VS BASES</button>
+            </div>
           </div>
-          <div class="chart-wrap" style="height:220px"><canvas id="techChart"></canvas></div>
+          <div id="techChartWrap" class="chart-wrap" style="height:220px"><canvas id="techChart"></canvas></div>
+          <div id="techResumenCards" style="margin-top:8px"></div>
         </div>
         <div class="card" style="flex:1">
           <div class="card-hdr">
@@ -1244,37 +1249,7 @@ const MODS = (() => {
       }).join('');
     }
 
-    const tc = document.getElementById('techChart');
-    if (tc) {
-      const tecnicosSet = [...new Set(fallas.map(f => f.tecnico).filter(Boolean))];
-      const correctivos = tecnicosSet.map(t => fallas.filter(f => f.tecnico === t && f.tipo === 'Correctivo').length);
-      const preventivos = tecnicosSet.map(t => fallas.filter(f => f.tecnico === t && f.tipo === 'Preventivo').length);
-      const atendidos   = tecnicosSet.map(t => fallas.filter(f => f.tecnico === t && _isAtendidoEst(f.estatus, f.empresa)).length);
-
-      if (tecnicosSet.length === 0) {
-        tc.closest('.chart-wrap').innerHTML = '<p style="color:var(--text3);font-size:12px;padding:20px;text-align:center">Sin técnicos asignados en el período</p>';
-      } else {
-        techChart = new Chart(tc, {
-          type: 'bar',
-          data: {
-            labels: tecnicosSet,
-            datasets: [
-              { label: 'Correctivos', data: correctivos, backgroundColor: '#ef4444', borderRadius: 4, borderSkipped: false },
-              { label: 'Preventivos', data: preventivos, backgroundColor: '#22c55e', borderRadius: 4, borderSkipped: false },
-              { label: 'Atendidos',   data: atendidos,   backgroundColor: '#4f8ef7', borderRadius: 4, borderSkipped: false },
-            ]
-          },
-          options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: true, labels: { color: '#7c8ba1', font: { size: 10 } } } },
-            scales: {
-              x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#7c8ba1', font: { size: 10 } } },
-              y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#7c8ba1', font: { size: 10 } }, beginAtZero: true }
-            }
-          }
-        });
-      }
-    }
+    _buildTechChart(fallas);
 
     const pc = document.getElementById('provChart');
     if (pc) {
@@ -1300,6 +1275,255 @@ const MODS = (() => {
         });
       }
     }
+  }
+
+
+  // ══════════════════════════════════════════════════════════
+  // PRODUCTIVIDAD POR TÉCNICO — BASE y VS BASES
+  // Solo aplica a técnicos (role === 'tecnico')
+  // Admin y Master no entran en la gráfica
+  // ══════════════════════════════════════════════════════════
+  let _techMode = 'base'; // 'base' | 'vs'
+
+  function setTechMode(mode) {
+    _techMode = mode;
+    const btnBase = document.getElementById('techModeBase');
+    const btnVs   = document.getElementById('techModeVs');
+    if (btnBase) { btnBase.className = mode === 'base' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost'; btnBase.style.cssText = 'font-size:10px;padding:2px 8px'; }
+    if (btnVs)   { btnVs.className   = mode === 'vs'   ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost'; btnVs.style.cssText   = 'font-size:10px;padding:2px 8px'; }
+    _buildTechChart(getPeriodoFallas());
+  }
+
+  function _buildTechChart(fallas) {
+    if (techChart) { techChart.destroy(); techChart = null; }
+
+    const wrap = document.getElementById('techChartWrap');
+    const cards = document.getElementById('techResumenCards');
+
+    // Solo técnicos (role === 'tecnico') — excluir master y admin
+    const allUsers  = AUTH.getUsers().list || [];
+    const tecnicos  = allUsers.filter(u => u.role === 'tecnico' && u.activo !== false);
+
+    // Sesión actual para saber qué base mostrar en modo BASE
+    const session   = AUTH.checkSession();
+    const isGeneral = DATA.state.viewMode === 'general';
+
+    // Filtrar fallas por empresa activa (modo individual) o todas
+    const fallasFiltradas = fallas;
+
+    if (_techMode === 'base') {
+      // ── MODO BASE: técnicos de la misma base del usuario activo ──
+      // Si es master/admin ve la base activa; si es técnico ve su propia base
+      const baseActiva = session?.base || '';
+      const tecBase    = baseActiva
+        ? tecnicos.filter(u => (u.base || '').toUpperCase() === baseActiva.toUpperCase())
+        : tecnicos;
+
+      if (tecBase.length === 0) {
+        if (wrap) wrap.innerHTML = '<p style="color:var(--text3);font-size:12px;padding:20px;text-align:center">Sin técnicos en esta base</p>';
+        if (cards) cards.innerHTML = '';
+        return;
+      }
+
+      const labels     = tecBase.map(u => u.nombre || u.username);
+      const correctivos= tecBase.map(u => fallasFiltradas.filter(f => f.tecnicoUsername === u.username && /correctiv/i.test(f.tipo)).length);
+      const preventivos= tecBase.map(u => fallasFiltradas.filter(f => f.tecnicoUsername === u.username && /preventiv/i.test(f.tipo)).length);
+      const atendidos  = tecBase.map(u => fallasFiltradas.filter(f => f.tecnicoUsername === u.username && _isAtendidoEst(f.estatus, f.empresa)).length);
+
+      _renderTechBarChart(labels, correctivos, preventivos, atendidos);
+      _renderTechCards(tecBase, fallasFiltradas, baseActiva ? `Técnicos · Base ${baseActiva}` : 'Todos los técnicos');
+
+    } else {
+      // ── MODO VS BASES: top 1 técnico de cada base compiten entre sí ──
+      // Agrupar técnicos por base, tomar el que más atendidos tenga en cada base
+      const baseMap = {};
+      tecnicos.forEach(u => {
+        const base = (u.base || 'Sin base').toUpperCase();
+        if (!baseMap[base]) baseMap[base] = [];
+        baseMap[base].push(u);
+      });
+
+      const topPorBase = Object.entries(baseMap).map(([base, tecList]) => {
+        // Elegir el técnico con más atendidos en esta base
+        const scored = tecList.map(u => ({
+          u,
+          atendidos: fallasFiltradas.filter(f => f.tecnicoUsername === u.username && _isAtendidoEst(f.estatus, f.empresa)).length,
+          correctivos: fallasFiltradas.filter(f => f.tecnicoUsername === u.username && /correctiv/i.test(f.tipo)).length,
+          preventivos: fallasFiltradas.filter(f => f.tecnicoUsername === u.username && /preventiv/i.test(f.tipo)).length,
+        }));
+        scored.sort((a, b) => b.atendidos - a.atendidos);
+        return { base, top: scored[0] };
+      }).filter(b => b.top);
+
+      if (topPorBase.length === 0) {
+        if (wrap) wrap.innerHTML = '<p style="color:var(--text3);font-size:12px;padding:20px;text-align:center">Sin datos por base</p>';
+        if (cards) cards.innerHTML = '';
+        return;
+      }
+
+      const labels     = topPorBase.map(b => b.base);
+      const correctivos= topPorBase.map(b => b.top.correctivos);
+      const preventivos= topPorBase.map(b => b.top.preventivos);
+      const atendidos  = topPorBase.map(b => b.top.atendidos);
+
+      _renderTechBarChart(labels, correctivos, preventivos, atendidos,
+        topPorBase.map(b => (b.top.u.nombre || b.top.u.username)));
+      _renderTechCardsVsBases(topPorBase, fallasFiltradas);
+    }
+  }
+
+  function _renderTechBarChart(labels, correctivos, preventivos, atendidos, sublabels) {
+    const wrap = document.getElementById('techChartWrap');
+    if (!wrap) return;
+    wrap.innerHTML = '<canvas id="techChart"></canvas>';
+    const tc = document.getElementById('techChart');
+    if (!tc) return;
+
+    // Si hay sublabels (VS BASES), mostrar "BASE\nNombre técnico"
+    const displayLabels = sublabels
+      ? labels.map((b, i) => [b, sublabels[i] ? sublabels[i].split(' ')[0] : ''])
+      : labels;
+
+    techChart = new Chart(tc, {
+      type: 'bar',
+      data: {
+        labels: displayLabels,
+        datasets: [
+          { label: 'Correctivos', data: correctivos, backgroundColor: '#ef4444', borderRadius: 4, borderSkipped: false },
+          { label: 'Preventivos', data: preventivos, backgroundColor: '#22c55e', borderRadius: 4, borderSkipped: false },
+          { label: 'Atendidos',   data: atendidos,   backgroundColor: '#4f8ef7', borderRadius: 4, borderSkipped: false },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: true, labels: { color: '#7c8ba1', font: { size: 10 } } },
+          tooltip: {
+            callbacks: {
+              title: ctx => Array.isArray(ctx[0].label) ? ctx[0].label.join(' · ') : ctx[0].label
+            }
+          }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#7c8ba1', font: { size: 10 } } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#7c8ba1', font: { size: 10 } }, beginAtZero: true }
+        }
+      }
+    });
+  }
+
+  function _renderTechCards(tecBase, fallas, titulo) {
+    const cards = document.getElementById('techResumenCards');
+    if (!cards) return;
+
+    const stats = tecBase.map(u => {
+      const aten = fallas.filter(f => f.tecnicoUsername === u.username && _isAtendidoEst(f.estatus, f.empresa)).length;
+      const corr = fallas.filter(f => f.tecnicoUsername === u.username && /correctiv/i.test(f.tipo)).length;
+      const prev = fallas.filter(f => f.tecnicoUsername === u.username && /preventiv/i.test(f.tipo)).length;
+      const total= fallas.filter(f => f.tecnicoUsername === u.username).length;
+      const efic = total > 0 ? Math.round(aten / total * 100) : 0;
+      return { u, aten, corr, prev, total, efic };
+    }).sort((a, b) => b.efic - a.efic);
+
+    if (stats.length === 0) { cards.innerHTML = ''; return; }
+
+    const mejor = stats[0];
+    const peor  = stats[stats.length - 1];
+
+    cards.innerHTML = `
+      <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:8px 0 4px">${titulo}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${stats.map((s, i) => {
+          const isMejor = i === 0 && stats.length > 1;
+          const isPeor  = i === stats.length - 1 && stats.length > 1;
+          const badge   = isMejor
+            ? '<span style="font-size:9px;background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3);border-radius:4px;padding:1px 5px">⭐ MEJOR</span>'
+            : isPeor
+            ? '<span style="font-size:9px;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);border-radius:4px;padding:1px 5px">↓ MENOR</span>'
+            : '';
+          const barColor = s.efic >= 70 ? '#22c55e' : s.efic >= 40 ? '#f59e0b' : '#ef4444';
+          return `<div style="flex:1;min-width:160px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <div style="width:34px;height:34px;border-radius:50%;background:var(--bg4);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+              <div style="min-width:0">
+                <div style="font-size:12px;font-weight:600;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.u.nombre || s.u.username}</div>
+                <div style="font-size:10px;color:var(--text3)">${s.u.base || '—'}</div>
+              </div>
+              ${badge}
+            </div>
+            <div style="display:flex;gap:10px;font-size:11px;margin-bottom:6px">
+              <div style="text-align:center"><div style="color:#4f8ef7;font-weight:700;font-size:14px">${s.aten}</div><div style="color:var(--text3)">Atend.</div></div>
+              <div style="text-align:center"><div style="color:#ef4444;font-weight:700;font-size:14px">${s.corr}</div><div style="color:var(--text3)">Corr.</div></div>
+              <div style="text-align:center"><div style="color:#22c55e;font-weight:700;font-size:14px">${s.prev}</div><div style="color:var(--text3)">Prev.</div></div>
+              <div style="text-align:center"><div style="color:var(--text2);font-weight:700;font-size:14px">${s.total}</div><div style="color:var(--text3)">Total</div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="flex:1;height:5px;background:var(--bg4);border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${s.efic}%;background:${barColor};border-radius:3px;transition:width .4s"></div>
+              </div>
+              <span style="font-size:10px;font-weight:700;color:${barColor}">${s.efic}%</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+      <p style="font-size:10px;color:var(--text3);margin-top:6px;text-align:center">La eficiencia se calcula: atendidos / total asignados</p>`;
+  }
+
+  function _renderTechCardsVsBases(topPorBase, fallas) {
+    const cards = document.getElementById('techResumenCards');
+    if (!cards) return;
+
+    const stats = topPorBase.map(({ base, top }) => ({
+      base,
+      u: top.u,
+      aten: top.atendidos,
+      corr: top.correctivos,
+      prev: top.preventivos,
+      total: fallas.filter(f => f.tecnicoUsername === top.u.username).length,
+      efic: fallas.filter(f => f.tecnicoUsername === top.u.username).length > 0
+        ? Math.round(top.atendidos / fallas.filter(f => f.tecnicoUsername === top.u.username).length * 100) : 0
+    })).sort((a, b) => b.efic - a.efic);
+
+    if (stats.length === 0) { cards.innerHTML = ''; return; }
+
+    cards.innerHTML = `
+      <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:8px 0 4px">Top técnico por base</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${stats.map((s, i) => {
+          const isMejor = i === 0;
+          const isPeor  = i === stats.length - 1 && stats.length > 1;
+          const badge   = isMejor
+            ? '<span style="font-size:9px;background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3);border-radius:4px;padding:1px 5px">🏆 BASE TOP</span>'
+            : isPeor
+            ? '<span style="font-size:9px;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);border-radius:4px;padding:1px 5px">↓ REZAGADA</span>'
+            : '';
+          const barColor = s.efic >= 70 ? '#22c55e' : s.efic >= 40 ? '#f59e0b' : '#ef4444';
+          return `<div style="flex:1;min-width:160px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px">
+            <div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:6px;text-transform:uppercase">${s.base} ${badge}</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <div style="width:30px;height:30px;border-radius:50%;background:var(--bg4);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+              <div style="min-width:0">
+                <div style="font-size:11px;font-weight:600;color:var(--text1)">${s.u.nombre || s.u.username}</div>
+                <div style="font-size:10px;color:var(--text3)">Técnico destacado</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;font-size:11px;margin-bottom:6px">
+              <div style="text-align:center"><div style="color:#4f8ef7;font-weight:700;font-size:13px">${s.aten}</div><div style="color:var(--text3)">Atend.</div></div>
+              <div style="text-align:center"><div style="color:#ef4444;font-weight:700;font-size:13px">${s.corr}</div><div style="color:var(--text3)">Corr.</div></div>
+              <div style="text-align:center"><div style="color:#22c55e;font-weight:700;font-size:13px">${s.prev}</div><div style="color:var(--text3)">Prev.</div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="flex:1;height:5px;background:var(--bg4);border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${s.efic}%;background:${barColor};border-radius:3px"></div>
+              </div>
+              <span style="font-size:10px;font-weight:700;color:${barColor}">${s.efic}%</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
   }
 
   function renderDashTable() {
@@ -2245,6 +2469,7 @@ const MODS = (() => {
 
   return {
     renderRegistro, renderAtencion, renderDashboard, renderAtendidos, renderConfig, renderHistorial,
+    setTechMode,
     initDashboard, renderDashTable, renderAtendidosTable, setAtendPeriodo, exportAtendidosCSV, clearAtendFilters,
     clearFilters, exportCSV,
     selAtencion, selAtencionFromDash, eliminarDesideDash, guardarAtencion, onAtenEstatusChange, eliminarAtencion,
