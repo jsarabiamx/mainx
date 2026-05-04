@@ -1277,8 +1277,16 @@ textarea { resize: vertical; min-height: 80px; }
   border: 1px solid var(--accent-glow);
 }
 
-.vsb-item-done { opacity: 0.65; }
-.vsb-item-done:hover { opacity: 1; }
+.vsb-item-done { opacity: 0.55; }
+.vsb-item-done:hover { opacity: 0.9; }
+.vsb-item-barrido { opacity: 0.55; }
+.vsb-item-barrido:hover { opacity: 0.9; }
+
+.vsb-badge-barrido {
+  background: rgba(79,142,247,0.12);
+  color: #4f8ef7;
+  border: 1px solid rgba(79,142,247,0.25);
+}
 
 .vsb-item-num {
   font-family: var(--mono);
