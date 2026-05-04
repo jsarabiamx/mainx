@@ -842,6 +842,12 @@ const TECH = (() => {
     renderPendientes();
     renderAtendidos();
     if (state.selectedId) renderDetail(state.selectedId);
+    // Notificar a la nueva UI si está cargada
+    if (window.TECH) {
+      if (typeof window.TECH._renderCards   === 'function') window.TECH._renderCards();
+      if (typeof window.TECH._renderKPIs    === 'function') window.TECH._renderKPIs();
+      if (typeof window.TECH._renderEmpresa === 'function') window.TECH._renderEmpresa();
+    }
   }
 
   let _lastFilterOptions = { bases: [], provs: [], estados: [] };
@@ -1272,6 +1278,39 @@ const TECH = (() => {
     const d = document.getElementById('techNotifDropdown');
     if (d) d.style.display = 'none';
   }
+
+  // ── Exponer para tecnico-ui.js ──
+  function _getFallas() {
+    return state.fallas || [];
+  }
+  function _getAllFallas() {
+    return state.fallas || [];
+  }
+  function _openAtenderModal(id) {
+    // Encontrar la falla y abrir el modal de atender
+    const falla = (state.fallas || []).find(f => f.id === id);
+    if (!falla) return;
+    // Simular click en el botón Atender del card existente (via el modal interno)
+    showAtenderModal(id);
+  }
+
+  window.TECH = {
+    state,
+    _uiReady: true,
+    _getFallas,
+    _getAllFallas,
+    _openAtenderModal,
+    _toggleEmpresa: (emp) => {
+      const idx = state.empresasSel.indexOf(emp);
+      if (idx >= 0) state.empresasSel.splice(idx, 1);
+      else state.empresasSel.push(emp);
+      renderAll();
+    },
+    _renderCards:   null,
+    _renderKPIs:    null,
+    _renderPerfil:  null,
+    _renderEmpresa: null,
+  };
 
   return { init, showAtenderModal, openNotifReport };
 
