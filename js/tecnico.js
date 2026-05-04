@@ -31,6 +31,7 @@ const TECH = (() => {
     empresasSel:    [],
     fallas:         [],
     selectedId:     null,
+    activeTab:      'pendiente', // pendiente | proceso | atendido
     searchPend:     '',
     searchDone:     '',
     filterBases:    [],
@@ -847,47 +848,66 @@ const TECH = (() => {
     }
   }
 
-  /* ── Pendientes ── */
-  function renderPendientes() {
-    const raw  = getPendientes();
-    const list = filterList(raw, state.searchPend);
-    const cont  = document.getElementById('pendientesList');
-    const count = document.getElementById('pendientesCount');
-    if (count) count.textContent = raw.length;
+  /* ── Render unificado por tab ── */
+  function renderPendientes() { renderTabList(); }
+  function renderAtendidos()  { renderTabList(); }
+
+  function renderTabList() {
+    const cont = document.getElementById('pendientesList');
     if (!cont) return;
 
-    if (!list.length) {
-      cont.innerHTML = emptyState(state.searchPend?'🔍':'✅', state.searchPend?'Sin resultados':'Sin pendientes', state.searchPend?'Intenta otra búsqueda':'Todos los reportes están atendidos');
-      return;
+    // Si hay detalle abierto, no re-renderizar la lista
+    const viewDetalle = document.getElementById('viewDetalle');
+    if (viewDetalle && viewDetalle.style.display !== 'none') return;
+
+    const all  = getAll();
+    const proc = all.filter(f => /proceso/i.test(f.estatus||''));
+
+    let lista;
+    const q = state.searchPend || '';
+    if (state.activeTab === 'pendiente') {
+      lista = filterList(getPendientes().filter(f => !/proceso/i.test(f.estatus||'')), q);
+      lista.sort((a,b) => {
+        const o={alta:0,media:1,baja:2};
+        return (o[(a.prioridad||'media').toLowerCase()]??1) - (o[(b.prioridad||'media').toLowerCase()]??1)
+          || new Date(b.fecha||0) - new Date(a.fecha||0);
+      });
+    } else if (state.activeTab === 'proceso') {
+      lista = filterList(proc, q);
+      lista.sort((a,b) => new Date(b.fecha||0) - new Date(a.fecha||0));
+    } else {
+      lista = filterList(getAtendidos(), q);
+      lista.sort((a,b) => new Date(b.fechaAtencion||b.fecha||0) - new Date(a.fechaAtencion||a.fecha||0));
     }
 
-    list.sort((a,b) => {
-      const o={alta:0,media:1,baja:2};
-      const pa=o[(a.prioridad||'media').toLowerCase()]??1;
-      const pb=o[(b.prioridad||'media').toLowerCase()]??1;
-      return pa!==pb ? pa-pb : new Date(b.fecha||0)-new Date(a.fecha||0);
+    // Actualizar tab activo visual
+    ['pendiente','proceso','atendido'].forEach(t => {
+      const el = document.getElementById('tab_' + t);
+      if (el) el.classList.toggle('active-tab', t === state.activeTab);
     });
 
-    cont.innerHTML = list.map(f => reportCard(f)).join('');
-    bindClicks(cont);
-  }
+    // Etiqueta del panel
+    const labels = { pendiente: 'Pendientes de atención', proceso: 'En proceso', atendido: 'Reportes atendidos' };
+    const dotCls = { pendiente: 'amber', proceso: 'blue', atendido: 'green' };
+    const pTitle = document.getElementById('panelTitle');
+    const pDot   = document.getElementById('panelDot');
+    const pCount = document.getElementById('panelCount');
+    if (pTitle) pTitle.textContent = labels[state.activeTab] || '';
+    if (pDot)   { pDot.className = 'panel-dot'; pDot.classList.add(dotCls[state.activeTab]||'amber'); }
+    if (pCount) { pCount.textContent = lista.length; pCount.className = 'panel-count ' + (dotCls[state.activeTab]||'amber'); }
 
-  /* ── Atendidos ── */
-  function renderAtendidos() {
-    const raw  = getAtendidos();
-    const list = filterList(raw, state.searchDone);
-    const cont  = document.getElementById('atendidosList');
-    const count = document.getElementById('atendidosCount');
-    if (count) count.textContent = raw.length;
-    if (!cont) return;
-
-    if (!list.length) {
-      cont.innerHTML = emptyState(state.searchDone?'🔍':'📋', state.searchDone?'Sin resultados':'Sin atendidos', state.searchDone?'Intenta otra búsqueda':'No hay reportes atendidos aún');
+    if (!lista.length) {
+      const msgs = {
+        pendiente: ['✅','Sin pendientes','Todos los reportes están atendidos'],
+        proceso:   ['🔧','Sin reportes en proceso','Ningún reporte está siendo atendido ahora'],
+        atendido:  ['📋','Sin atendidos','No hay reportes atendidos aún'],
+      };
+      const [ico, tit, sub] = msgs[state.activeTab] || msgs.pendiente;
+      cont.innerHTML = emptyState(q?'🔍':ico, q?'Sin resultados':tit, q?'Intenta otra búsqueda':sub);
       return;
     }
 
-    list.sort((a,b) => new Date(b.fechaAtencion||b.fecha||0) - new Date(a.fechaAtencion||a.fecha||0));
-    cont.innerHTML = list.map(f => reportCard(f)).join('');
+    cont.innerHTML = lista.map(f => reportCard(f)).join('');
     bindClicks(cont);
   }
 
@@ -945,7 +965,6 @@ const TECH = (() => {
   function bindClicks(container) {
     container.querySelectorAll('.report-item').forEach(el => {
       el.addEventListener('click', (e) => {
-        // Check if Atender button was clicked
         const atenderBtn = e.target.closest('[data-atender]');
         if (atenderBtn) {
           e.stopPropagation();
@@ -953,13 +972,39 @@ const TECH = (() => {
           return;
         }
         const id = el.dataset.id;
-        state.selectedId = state.selectedId === id ? null : id;
-        renderPendientes();
-        renderAtendidos();
-        renderDetail(state.selectedId);
+        state.selectedId = id;
+        // Mostrar detalle en lugar de la lista (nueva UX)
+        const viewLista   = document.getElementById('viewLista');
+        const viewDetalle = document.getElementById('viewDetalle');
+        if (viewLista && viewDetalle) {
+          viewLista.style.display   = 'none';
+          viewDetalle.style.display = '';
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        renderDetail(id);
       });
     });
   }
+
+  // Exponer función para cerrar detalle (usada por btn Regresar)
+  window.tuiCerrarDetalle = function() {
+    state.selectedId = null;
+    const viewLista   = document.getElementById('viewLista');
+    const viewDetalle = document.getElementById('viewDetalle');
+    if (viewLista)   viewLista.style.display   = '';
+    if (viewDetalle) viewDetalle.style.display = 'none';
+  };
+
+  // Función para cambiar tab (expuesta globalmente)
+  window.tuiSetTab = function(tab) {
+    state.selectedId = null;
+    state.activeTab  = tab;
+    const viewLista   = document.getElementById('viewLista');
+    const viewDetalle = document.getElementById('viewDetalle');
+    if (viewLista)   viewLista.style.display   = '';
+    if (viewDetalle) viewDetalle.style.display = 'none';
+    renderTabList();
+  };
 
   /* ══════════════════════════════════════════════
      MODAL ATENDER
