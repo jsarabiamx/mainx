@@ -159,15 +159,15 @@
     if (!s) return;
     let a=0,p=0,c=0,pr=0;
     try {
-      if (typeof TECH !== 'undefined' && TECH.state?.fallas) {
-        const all = TECH.state.fallas;
+      if (window._techState?.fallas) {
+        const all = window._techState.fallas;
         const now = new Date();
         const cut = _per==='dia' ? new Date(now-86400000) : _per==='semana' ? new Date(now-7*86400000) : new Date(now-30*86400000);
         const un = s.username||''; const nm = s.nombre||s.name||'';
         const isA = e => /atendid/i.test(e||'');
         const mis = all.filter(f => (f.tecnicoUsername===un||f.tecnico===nm) && (!f.fecha||new Date(f.fecha)>=cut));
         a = mis.filter(f=>isA(f.estatus)).length;
-        p = all.filter(f=>!isA(f.estatus)&&(f.tecnicoUsername===un||f.tecnico===nm)).length;
+        p = window._techState.fallas.filter(f=>!isA(f.estatus)&&(f.tecnicoUsername===un||f.tecnico===nm)).length;
         c = mis.filter(f=>/correctiv/i.test(f.tipo)).length;
         pr= mis.filter(f=>/preventiv/i.test(f.tipo)).length;
       }
