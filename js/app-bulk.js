@@ -777,12 +777,29 @@ const BULK = (() => {
     const current = getCurrentUnidad();
     if (!current) return;
 
+    const estado  = state.chipState.estado;
+
+    // Si es barrido: avanzar directo sin validar campos — solo marcar en línea
+    if (estado === 'barrido') {
+      state.unidades[state.currentIdx].status  = 'barrido';
+      state.unidades[state.currentIdx].enLinea = true;
+      UI.toast(`📶 Unidad ${current.numero} marcada en línea`);
+      UI.updateHeaderCounts();
+      const nextPend = state.unidades.findIndex((u, i) => i > state.currentIdx && u.status === 'pending');
+      if (nextPend !== -1) { state.currentIdx = nextPend; renderCurrentValidacion(); }
+      else {
+        const anyPend = state.unidades.findIndex(u => u.status === 'pending');
+        if (anyPend !== -1) { state.currentIdx = anyPend; renderCurrentValidacion(); }
+        else { const main = document.getElementById('mainContent'); if (main) main.innerHTML = renderValidacionCompleta(); UI.updateHeaderCounts(); }
+      }
+      return;
+    }
+
     const base    = document.getElementById('bulkBase')?.value;
     const svc     = document.getElementById('bulkServicio')?.value;
     const fecha   = document.getElementById('bulkFecha')?.value;
-    const estado  = state.chipState.estado;
 
-    // Validaciones mínimas
+    // Validaciones mínimas (solo para con falla / sin falla)
     const errors = [];
     if (!base)  errors.push('Base Operativa');
     if (!svc)   errors.push('Tipo de Servicio');
@@ -798,22 +815,6 @@ const BULK = (() => {
 
     if (errors.length) {
       UI.toast('Campos requeridos: ' + errors.join(', '), 'err');
-      return;
-    }
-
-    // Si es barrido: no guardar en Supabase, solo marcar en línea localmente
-    if (estado === 'barrido') {
-      state.unidades[state.currentIdx].status  = 'barrido';
-      state.unidades[state.currentIdx].enLinea = true;
-      UI.toast(`📶 Unidad ${current.numero} marcada en línea`);
-      UI.updateHeaderCounts();
-      const nextPend = state.unidades.findIndex((u, i) => i > state.currentIdx && u.status === 'pending');
-      if (nextPend !== -1) { state.currentIdx = nextPend; renderCurrentValidacion(); }
-      else {
-        const anyPend = state.unidades.findIndex(u => u.status === 'pending');
-        if (anyPend !== -1) { state.currentIdx = anyPend; renderCurrentValidacion(); }
-        else { const main = document.getElementById('mainContent'); if (main) main.innerHTML = renderValidacionCompleta(); UI.updateHeaderCounts(); }
-      }
       return;
     }
 
