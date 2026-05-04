@@ -4,7 +4,7 @@
 
   document.addEventListener('DOMContentLoaded', function() {
     addStyles();
-    addNav();
+    // nav ya está en el HTML, solo agregar paneles
     addPanels();
     waitAndInit();
   });
@@ -131,7 +131,7 @@
   }
 
   /* ── Navegación ── */
-  window.tuiGo = function(screen) {
+  window.tuiGo = window.tuiScreen = function(screen) {
     ['Inicio','Vision','Perfil'].forEach(n => document.getElementById('tni'+n)?.classList.remove('active'));
     document.getElementById('tniInicio' === 'tni'+screen ? 'tniInicio' :
       screen === 'vision' ? 'tniVision' : 'tniPerfil')?.classList.add('active');
