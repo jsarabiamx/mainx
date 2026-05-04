@@ -876,3 +876,59 @@ body {
 .empresa-chip:hover { opacity: 0.85; }
 
 @keyframes toastIn  { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+/* ── TAB ACTIVO ── */
+.kpi-tab { cursor: pointer; }
+.kpi-tab.active-tab { background: var(--bg3) !important; }
+.kpi-tab.active-tab::after { opacity: 1 !important; }
+.kpi-static { cursor: default; }
+
+/* ── BOTÓN REGRESAR ── */
+.btn-regresar {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 16px; margin-bottom: 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  color: var(--text2); font-size: 13px; font-weight: 600;
+  cursor: pointer; font-family: var(--font);
+  width: 100%; justify-content: flex-start;
+  transition: all .15s;
+}
+.btn-regresar:active { background: var(--bg3); color: var(--blue); }
+
+/* ── BOTTOM NAV ── */
+#tuiNav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  height: 68px;
+  background: rgba(7,9,15,.97);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border);
+  display: grid; grid-template-columns: repeat(3,1fr);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tni {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 4px; cursor: pointer;
+  transition: opacity .15s;
+}
+.tni:active { opacity: .6; }
+.tni-icon {
+  width: 30px; height: 30px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text3); transition: all .15s;
+}
+.tni.active .tni-icon { background: var(--blue-dim); color: var(--blue); }
+.tni-lbl { font-size: 10px; font-weight: 600; color: var(--text3); }
+.tni.active .tni-lbl { color: var(--blue); }
+
+/* ── PANELES VISIÓN Y PERFIL ── */
+#tuiPanelVision, #tuiPanelPerfil {
+  display: none; padding: 16px;
+  min-height: 60vh;
+}
+#tuiPanelVision.show, #tuiPanelPerfil.show { display: block; }
+
+/* ── PANEL DOT BLUE (en proceso) ── */
+.panel-dot.blue { background: var(--blue); }
