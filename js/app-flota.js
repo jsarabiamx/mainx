@@ -16,9 +16,62 @@ const FLOTA = (() => {
     step:       1,      // 1=upload 2=preview 3=done
   };
 
-  // ─── COLUMNAS ESPERADAS (índice base-0) ────────
-  // E=4  G=6  K=10  M=12  R=17  T=19
-  const COL = { E: 4, G: 6, K: 10, M: 12, R: 17, T: 19 };
+  // ─── ESQUEMAS POR EMPRESA (índice base-0) ──────
+  const ESQUEMAS = {
+    // GHO: FLOTA_GHO_Oficial_...  hoja Detalle1
+    GHO: {
+      patron:    /FLOTA/i,
+      nombre_archivo: 'FLOTA_GHO_Oficial_...',
+      columnas_label: 'E=ECONÓMICO · M=CROMÁTICA · T=ESTATUS · K=BASE · R=PISOS · G=SERVICIO',
+      tiene_pisos: true,
+      parsear: (row) => ({
+        numEco:         String(row[4]  || '').trim(),
+        cromatica:      String(row[12] || '').trim(),
+        estatusInforme: String(row[19] || '').trim(),
+        base:           String(row[10] || '').trim(),
+        pisos:          String(row[17] || '').trim(),
+        servicio:       String(row[6]  || '').trim(),
+      }),
+      esEcoValido: (numEco) => numEco.length >= 2 && /\d/.test(numEco),
+      detectarCabecera: (rows) => {
+        for (let i = 0; i < Math.min(10, rows.length); i++) {
+          const c = String(rows[i][4] || '').toUpperCase();
+          if (c.includes('ECONÓM') || c.includes('ECONOM') || c.includes('NUM')) return i + 1;
+        }
+        return 1;
+      },
+    },
+    // ETN: 05_ASIGNACION_STLU_DTM_MAYO  hoja Detalle1
+    ETN: {
+      patron:    /ASIGNAC/i,
+      nombre_archivo: 'XX_ASIGNACION_STLU_DTM_MES',
+      columnas_label: 'A=ECONÓMICO · B=CROMÁTICA · C=ESTATUS · F=BASE · H=SERVICIO',
+      tiene_pisos: false,  // sin pisos en archivo — se agrega manual
+      parsear: (row) => ({
+        numEco:         String(row[0] || '').trim(),
+        cromatica:      String(row[1] || '').trim(),
+        estatusInforme: String(row[2] || '').trim(),
+        base:           String(row[5] || '').trim(),
+        pisos:          '',  // se agrega manual desde el concentrado
+        servicio:       String(row[7] || '').trim(),
+      }),
+      esEcoValido: (numEco) => numEco.length >= 2 && /\d/.test(numEco),
+      detectarCabecera: (rows) => {
+        for (let i = 0; i < Math.min(10, rows.length); i++) {
+          const c = String(rows[i][0] || '').toUpperCase();
+          if (c.includes('ECONÓM') || c.includes('ECONOM') || c.includes('DETALLES')) return i + 1;
+        }
+        return 1;
+      },
+    },
+  };
+
+  // Esquema default (GHO)
+  const COL = { E: 4, G: 6, K: 10, M: 12, R: 17, T: 19 };  // legacy, no usado directamente
+
+  function getEsquema(emp) {
+    return ESQUEMAS[emp] || ESQUEMAS['GHO'];
+  }
 
   // ─── Render principal ──────────────────────────
   function renderCargaAsignacion(session) {
@@ -37,7 +90,7 @@ const FLOTA = (() => {
             </div>
             <div>
               <h2 class="mod-title">Carga de Asignación Mensual</h2>
-              <p class="mod-subtitle">Sube el archivo Excel FLOTA_GHO — hoja <strong>Detalle1</strong></p>
+              <p class="mod-subtitle" id="flotaSubtitle">Sube el archivo Excel — hoja <strong>Detalle1</strong></p>
             </div>
           </div>
         </div>
@@ -81,12 +134,12 @@ const FLOTA = (() => {
             Proceso de detección
           </div>
           <div class="flota-steps">
-            ${['Archivo','Leyendo','Detectando','Validando','Listo'].map((s,i) => `
-              <div class="fs-step" id="fstep-${i}">
-                <div class="fs-dot">${i+1}</div>
-                <div class="fs-lbl">${s}</div>
-              </div>
-            `).join('<div class="fs-line"></div>')}
+            ${['Archivo','Leyendo','Detectando','Validando','Listo'].map((s,i) =>
+              '<div class="fs-step" id="fstep-' + i + '">'
+              + '<div class="fs-dot">' + (i+1) + '</div>'
+              + '<div class="fs-lbl">' + s + '</div>'
+              + '</div>'
+            ).join('<div class="fs-line"></div>')}
           </div>
           <div id="flotaDetMsg" style="margin-top:10px;font-size:12px;color:var(--green)"></div>
         </div>
@@ -102,19 +155,22 @@ const FLOTA = (() => {
             Formato esperado
           </div>
           <div style="font-size:11px;color:var(--text2);font-family:var(--mono);background:var(--bg3);padding:8px 10px;border-radius:6px;margin-bottom:8px">
-            FLOTA_GHO_Oficial_...
+            ${getEsquema(emp).nombre_archivo}
           </div>
           <div style="font-size:11px;color:var(--text3);margin-bottom:6px">
             <span style="color:var(--text2);font-weight:600">Hoja:</span> Detalle1
           </div>
           <div style="font-size:10px;color:var(--text3);line-height:1.8">
-            <span style="color:#8b5cf6">E</span>=ECONÓMICO ·
-            <span style="color:#8b5cf6">M</span>=CROMÁTICA ·
-            <span style="color:#8b5cf6">T</span>=ESTATUS ·
-            <span style="color:#8b5cf6">K</span>=BASE ·
-            <span style="color:#8b5cf6">R</span>=PISOS ·
-            <span style="color:#8b5cf6">G</span>=SERVICIO
+            ${getEsquema(emp).columnas_label.split('·').map(p => {
+              const parts = p.trim().split('=');
+              const col   = parts[0] ? parts[0].trim() : '';
+              const lbl   = parts[1] ? parts[1].trim() : '';
+              return '<span style="color:#8b5cf6">' + col + '</span>=' + lbl;
+            }).join(' · ')}
           </div>
+          ${getEsquema(emp).tiene_pisos ? '' :
+            '<div style="margin-top:6px;font-size:10px;color:#f59e0b">⚠️ Pisos se agregan manual en el concentrado</div>'
+          }
         </div>
 
         <div class="card" style="padding:14px">
@@ -225,9 +281,12 @@ const FLOTA = (() => {
     state.archivo    = file;
     state.archivoNom = file.name;
 
-    // Verificar que parezca un archivo de flota
-    if (!file.name.toUpperCase().includes('FLOTA')) {
-      UI.toast('⚠️ El nombre del archivo no contiene "FLOTA" — verifica que sea el archivo correcto', 'warn');
+    // Verificar que parezca un archivo de la empresa activa
+    const emp      = DATA.state.currentEmpresa || 'GHO';
+    const esquema  = getEsquema(emp);
+    const nombreUp = file.name.toUpperCase();
+    if (!esquema.patron.test(file.name)) {
+      UI.toast('⚠️ El archivo no parece ser de ' + emp + ' — verifica el nombre', 'warn');
     }
 
     // Mostrar progreso
@@ -295,32 +354,17 @@ const FLOTA = (() => {
   // ─── PARSEAR FILAS ────────────────────────────
   function parsearFilas(rows) {
     if (!rows || rows.length < 2) return [];
+    const emp     = DATA.state.currentEmpresa || 'GHO';
+    const esquema = getEsquema(emp);
 
-    // Detectar fila de cabecera buscando "NUM ECONÓMICO" o "ECONÓMICO" en col E
-    let startRow = 1;
-    for (let i = 0; i < Math.min(10, rows.length); i++) {
-      const celE = String(rows[i][COL.E] || '').toUpperCase();
-      if (celE.includes('ECONÓM') || celE.includes('ECONOM') || celE.includes('NUM')) {
-        startRow = i + 1;
-        break;
-      }
-    }
+    const startRow = esquema.detectarCabecera(rows);
+    const result   = [];
 
-    const result = [];
     for (let i = startRow; i < rows.length; i++) {
-      const row = rows[i];
-      const numEco = String(row[COL.E] || '').trim();
-      if (!numEco || numEco.length < 2) continue; // saltar filas vacías
-      if (isNaN(Number(numEco)) && !numEco.match(/\d/)) continue; // filtrar cabeceras residuales
-
-      result.push({
-        numEco:         numEco,
-        servicio:       String(row[COL.G] || '').trim(),
-        base:           String(row[COL.K] || '').trim(),
-        cromatica:      String(row[COL.M] || '').trim(),
-        pisos:          String(row[COL.R] || '').trim(),
-        estatusInforme: String(row[COL.T] || '').trim(),
-      });
+      const row    = rows[i];
+      const parsed = esquema.parsear(row);
+      if (!parsed.numEco || !esquema.esEcoValido(parsed.numEco)) continue;
+      result.push(parsed);
     }
     return result;
   }
@@ -377,22 +421,22 @@ const FLOTA = (() => {
             <table style="width:100%;border-collapse:collapse;font-size:11px">
               <thead>
                 <tr style="border-bottom:1px solid var(--border)">
-                  ${['Unidad','Base','Cromática','Servicio','Estatus','Pisos'].map(h =>
-                    `<th style="padding:6px 10px;text-align:left;color:var(--text3);font-weight:600;white-space:nowrap">${h}</th>`
+                  ${(getEsquema(DATA.state.currentEmpresa||'GHO').tiene_pisos ? ['Unidad','Base','Cromática','Servicio','Estatus','Pisos'] : ['Unidad','Base','Cromática','Servicio','Estatus']).map(h =>
+                    '<th style="padding:6px 10px;text-align:left;color:var(--text3);font-weight:600;white-space:nowrap">' + h + '</th>'
                   ).join('')}
                 </tr>
               </thead>
               <tbody>
-                ${sample.map(f => `
-                  <tr style="border-bottom:1px solid rgba(255,255,255,.03)">
-                    <td style="padding:7px 10px;font-family:var(--mono);font-weight:600">${f.numEco}</td>
-                    <td style="padding:7px 10px">${f.base || '—'}</td>
-                    <td style="padding:7px 10px">${f.cromatica || '—'}</td>
-                    <td style="padding:7px 10px">${f.servicio || '—'}</td>
-                    <td style="padding:7px 10px">${estatusBadge(f.estatusInforme)}</td>
-                    <td style="padding:7px 10px">${f.pisos || '—'}</td>
-                  </tr>
-                `).join('')}
+                ${sample.map(f =>
+                  '<tr style="border-bottom:1px solid rgba(255,255,255,.03)">'
+                  + '<td style="padding:7px 10px;font-family:var(--mono);font-weight:600">' + f.numEco + '</td>'
+                  + '<td style="padding:7px 10px">' + (f.base || '—') + '</td>'
+                  + '<td style="padding:7px 10px">' + (f.cromatica || '—') + '</td>'
+                  + '<td style="padding:7px 10px">' + (f.servicio || '—') + '</td>'
+                  + '<td style="padding:7px 10px">' + estatusBadge(f.estatusInforme) + '</td>'
+                  + (getEsquema(DATA.state.currentEmpresa||'GHO').tiene_pisos ? '<td style="padding:7px 10px">' + (f.pisos || '—') + '</td>' : '')
+                  + '</tr>'
+                ).join('')}
               </tbody>
             </table>
           </div>
@@ -434,7 +478,7 @@ const FLOTA = (() => {
     if (!state.filas.length) return;
     const emp    = DATA.state.currentEmpresa || 'GHO';
     const session = AUTH.checkSession();
-    const userId  = session?.id || session?.userId || null;
+    const userId  = session?.username || session?.nombre || 'sistema';
     const mesAnio = state.mesAnio;
     const archivo = state.archivoNom;
 
@@ -481,7 +525,7 @@ const FLOTA = (() => {
         fuera_op:    fuera,
         para_venta:  venta,
         otros:       otros,
-        cargado_por: userId,
+        cargado_por: String(userId),
       });
 
       UI.toast(`✅ ${state.filas.length} unidades guardadas correctamente`);
@@ -590,7 +634,7 @@ const FLOTA = (() => {
           <td style="padding:8px 12px;color:var(--text2)">${r.cromatica || '—'}</td>
           <td style="padding:8px 12px;color:var(--text2)">${r.servicio || '—'}</td>
           <td style="padding:8px 12px">${estatusBadge(r.estatus_informe)}</td>
-          <td style="padding:8px 12px;color:var(--text2)">${r.pisos || '—'}</td>
+          <td style="padding:8px 12px">${_renderPisosCel(r)}</td>
           <td style="padding:8px 12px;font-family:var(--mono);font-size:11px;color:var(--text3)">${_fmtMes(r.mes_anio)}</td>
         </tr>
       `).join('');
@@ -630,6 +674,52 @@ const FLOTA = (() => {
   async function cambiarMes(mes) {
     const emp = DATA.state.currentEmpresa || 'GHO';
     await cargarPorMes(emp, mes);
+  }
+
+  // ─── RENDER PISOS CELL (sin backtick anidado) ──
+  function _renderPisosCel(r) {
+    if (r.pisos) {
+      return '<span style="color:var(--text2)">' + r.pisos + '</span>'
+           + ' <button onclick="FLOTA.editarPisos('' + r.id + '')" '
+           + 'style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--text3);padding:0 2px" title="Cambiar">✏️</button>';
+    }
+    const sel_id = 'psel_' + r.id;
+    return '<select id="' + sel_id + '" onchange="FLOTA.actualizarPisos('' + r.id + '',this.value)"'
+      + ' style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);'
+      + 'border-radius:6px;color:#f59e0b;font-size:10px;padding:2px 6px;cursor:pointer;font-family:inherit">'
+      + '<option value="">Pendiente</option>'
+      + '<option value="UNO">1 Piso</option>'
+      + '<option value="DOS">2 Pisos</option>'
+      + '</select>';
+  }
+
+  function editarPisos(id) {
+    // Reemplazar el span por el select para editar
+    const row = _allRows.find(r => r.id === id);
+    if (!row) return;
+    row.pisos = ''; // forzar que renderTabla muestre select
+    renderTabla();
+  }
+
+  // ─── ACTUALIZAR PISOS (inline desde tabla) ────
+  async function actualizarPisos(id, valor) {
+    if (!id || !valor) return;
+    try {
+      const { error } = await _getClient()
+        .from('flota_asignacion')
+        .update({ pisos: valor, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+      // Actualizar en memoria
+      const row = _allRows.find(r => r.id === id);
+      if (row) row.pisos = valor;
+      const frow = _filteredRows.find(r => r.id === id);
+      if (frow) frow.pisos = valor;
+      UI.toast('✓ Pisos actualizado');
+    } catch(err) {
+      console.error('[FLOTA pisos]', err);
+      UI.toast('Error al guardar pisos', 'err');
+    }
   }
 
   function exportarCSV() {
@@ -672,12 +762,13 @@ const FLOTA = (() => {
         .order('created_at', { ascending: false })
         .limit(5);
       if (!data || data.length === 0) { el.textContent = 'Sin cargas previas'; return; }
-      el.innerHTML = data.map(r => `
-        <div style="padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)">
-          <div style="font-weight:600;color:var(--text1)">${_fmtMes(r.mes_anio)}</div>
-          <div style="color:var(--text3);font-size:10px;margin-top:2px">${r.total} unidades · ${r.en_operacion} en op.</div>
-          <div style="color:var(--text3);font-size:10px">${r.archivo?.slice(0,30) || ''}</div>
-        </div>`).join('');
+      el.innerHTML = data.map(r =>
+        '<div style="padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)">'
+        + '<div style="font-weight:600;color:var(--text1)">' + _fmtMes(r.mes_anio) + '</div>'
+        + '<div style="color:var(--text3);font-size:10px;margin-top:2px">' + r.total + ' unidades · ' + r.en_operacion + ' en op.</div>'
+        + '<div style="color:var(--text3);font-size:10px">' + (r.archivo ? r.archivo.slice(0,30) : '') + '</div>'
+        + '</div>'
+      ).join('');
     } catch(e) { el.textContent = 'Sin cargas previas'; }
   }
 
@@ -700,11 +791,13 @@ const FLOTA = (() => {
 
   // ─── HELPERS ──────────────────────────────────
   function _getClient() {
-    const cfg = window.CCTV_SUPABASE_CONFIG || { url:'https://sxzhmcrpeyuqslupttby.supabase.co', anonKey:'' };
-    if (!_getClient._instance) {
-      _getClient._instance = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: true } });
+    if (!_getClient._fb) {
+      const cfg = window.CCTV_SUPABASE_CONFIG || {};
+      const url  = cfg.url     || 'https://sxzhmcrpeyuqslupttby.supabase.co';
+      const key  = cfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
+      _getClient._fb = window.supabase.createClient(url, key);
     }
-    return _getClient._instance;
+    return _getClient._fb;
   }
 
   function _fmtMes(mesAnio) {
@@ -729,6 +822,7 @@ const FLOTA = (() => {
     showUpload,
     init,
     cargarConcentrado,
+    actualizarPisos,
   };
 
 })();
