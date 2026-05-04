@@ -42,6 +42,11 @@ const FLOTA = (() => {
       },
     },
     // ETN: 05_ASIGNACION_STLU_DTM_MAYO  hoja Detalle1
+    // Estructura real del archivo:
+    //   Fila 1: título "Detalles para Cuenta de ECONÓMICO..."
+    //   Fila 2: vacía
+    //   Fila 3: cabecera (ECONÓMICO, CROMÁTICA, ESTATUS, MODELO, ROL, BASE, EMPRESA...)
+    //   Fila 4+: datos reales (números económicos en col A)
     ETN: {
       patron:    /ASIGNAC/i,
       nombre_archivo: 'XX_ASIGNACION_STLU_DTM_MES',
@@ -55,13 +60,25 @@ const FLOTA = (() => {
         pisos:          '',  // se agrega manual desde el concentrado
         servicio:       String(row[7] || '').trim(),
       }),
-      esEcoValido: (numEco) => numEco.length >= 2 && /\d/.test(numEco),
+      // El número económico ETN es puramente numérico (4-6 dígitos)
+      esEcoValido: (numEco) => /^\d{3,6}$/.test(numEco.trim()),
       detectarCabecera: (rows) => {
-        for (let i = 0; i < Math.min(10, rows.length); i++) {
-          const c = String(rows[i][0] || '').toUpperCase();
-          if (c.includes('ECONÓM') || c.includes('ECONOM') || c.includes('DETALLES')) return i + 1;
+        // Estrategia 1: buscar la fila cuya col[0] es la cabecera "ECONÓMICO"
+        // (esa fila es la cabecera real de columnas, los datos empiezan en la siguiente)
+        for (let i = 0; i < Math.min(15, rows.length); i++) {
+          const c = String(rows[i][0] || '').toUpperCase().trim();
+          // La fila de cabecera dice exactamente "ECONÓMICO" o "ECONOMICO"
+          if (c === 'ECONÓMICO' || c === 'ECONOMICO' || c === 'ECO' || c === 'NUM ECONÓMICO') {
+            return i + 1; // la siguiente fila son los datos
+          }
         }
-        return 1;
+        // Estrategia 2: buscar la primera fila donde col[0] sea un número puro de 4+ dígitos
+        for (let i = 0; i < Math.min(15, rows.length); i++) {
+          const c = String(rows[i][0] || '').trim();
+          if (/^\d{4,6}$/.test(c)) return i; // esta fila ya es datos
+        }
+        // Fallback
+        return 3;
       },
     },
   };
