@@ -227,16 +227,23 @@ const BULK = (() => {
             </button>
           </div>
           <div class="vsb-list" id="validacionSidebarList">
-            ${state.unidades.map((u, i) => `
-              <div class="vsb-item ${i === state.currentIdx ? 'vsb-item-active' : ''} ${u.status === 'done' ? 'vsb-item-done' : ''}"
-                   onclick="BULK.goToUnit(${i})" id="vsb-item-${i}">
+            ${state.unidades.map((u, i) => {
+              const isDone     = u.status === 'done';
+              const isBarrido  = u.status === 'barrido';
+              const isFinished = isDone || isBarrido;
+              const badgeClass = isBarrido ? 'vsb-badge-barrido' : isDone ? 'vsb-badge-done' : 'vsb-badge-pending';
+              const badgeTxt   = isBarrido ? '📡 Barrido' : isDone ? '✓ Listo' : '• Pendiente';
+              const itemClass  = [
+                'vsb-item',
+                i === state.currentIdx ? 'vsb-item-active' : '',
+                isBarrido ? 'vsb-item-barrido' : isDone ? 'vsb-item-done' : ''
+              ].filter(Boolean).join(' ');
+              return `<div class="${itemClass}" onclick="BULK.goToUnit(${i})" id="vsb-item-${i}">
                 <span class="vsb-item-num">${i + 1}</span>
                 <span class="vsb-item-unidad">${u.numero}</span>
-                <span class="vsb-item-badge ${u.status === 'done' ? 'vsb-badge-done' : 'vsb-badge-pending'}">
-                  ${u.status === 'done' ? '✓' : '•'} ${u.status === 'done' ? 'Listo' : 'Pendiente'}
-                </span>
-              </div>
-            `).join('')}
+                <span class="vsb-item-badge ${badgeClass}">${badgeTxt}</span>
+              </div>`;
+            }).join('')}
           </div>
         </div>
 
@@ -383,23 +390,25 @@ const BULK = (() => {
                 </div>
               </div>
 
-              <!-- SECCIÓN BARRIDO: Última actualización (visible solo con barrido) -->
-              <div id="bulkBarridoSection" style="display:none;margin-top:10px;padding:12px 14px;background:rgba(79,142,247,.06);border:1px solid rgba(79,142,247,.2);border-radius:10px">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-                  <span style="font-size:12px;font-weight:600;color:#4f8ef7">📡 ¿Días sin actualizar?</span>
-                  <button id="bulkUltActBtn" onclick="BULK.toggleUltAct()" style="background:rgba(79,142,247,.15);border:1px solid rgba(79,142,247,.3);border-radius:6px;color:#4f8ef7;font-size:11px;font-weight:600;padding:4px 10px;cursor:pointer;font-family:inherit;transition:all .15s">
-                    + Agregar fecha
-                  </button>
-                </div>
-                <div id="bulkUltActWrap" style="display:none;margin-top:4px">
-                  <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Última transmisión registrada</label>
-                  <input type="datetime-local" id="bulkUltActFecha"
-                    style="background:var(--bg2);border:1px solid rgba(79,142,247,.3);border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;width:100%;max-width:280px;font-family:inherit;cursor:pointer"
-                  />
-                  <div style="font-size:10px;color:var(--text3);margin-top:4px">Si no aplica, cierra este campo — la unidad quedará como "en línea"</div>
-                </div>
-              </div>
 
+
+            </div>
+
+            <!-- SECCIÓN ÚLTIMA ACTUALIZACIÓN (siempre visible, combina con cualquier estado) -->
+            <div id="bulkUltActSection" style="margin-top:10px;padding:10px 14px;background:rgba(79,142,247,.05);border:1px solid rgba(79,142,247,.15);border-radius:10px;display:none">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <span style="font-size:12px;font-weight:600;color:#4f8ef7">⏱️ Última actualización</span>
+                <button id="bulkUltActBtn" onclick="BULK.toggleUltAct()" style="background:rgba(79,142,247,.15);border:1px solid rgba(79,142,247,.3);border-radius:6px;color:#4f8ef7;font-size:11px;font-weight:600;padding:4px 10px;cursor:pointer;font-family:inherit;transition:all .15s">
+                  + Agregar fecha
+                </button>
+              </div>
+              <div id="bulkUltActWrap" style="display:none;margin-top:8px">
+                <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Fecha de última transmisión</label>
+                <input type="datetime-local" id="bulkUltActFecha"
+                  style="background:var(--bg2);border:1px solid rgba(79,142,247,.3);border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;width:100%;max-width:280px;font-family:inherit;cursor:pointer"
+                />
+                <div style="font-size:10px;color:var(--text3);margin-top:4px">Sin fecha = unidad en línea</div>
+              </div>
             </div>
 
             <!-- SECCIÓN FALLA TÉCNICA (visible solo cuando hay falla) -->
@@ -551,9 +560,15 @@ const BULK = (() => {
     if (conFalla.length > 0) {
       txt += '🔴 Con falla:\n';
       conFalla.forEach(u => {
-        const r = (DATA.state.fallas || []).find(f => f.folio === u.folio);
+        const r    = (DATA.state.fallas || []).find(f => f.folio === u.folio);
         const desc = r ? (r.componente || r.categoria || r.descripcion || 'falla') : 'falla';
-        txt += u.numero + ' — ' + desc + '\n';
+        let linea  = u.numero + ' — ' + desc;
+        if (u.ultimaActualizacion) {
+          const dias = _diasSinActualizar(u.ultimaActualizacion);
+          linea += '\n' + _fmtFechaCorta(u.ultimaActualizacion)
+                + (dias !== null ? ' - ' + dias + (dias === 1 ? ' día' : ' días') : '');
+        }
+        txt += linea + '\n';
       });
       txt += '\n';
     }
@@ -561,7 +576,15 @@ const BULK = (() => {
     // ── Sin falla ──
     if (sinFalla.length > 0) {
       txt += '🟢 Sin falla:\n';
-      sinFalla.forEach(u => { txt += u.numero + '\n'; });
+      sinFalla.forEach(u => {
+        let linea = u.numero;
+        if (u.ultimaActualizacion) {
+          const dias = _diasSinActualizar(u.ultimaActualizacion);
+          linea += ' — ' + _fmtFechaCorta(u.ultimaActualizacion)
+                + (dias !== null ? ' - ' + dias + (dias === 1 ? ' día' : ' días') : '');
+        }
+        txt += linea + '\n';
+      });
       txt += '\n';
     }
 
@@ -709,23 +732,21 @@ const BULK = (() => {
   }
 
   function renderCurrentValidacion() {
-    // Find first pending if current is done
     let idx = state.currentIdx;
 
-    // If current is done, find the next pending
-    if (state.unidades[idx]?.status === 'done') {
+    // Si la actual ya está terminada (done o barrido), buscar la siguiente pendiente
+    const cur = state.unidades[idx];
+    if (cur && (cur.status === 'done' || cur.status === 'barrido')) {
       const nextPending = state.unidades.findIndex((u, i) => i >= idx && u.status === 'pending');
       if (nextPending !== -1) {
         state.currentIdx = nextPending;
         idx = nextPending;
       } else {
-        // Find any pending
         const anyPending = state.unidades.findIndex(u => u.status === 'pending');
         if (anyPending !== -1) {
           state.currentIdx = anyPending;
           idx = anyPending;
         } else {
-          // All done
           const main = document.getElementById('mainContent');
           if (main) main.innerHTML = renderValidacionCompleta();
           UI.updateHeaderCounts();
@@ -774,15 +795,14 @@ const BULK = (() => {
     const fb = document.getElementById('bulkEstadoFalla');
     const sb = document.getElementById('bulkEstadoSinFalla');
     const bb = document.getElementById('bulkEstadoBarrido');
-    if (fb) fb.classList.remove('active');
-    if (sb) sb.classList.remove('active');
-    if (bb) { bb.classList.remove('active'); bb.style.borderColor = ''; bb.style.color = ''; }
-    // Ocultar sección barrido y limpiar fecha
-    const bs   = document.getElementById('bulkBarridoSection');
+    [fb, sb, bb].forEach(b => { if (b) { b.classList.remove('active'); b.style.borderColor = ''; b.style.color = ''; } });
+    const uas  = document.getElementById('bulkUltActSection');
     const wrap = document.getElementById('bulkUltActWrap');
     const btn  = document.getElementById('bulkUltActBtn');
     const inp  = document.getElementById('bulkUltActFecha');
-    if (bs)   bs.style.display   = 'none';
+    const fs   = document.getElementById('bulkFallaSection');
+    if (uas)  uas.style.display  = 'none';
+    if (fs)   fs.style.display   = 'none';
     if (wrap) wrap.style.display = 'none';
     if (btn)  btn.textContent    = '+ Agregar fecha';
     if (inp)  inp.value          = '';
@@ -790,34 +810,33 @@ const BULK = (() => {
   }
 
   function selEstado(tipo) {
-    const fb = document.getElementById('bulkEstadoFalla');
-    const sb = document.getElementById('bulkEstadoSinFalla');
-    const bb = document.getElementById('bulkEstadoBarrido');
-    const fallaSection   = document.getElementById('bulkFallaSection');
-    const barridoSection = document.getElementById('bulkBarridoSection');
+    const fb  = document.getElementById('bulkEstadoFalla');
+    const sb  = document.getElementById('bulkEstadoSinFalla');
+    const bb  = document.getElementById('bulkEstadoBarrido');
+    const fallaSection  = document.getElementById('bulkFallaSection');
+    const ultActSection = document.getElementById('bulkUltActSection');
 
-    [fb, sb, bb].forEach(b => b && b.classList.remove('active'));
+    [fb, sb, bb].forEach(b => {
+      if (!b) return;
+      b.classList.remove('active');
+      b.style.borderColor = ''; b.style.color = '';
+    });
 
     if (tipo === 'falla') {
       if (fb) fb.classList.add('active');
-      if (fallaSection)   fallaSection.style.display   = '';
-      if (barridoSection) barridoSection.style.display = 'none';
+      if (fallaSection)  fallaSection.style.display  = '';
+      if (ultActSection) ultActSection.style.display = '';
     } else if (tipo === 'barrido') {
       if (bb) { bb.classList.add('active'); bb.style.borderColor = '#4f8ef7'; bb.style.color = '#4f8ef7'; }
-      if (fallaSection)   fallaSection.style.display   = 'none';
-      if (barridoSection) barridoSection.style.display = '';
-      // Reset ult act state cada vez que se selecciona barrido
-      const wrap = document.getElementById('bulkUltActWrap');
-      const btn  = document.getElementById('bulkUltActBtn');
-      const inp  = document.getElementById('bulkUltActFecha');
-      if (wrap) wrap.style.display = 'none';
-      if (btn)  btn.textContent = '+ Agregar fecha';
-      if (inp)  inp.value = '';
-    } else {
+      if (fallaSection)  fallaSection.style.display  = 'none';
+      if (ultActSection) ultActSection.style.display = '';
+    } else { // sinfalla
       if (sb) sb.classList.add('active');
-      if (fallaSection)   fallaSection.style.display   = 'none';
-      if (barridoSection) barridoSection.style.display = 'none';
+      if (fallaSection)  fallaSection.style.display  = 'none';
+      if (ultActSection) ultActSection.style.display = '';
     }
+
+    // Si cambia de estado pero ya había fecha, preguntar si mantenerla
     state.chipState.estado = tipo;
   }
 
@@ -828,12 +847,11 @@ const BULK = (() => {
     if (!wrap) return;
     const visible = wrap.style.display !== 'none';
     wrap.style.display = visible ? 'none' : '';
-    btn.textContent    = visible ? '+ Agregar fecha' : '✕ Quitar fecha';
+    if (btn) btn.textContent = visible ? '+ Agregar fecha' : '✕ Quitar fecha';
     if (!visible && inp && !inp.value) {
-      // Pre-fill con ayer a las 00:00 como sugerencia
-      const ayer = new Date(); ayer.setDate(ayer.getDate() - 1);
-      ayer.setHours(0,0,0,0);
-      inp.value = ayer.toISOString().slice(0,16);
+      // Pre-fill: ayer a la hora actual
+      const d = new Date(); d.setDate(d.getDate() - 1);
+      inp.value = d.toISOString().slice(0,16);
     }
     if (visible && inp) inp.value = '';
   }
@@ -869,8 +887,33 @@ const BULK = (() => {
 
   // ─── Navegación ───────────────────────────────
   function goToUnit(idx) {
-    state.currentIdx = idx;
-    renderCurrentValidacion();
+    const u = state.unidades[idx];
+    const isFinished = u && (u.status === 'done' || u.status === 'barrido');
+
+    if (isFinished && idx !== state.currentIdx) {
+      // Primer click: seleccionar sin editar (solo highlight)
+      if (state._editConfirmIdx === idx) {
+        // Segundo click: entrar a edición
+        state._editConfirmIdx = null;
+        state.currentIdx = idx;
+        u.status = 'pending'; // desbloquear para editar
+        u.folio  = u._prevFolio || u.folio;
+        renderCurrentValidacion();
+        UI.toast(`✏️ Editando unidad ${u.numero} — guarda de nuevo al terminar`);
+      } else {
+        // Primer click: marcar para posible edición
+        state._editConfirmIdx = idx;
+        // Solo actualizar highlight en sidebar
+        document.querySelectorAll('.vsb-item').forEach((el, i) => {
+          el.classList.toggle('vsb-item-active', i === idx);
+        });
+        UI.toast(`Toca de nuevo para editar ${u.numero}`);
+      }
+    } else {
+      state._editConfirmIdx = null;
+      state.currentIdx = idx;
+      renderCurrentValidacion();
+    }
   }
 
   function prevUnit() {
@@ -921,7 +964,11 @@ const BULK = (() => {
       const ultActVal     = (ultActWrap && ultActWrap.style.display !== 'none' && ultActFechaEl?.value)
                             ? ultActFechaEl.value : null;
       state.unidades[state.currentIdx].ultimaActualizacion = ultActVal || null;
-      UI.toast(`📶 Unidad ${current.numero} marcada en línea`);
+      if (ultActVal) {
+        UI.toast(`📴 Unidad ${current.numero} — fuera de línea`);
+      } else {
+        UI.toast(`📶 Unidad ${current.numero} — en línea`);
+      }
       UI.updateHeaderCounts();
       const nextPend = state.unidades.findIndex((u, i) => i > state.currentIdx && u.status === 'pending');
       if (nextPend !== -1) { state.currentIdx = nextPend; renderCurrentValidacion(); }
@@ -981,9 +1028,13 @@ const BULK = (() => {
       return;
     }
 
-    // Marcar como completada
-    state.unidades[state.currentIdx].status = 'done';
-    state.unidades[state.currentIdx].folio  = nuevo.folio;
+    // Marcar como completada — también guardar ultima actualización si la llenaron
+    const _ultWrap = document.getElementById('bulkUltActWrap');
+    const _ultInp  = document.getElementById('bulkUltActFecha');
+    const _ultVal  = (_ultWrap && _ultWrap.style.display !== 'none' && _ultInp?.value) ? _ultInp.value : null;
+    state.unidades[state.currentIdx].status              = 'done';
+    state.unidades[state.currentIdx].folio               = nuevo.folio;
+    state.unidades[state.currentIdx].ultimaActualizacion = _ultVal || null;
 
     UI.toast(`✓ Unidad ${current.numero} — Folio: ${nuevo.folio}`);
     UI.updateHeaderCounts();
