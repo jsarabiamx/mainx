@@ -2,256 +2,241 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>CCTV Fleet Control — Vista Técnico</title>
+  <link rel="stylesheet" href="css/tecnico.css">
+  <link rel="stylesheet" href="css/responsive.css">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📹</text></svg>">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/tecnico-new.css">
 </head>
 <body>
 
-  <div id="loadingOverlay">
-    <div class="loading-spinner"></div>
-    <div class="loading-text">Cargando panel técnico…</div>
+  <!-- LOADING -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Cargando panel técnico…</div>
+    </div>
   </div>
 
-  <header class="t-header">
-    <div class="t-header-brand">
-      <div class="t-header-icon">📹</div>
-      <div>
-        <div class="t-header-title">CCTV Fleet Control</div>
-        <div class="t-header-sub" id="headerSub">Panel técnico</div>
+  <!-- HEADER -->
+  <header class="tech-header">
+    <div class="header-brand">
+      <div class="brand-icon">📹</div>
+      <div class="brand-info">
+        <h1>CCTV Fleet Control</h1>
+        <p>Panel de atención técnica</p>
       </div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <span class="t-badge-role">Técnico</span>
-      <div class="t-avatar" id="userAvatar" onclick="goScreen('perfil')">T
-        <div class="t-notif-dot" id="notifDot"></div>
+
+    <div class="header-right">
+      <span class="tech-badge">Técnico</span>
+      <div class="user-info-header">
+        <div class="user-avatar" id="userAvatar">T</div>
+        <div>
+          <div class="user-name-header" id="userName">—</div>
+          <div class="user-empresa-header" id="userEmpresa">—</div>
+        </div>
       </div>
+      <button class="btn-logout" id="btnLogout">
+        <span>⬡</span> Salir
+      </button>
     </div>
   </header>
 
-  <div class="t-emp-strip" id="empresaStrip"></div>
-
-  <div class="t-kpi-strip">
-    <div class="t-kpi active" data-tab="pendiente" onclick="setTab('pendiente')">
-      <div class="t-kpi-val" id="kpiPendiente">0</div>
-      <div class="t-kpi-lbl">Pendientes</div>
-    </div>
-    <div class="t-kpi" data-tab="proceso" onclick="setTab('proceso')">
-      <div class="t-kpi-val" id="kpiProceso">0</div>
-      <div class="t-kpi-lbl">En proceso</div>
-    </div>
-    <div class="t-kpi" data-tab="atendido" onclick="setTab('atendido')">
-      <div class="t-kpi-val" id="kpiAtendido">0</div>
-      <div class="t-kpi-lbl">Atendidos</div>
-    </div>
-    <div class="t-kpi" data-tab="total" onclick="setTab('total')">
-      <div class="t-kpi-val" id="kpiTotal">0</div>
-      <div class="t-kpi-lbl">Total</div>
-    </div>
+  <!-- EMPRESA STRIP -->
+  <div class="empresa-strip">
+    <span class="strip-label">Empresa:</span>
+    <div id="empresaStrip" style="display:flex;gap:8px;align-items:center;"></div>
   </div>
 
-  <main class="t-main">
+  <!-- MAIN -->
+  <main class="tech-main">
 
-    <div id="screenInicio" class="t-screen active">
-      <div class="t-search-wrap">
-        <div class="t-search-container">
-          <svg class="t-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          <input class="t-search" type="text" id="searchInput" placeholder="Buscar unidad, folio, categoría…" oninput="renderAll()">
-        </div>
+    <!-- KPIs -->
+    <div class="kpi-strip">
+      <div class="kpi-card kpi-pending">
+        <span class="kpi-icon">⏳</span>
+        <div class="kpi-value" id="kpiPendiente">0</div>
+        <div class="kpi-label">Pendientes</div>
       </div>
-      <div class="t-filter-bar">
-        <div class="t-filter-chip active" data-filter="miBase" onclick="toggleFilter(this)">Mi base</div>
-        <div class="t-filter-chip" data-filter="general" onclick="toggleFilter(this)">General</div>
+      <div class="kpi-card kpi-process">
+        <span class="kpi-icon">🔧</span>
+        <div class="kpi-value" id="kpiProceso">0</div>
+        <div class="kpi-label">En proceso</div>
       </div>
-      <div class="t-list" id="reportList"></div>
-    </div>
-
-    <div id="screenVision" class="t-screen">
-      <div class="v-period-tabs">
-        <button class="v-period-tab active" onclick="setVisionPeriod('dia',this)">Hoy</button>
-        <button class="v-period-tab" onclick="setVisionPeriod('semana',this)">Semana</button>
-        <button class="v-period-tab" onclick="setVisionPeriod('mes',this)">Mes</button>
+      <div class="kpi-card kpi-done">
+        <span class="kpi-icon">✅</span>
+        <div class="kpi-value" id="kpiAtendido">0</div>
+        <div class="kpi-label">Atendidos</div>
       </div>
-      <div class="v-stats-grid">
-        <div class="v-stat-card">
-          <div class="v-stat-val" style="color:var(--blue)" id="vAtendidos">0</div>
-          <div class="v-stat-lbl">Atendidos</div>
-        </div>
-        <div class="v-stat-card">
-          <div class="v-stat-val" style="color:var(--amber)" id="vPendientes">0</div>
-          <div class="v-stat-lbl">Pendientes</div>
-        </div>
-        <div class="v-stat-card">
-          <div class="v-stat-val" style="color:var(--red)" id="vCorrectivos">0</div>
-          <div class="v-stat-lbl">Correctivos</div>
-        </div>
-        <div class="v-stat-card">
-          <div class="v-stat-val" style="color:var(--green)" id="vPreventivos">0</div>
-          <div class="v-stat-lbl">Preventivos</div>
-        </div>
-      </div>
-      <div class="v-chart-card">
-        <div class="v-chart-title">Distribución de trabajo</div>
-        <div id="visionChart"></div>
-      </div>
-      <div class="v-chart-card">
-        <div class="v-chart-title">Por empresa</div>
-        <div id="visionEmpChart"></div>
+      <div class="kpi-card kpi-total">
+        <span class="kpi-icon">📊</span>
+        <div class="kpi-value" id="kpiTotal">0</div>
+        <div class="kpi-label">Total reportes</div>
       </div>
     </div>
 
-    <div id="screenPerfil" class="t-screen">
-      <div class="p-avatar-wrap">
-        <div class="p-avatar-big" id="perfilAvatar">T</div>
-        <div class="p-name" id="perfilNombre">—</div>
-        <div class="p-role">Técnico de campo</div>
-      </div>
-      <div class="p-card">
-        <div class="p-card-row"><span class="p-card-label">Usuario</span><span class="p-card-value" id="perfilUsername">—</span></div>
-        <div class="p-card-row"><span class="p-card-label">Base asignada</span><span class="p-card-value" id="perfilBase">—</span></div>
-        <div class="p-card-row"><span class="p-card-label">Teléfono</span><span class="p-card-value" id="perfilTel">—</span></div>
-        <div class="p-card-row"><span class="p-card-label">ID Empleado</span><span class="p-card-value" id="perfilEmpleado">—</span></div>
-        <div class="p-card-row"><span class="p-card-label">Email</span><span class="p-card-value" id="perfilEmail" style="font-size:11px">—</span></div>
-        <div class="p-card-row"><span class="p-card-label">Empresas</span><span class="p-card-value" id="perfilEmpresas">—</span></div>
-      </div>
-      <button class="p-logout-btn" id="btnLogout">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-        Cerrar sesión
-      </button>
-    </div>
+    <!-- PANELS -->
+    <div class="panels-grid">
 
-  </main>
-
-  <nav class="t-nav">
-    <div class="t-nav-item active" id="nav-inicio" onclick="goScreen('inicio')">
-      <div class="t-nav-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      </div>
-      <div class="t-nav-label">Inicio</div>
-    </div>
-    <div class="t-nav-item" id="nav-vision" onclick="goScreen('vision')">
-      <div class="t-nav-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      </div>
-      <div class="t-nav-label">Visión</div>
-    </div>
-    <div class="t-nav-item" id="nav-perfil" onclick="goScreen('perfil')">
-      <div class="t-nav-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      </div>
-      <div class="t-nav-label">Perfil</div>
-    </div>
-  </nav>
-
-  <!-- DETAIL BOTTOM SHEET -->
-  <div class="t-sheet-overlay" id="sheetOverlay" onclick="closeSheet()"></div>
-  <div class="t-sheet" id="detailSheet">
-    <div class="t-sheet-handle" onclick="closeSheet()"><div class="t-sheet-handle-bar"></div></div>
-    <div class="t-sheet-header">
-      <div class="t-sheet-folio" id="sheetFolio">—</div>
-      <div class="t-sheet-unidad" id="sheetUnidad">Unidad —</div>
-      <div class="t-sheet-badges">
-        <span id="sheetEmpresa" style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px">—</span>
-        <span id="sheetStatus" class="t-card-status">—</span>
-        <span id="sheetDate" style="font-size:10px;color:var(--text3)">—</span>
-      </div>
-    </div>
-    <div class="t-sheet-body">
-      <div class="t-sheet-section">
-        <div class="t-sheet-section-title">Información general</div>
-        <div class="t-sheet-grid">
-          <div><div class="t-sheet-field-label">Base</div><div class="t-sheet-field-value" id="sheetBase">—</div></div>
-          <div><div class="t-sheet-field-label">Servicio</div><div class="t-sheet-field-value" id="sheetServicio">—</div></div>
-          <div><div class="t-sheet-field-label">Prioridad</div><div class="t-sheet-field-value" id="sheetPrioridad">—</div></div>
-          <div><div class="t-sheet-field-label">Operador</div><div class="t-sheet-field-value" id="sheetOperador">—</div></div>
-        </div>
-      </div>
-      <div class="t-sheet-section">
-        <div class="t-sheet-section-title">Falla técnica</div>
-        <div class="t-sheet-grid">
-          <div><div class="t-sheet-field-label">Categoría</div><div class="t-sheet-field-value" id="sheetCategoria">—</div></div>
-          <div><div class="t-sheet-field-label">Componente</div><div class="t-sheet-field-value" id="sheetComponente">—</div></div>
-          <div class="t-sheet-field-full">
-            <div class="t-sheet-field-label">Descripción</div>
-            <div class="t-sheet-desc" id="sheetDesc">—</div>
+      <!-- PENDIENTES -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <div class="panel-dot amber"></div>
+            <h2>Pendientes de atención</h2>
           </div>
+          <span class="panel-count amber" id="pendientesCount">0</span>
+        </div>
+        <div class="panel-search">
+          <input type="text" class="search-input" id="searchPendientes"
+                 placeholder="Buscar por unidad, folio, categoría…">
+        </div>
+        <div class="report-list" id="pendientesList">
+          <!-- Se llena con JS -->
         </div>
       </div>
-      <div class="t-sheet-section">
-        <div class="t-sheet-section-title">Atención</div>
-        <div class="t-sheet-grid">
-          <div><div class="t-sheet-field-label">Técnico asignado</div><div class="t-sheet-field-value" id="sheetTecnico">—</div></div>
-          <div><div class="t-sheet-field-label">Fecha atención</div><div class="t-sheet-field-value" id="sheetFechaAten">—</div></div>
-          <div class="t-sheet-field-full">
-            <div class="t-sheet-field-label">Observaciones</div>
-            <div class="t-sheet-desc" id="sheetObs">—</div>
+
+      <!-- ATENDIDOS -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <div class="panel-dot green"></div>
+            <h2>Reportes atendidos</h2>
           </div>
+          <span class="panel-count green" id="atendidosCount">0</span>
+        </div>
+        <div class="panel-search">
+          <input type="text" class="search-input" id="searchAtendidos"
+                 placeholder="Buscar en atendidos…">
+        </div>
+        <div class="report-list" id="atendidosList">
+          <!-- Se llena con JS -->
         </div>
       </div>
-    </div>
-    <div class="t-sheet-footer" id="sheetFooter">
-      <button class="t-sheet-btn-sec" onclick="closeSheet()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-        Cerrar
-      </button>
-      <button class="t-sheet-btn-pri" id="sheetAtenderBtn" onclick="doAtender()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-        Atender
-      </button>
-    </div>
-  </div>
 
-  <!-- MODAL ATENDER (requerido por tecnico.js) -->
-  <div id="atenderOverlay" style="position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.7);display:none;align-items:flex-end">
-    <div id="atenderModal" style="background:var(--bg1);border-radius:20px 20px 0 0;width:100%;padding:20px;border:1px solid var(--border2);border-bottom:none">
-      <h3 id="atenderTitle" style="font-size:16px;font-weight:700;margin-bottom:4px">Atender Reporte</h3>
-      <p id="atenderSubtitle" style="font-size:12px;color:var(--text3);margin-bottom:16px">Al confirmar pasará a En proceso.</p>
-      <div id="atenderContent"></div>
+    </div><!-- /panels-grid -->
+
+    <!-- DETALLE (aparece al seleccionar) -->
+    <div style="margin-top:20px;">
+      <div class="detail-panel" id="detailPanel">
+
+        <!-- Placeholder -->
+        <div class="detail-placeholder" id="detailPlaceholder">
+          <span class="empty-icon">👆</span>
+          <div class="empty-title">Selecciona un reporte</div>
+          <div class="empty-sub">Toca cualquier reporte de la lista para ver todos sus detalles</div>
+        </div>
+
+        <!-- Contenido detalle -->
+        <div class="detail-content" id="detailContent">
+
+          <!-- Header detalle -->
+          <div class="detail-header">
+            <div class="detail-folio-row">
+              <span class="detail-folio" id="detailFolio">—</span>
+              <span class="report-status-badge badge-pendiente" id="detailStatusBadge">—</span>
+            </div>
+            <div class="detail-unidad" id="detailUnidad">Unidad —</div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <span class="detail-empresa-tag" id="detailEmpresa">—</span>
+              <span class="detail-date" id="detailDate">—</span>
+            </div>
+          </div>
+
+          <!-- Body detalle -->
+          <div class="detail-body">
+
+            <!-- Info general -->
+            <div class="detail-section">
+              <div class="detail-section-title">Información general</div>
+              <div class="detail-grid">
+                <div class="detail-field">
+                  <div class="detail-field-label">Empresa</div>
+                  <div class="detail-field-value" id="dEmpresa">—</div>
+                </div>
+                <div class="detail-field">
+                  <div class="detail-field-label">Base</div>
+                  <div class="detail-field-value" id="dBase">—</div>
+                </div>
+                <div class="detail-field">
+                  <div class="detail-field-label">Servicio</div>
+                  <div class="detail-field-value" id="dServicio">—</div>
+                </div>
+                <div class="detail-field">
+                  <div class="detail-field-label">Piso</div>
+                  <div class="detail-field-value" id="dPiso">—</div>
+                </div>
+                <div class="detail-field">
+                  <div class="detail-field-label">Prioridad</div>
+                  <div class="detail-field-value" id="dPrioridad">—</div>
+                </div>
+                <div class="detail-field">
+                  <div class="detail-field-label">Operador</div>
+                  <div class="detail-field-value" id="dOperador">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Falla técnica -->
+            <div class="detail-section">
+              <div class="detail-section-title">Falla técnica</div>
+              <div class="detail-grid">
+                <div class="detail-field">
+                  <div class="detail-field-label">Categoría</div>
+                  <div class="detail-field-value" id="dCategoria">—</div>
+                </div>
+                <div class="detail-field">
+                  <div class="detail-field-label">Componente</div>
+                  <div class="detail-field-value" id="dComponente">—</div>
+                </div>
+                <div class="detail-field detail-full">
+                  <div class="detail-field-label">Descripción de falla</div>
+                  <div class="detail-desc-text" id="dDescripcion">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Atención -->
+            <div class="detail-section">
+              <div class="detail-section-title">Atención</div>
+              <div class="detail-grid">
+                <div class="detail-field">
+                  <div class="detail-field-label">Técnico asignado</div>
+                  <div class="detail-field-value" id="dTecnico">—</div>
+                </div>
+                <div class="detail-field">
+                  <div class="detail-field-label">Fecha de atención</div>
+                  <div class="detail-field-value" id="dFechaAten">—</div>
+                </div>
+                <div class="detail-field detail-full">
+                  <div class="detail-field-label">Observaciones</div>
+                  <div class="detail-obs-text" id="dObservaciones">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Historial oculto en vista técnico -->
+            <div id="detailHistory" style="display:none"></div>
+
+          </div><!-- /detail-body -->
+        </div><!-- /detail-content -->
+
+      </div><!-- /detail-panel -->
     </div>
-  </div>
 
-  <!-- IDs requeridos por tecnico.js legacy -->
-  <div id="detailHistory" style="display:none"></div>
-  <div id="pendientesList" style="display:none"></div>
-  <div id="atendidosList" style="display:none"></div>
-  <div id="pendientesCount" style="display:none"></div>
-  <div id="atendidosCount" style="display:none"></div>
-  <div id="detailPanel" style="display:none"></div>
-  <div id="detailPlaceholder" style="display:none"></div>
-  <div id="detailContent" style="display:none"></div>
-  <div id="detailFolio" style="display:none"></div>
-  <div id="detailStatusBadge" style="display:none"></div>
-  <div id="detailUnidad" style="display:none"></div>
-  <div id="detailEmpresa" style="display:none"></div>
-  <div id="detailDate" style="display:none"></div>
-  <div id="dEmpresa" style="display:none"></div>
-  <div id="dBase" style="display:none"></div>
-  <div id="dServicio" style="display:none"></div>
-  <div id="dPiso" style="display:none"></div>
-  <div id="dPrioridad" style="display:none"></div>
-  <div id="dOperador" style="display:none"></div>
-  <div id="dCategoria" style="display:none"></div>
-  <div id="dComponente" style="display:none"></div>
-  <div id="dDescripcion" style="display:none"></div>
-  <div id="dTecnico" style="display:none"></div>
-  <div id="dFechaAten" style="display:none"></div>
-  <div id="dObservaciones" style="display:none"></div>
-  <div id="userName" style="display:none"></div>
-  <div id="userEmpresa" style="display:none"></div>
-  <div id="searchPendientes" style="display:none"></div>
-  <div id="searchAtendidos" style="display:none"></div>
+  </main><!-- /tech-main -->
 
+  <!-- TOAST -->
   <div class="toast-container" id="toastContainer"></div>
 
+  <!-- SCRIPTS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-config.js"></script>
-  <script src="js/supabaseService.js"></script>
-  <script src="js/dataService.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/supabaseService.js"></script>
+<script src="js/dataService.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/tecnico.js"></script>
-  <script src="js/tecnico-ui.js"></script>
+  <script src="js/responsive.js"></script>
 </body>
 </html>
