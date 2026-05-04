@@ -203,4 +203,38 @@
   }
 
   function T(id,v) { const e=document.getElementById(id); if(e) e.textContent=v??'—'; }
+
+  /* Conectar botón Atender del detalle con el modal */
+  setInterval(() => {
+    const btn = document.getElementById('detalleAtenderBtn');
+    if (!btn || btn._bound) return;
+    btn._bound = true;
+    btn.addEventListener('click', () => {
+      // Buscar el selectedId desde el state de tecnico.js
+      try {
+        const id = window._techState ? window._techState.selectedId : null;
+        if (id && typeof showAtenderModal === 'function') showAtenderModal(id);
+      } catch(e) {}
+    });
+  }, 500);
+
+  /* Ocultar/mostrar btn Atender según estatus */
+  const _dvObs = new MutationObserver(() => {
+    const vd = document.getElementById('viewDetalle');
+    if (!vd || vd.style.display === 'none') return;
+    setTimeout(() => {
+      try {
+        const id = window._techState && window._techState.selectedId;
+        const fallas = window._techState && window._techState.fallas;
+        const f = fallas && id ? fallas.find(x => x.id === id) : null;
+        const sec = document.getElementById('detalleAtenderSection');
+        if (sec && f) {
+          sec.style.display = /proceso|atendid/i.test(f.estatus||'') ? 'none' : '';
+        }
+      } catch(e) {}
+    }, 100);
+  });
+  const _vd = document.getElementById('viewDetalle');
+  if (_vd) _dvObs.observe(_vd, { attributes: true, attributeFilter: ['style'] });
+
 })();
