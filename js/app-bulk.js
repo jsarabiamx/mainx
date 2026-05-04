@@ -383,6 +383,23 @@ const BULK = (() => {
                 </div>
               </div>
 
+              <!-- SECCIÓN BARRIDO: Última actualización (visible solo con barrido) -->
+              <div id="bulkBarridoSection" style="display:none;margin-top:10px;padding:12px 14px;background:rgba(79,142,247,.06);border:1px solid rgba(79,142,247,.2);border-radius:10px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                  <span style="font-size:12px;font-weight:600;color:#4f8ef7">📡 ¿Días sin actualizar?</span>
+                  <button id="bulkUltActBtn" onclick="BULK.toggleUltAct()" style="background:rgba(79,142,247,.15);border:1px solid rgba(79,142,247,.3);border-radius:6px;color:#4f8ef7;font-size:11px;font-weight:600;padding:4px 10px;cursor:pointer;font-family:inherit;transition:all .15s">
+                    + Agregar fecha
+                  </button>
+                </div>
+                <div id="bulkUltActWrap" style="display:none;margin-top:4px">
+                  <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Última transmisión registrada</label>
+                  <input type="datetime-local" id="bulkUltActFecha"
+                    style="background:var(--bg2);border:1px solid rgba(79,142,247,.3);border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;width:100%;max-width:280px;font-family:inherit;cursor:pointer"
+                  />
+                  <div style="font-size:10px;color:var(--text3);margin-top:4px">Si no aplica, cierra este campo — la unidad quedará como "en línea"</div>
+                </div>
+              </div>
+
             </div>
 
             <!-- SECCIÓN FALLA TÉCNICA (visible solo cuando hay falla) -->
@@ -439,27 +456,100 @@ const BULK = (() => {
     </div>`;
   }
 
-  function _generarTextoBarrido() {
-    const emp      = DATA.state.currentEmpresa;
-    const fecha    = new Date().toLocaleDateString('es-MX', { day:'2-digit', month:'2-digit', year:'2-digit' });
-    const hora     = new Date().toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', hour12: false });
+  function _fmtFechaCorta(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      const dd = String(d.getDate()).padStart(2,'0');
+      const mm = String(d.getMonth()+1).padStart(2,'0');
+      const yy = String(d.getFullYear()).slice(-2);
+      const hh = String(d.getHours()).padStart(2,'0');
+      const mi = String(d.getMinutes()).padStart(2,'0');
+      return dd+'-'+mm+'-'+yy+' / '+hh+':'+mi;
+    } catch(e){ return iso; }
+  }
 
-    const enLinea   = state.unidades.filter(u => u.status === 'barrido');
-    const conFalla  = state.unidades.filter(u => u.status === 'done' && u.folio);
-    const sinFalla  = state.unidades.filter(u => u.status === 'done' && !u.folio);
-    const omitidas  = state.unidades.filter(u => u.status === 'pending');
+  function _diasSinActualizar(iso) {
+    if (!iso) return null;
+    try {
+      const now  = new Date();
+      const then = new Date(iso);
+      const diff = now - then; // ms
+      return Math.floor(diff / 86400000); // días completos
+    } catch(e){ return null; }
+  }
+
+  function _generarTextoBarrido() {
+    const emp   = DATA.state.currentEmpresa;
+    const now   = new Date();
+    const fecha = now.toLocaleDateString('es-MX', { day:'2-digit', month:'2-digit', year:'2-digit' });
+    const hora  = now.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', hour12: false });
+
+    // Separar unidades barrido: en línea vs con última actualización
+    const barridoUnidades = state.unidades.filter(u => u.status === 'barrido');
+    const enLinea = barridoUnidades.filter(u => !u.ultimaActualizacion);
+    const conUltAct = barridoUnidades.filter(u => !!u.ultimaActualizacion);
+
+    // Agrupar con-ult-act por cantidad de días
+    // Detectar si fue hoy mismo (sin transmisión en la mañana = mismo día)
+    const hoyStr = now.toDateString();
+    const sinTxHoy = conUltAct.filter(u => {
+      try { return new Date(u.ultimaActualizacion).toDateString() === hoyStr; } catch(e){ return false; }
+    });
+    const masDeUnDia = conUltAct.filter(u => {
+      const d = _diasSinActualizar(u.ultimaActualizacion);
+      return d !== null && d >= 1;
+    });
+
+    // Agrupar masDeUnDia por cantidad exacta de días
+    const porDias = {};
+    masDeUnDia.forEach(u => {
+      const d = _diasSinActualizar(u.ultimaActualizacion);
+      if (!porDias[d]) porDias[d] = [];
+      porDias[d].push(u);
+    });
+
+    const conFalla = state.unidades.filter(u => u.status === 'done' && u.folio);
+    const sinFalla = state.unidades.filter(u => u.status === 'done' && !u.folio);
+    const omitidas = state.unidades.filter(u => u.status === 'pending');
 
     let txt = '';
     txt += '📡 *ESTADO DE UNIDADES ' + emp + '*\n';
     txt += '📅 Barrido ' + fecha + ' / ' + hora + '\n\n';
 
+    // ── En línea ──
     if (enLinea.length > 0) {
-      txt += '✅ *En línea:*\n';
+      txt += '✅ OPERATIVO — Cámaras / Antenas GPS-3G OK\n\n';
+      txt += 'En línea:\n';
       enLinea.forEach(u => { txt += u.numero + ' (en línea)\n'; });
       txt += '\n';
     }
+
+    // ── Sin transmisión en la mañana (mismo día) ──
+    if (sinTxHoy.length > 0) {
+      txt += '☀️ Sin transmisión en la mañana\n';
+      sinTxHoy.forEach(u => {
+        txt += u.numero + ' en espera, ' + _fmtFechaCorta(u.ultimaActualizacion) + '\n';
+      });
+      txt += '\n';
+    }
+
+    // ── Última transmisión agrupada por días ──
+    const diasOrdenados = Object.keys(porDias).map(Number).sort((a,b) => a-b);
+    if (diasOrdenados.length > 0) {
+      txt += '⏱️ Última transmisión\n';
+      diasOrdenados.forEach(d => {
+        txt += '▪️ ' + d + (d === 1 ? ' día' : ' días') + '\n';
+        porDias[d].forEach(u => {
+          txt += u.numero + ' — ' + _fmtFechaCorta(u.ultimaActualizacion) + '\n';
+        });
+      });
+      txt += '\n';
+    }
+
+    // ── Con falla ──
     if (conFalla.length > 0) {
-      txt += '🔴 *Con falla:*\n';
+      txt += '🔴 Con falla:\n';
       conFalla.forEach(u => {
         const r = (DATA.state.fallas || []).find(f => f.folio === u.folio);
         const desc = r ? (r.componente || r.categoria || r.descripcion || 'falla') : 'falla';
@@ -467,13 +557,16 @@ const BULK = (() => {
       });
       txt += '\n';
     }
+
+    // ── Sin falla ──
     if (sinFalla.length > 0) {
-      txt += '🟢 *Sin falla:*\n';
+      txt += '🟢 Sin falla:\n';
       sinFalla.forEach(u => { txt += u.numero + '\n'; });
       txt += '\n';
     }
+
     if (omitidas.length > 0) {
-      txt += '⏩ *Omitidas:* ' + omitidas.map(u => u.numero).join(', ') + '\n';
+      txt += '⏩ Omitidas: ' + omitidas.map(u => u.numero).join(', ') + '\n';
     }
 
     return txt.trim();
@@ -680,8 +773,19 @@ const BULK = (() => {
   function resetEstado() {
     const fb = document.getElementById('bulkEstadoFalla');
     const sb = document.getElementById('bulkEstadoSinFalla');
+    const bb = document.getElementById('bulkEstadoBarrido');
     if (fb) fb.classList.remove('active');
     if (sb) sb.classList.remove('active');
+    if (bb) { bb.classList.remove('active'); bb.style.borderColor = ''; bb.style.color = ''; }
+    // Ocultar sección barrido y limpiar fecha
+    const bs   = document.getElementById('bulkBarridoSection');
+    const wrap = document.getElementById('bulkUltActWrap');
+    const btn  = document.getElementById('bulkUltActBtn');
+    const inp  = document.getElementById('bulkUltActFecha');
+    if (bs)   bs.style.display   = 'none';
+    if (wrap) wrap.style.display = 'none';
+    if (btn)  btn.textContent    = '+ Agregar fecha';
+    if (inp)  inp.value          = '';
     state.chipState.estado = '';
   }
 
@@ -689,21 +793,49 @@ const BULK = (() => {
     const fb = document.getElementById('bulkEstadoFalla');
     const sb = document.getElementById('bulkEstadoSinFalla');
     const bb = document.getElementById('bulkEstadoBarrido');
-    const fallaSection = document.getElementById('bulkFallaSection');
+    const fallaSection   = document.getElementById('bulkFallaSection');
+    const barridoSection = document.getElementById('bulkBarridoSection');
 
     [fb, sb, bb].forEach(b => b && b.classList.remove('active'));
 
     if (tipo === 'falla') {
       if (fb) fb.classList.add('active');
-      if (fallaSection) fallaSection.style.display = '';
+      if (fallaSection)   fallaSection.style.display   = '';
+      if (barridoSection) barridoSection.style.display = 'none';
     } else if (tipo === 'barrido') {
       if (bb) { bb.classList.add('active'); bb.style.borderColor = '#4f8ef7'; bb.style.color = '#4f8ef7'; }
-      if (fallaSection) fallaSection.style.display = 'none';
+      if (fallaSection)   fallaSection.style.display   = 'none';
+      if (barridoSection) barridoSection.style.display = '';
+      // Reset ult act state cada vez que se selecciona barrido
+      const wrap = document.getElementById('bulkUltActWrap');
+      const btn  = document.getElementById('bulkUltActBtn');
+      const inp  = document.getElementById('bulkUltActFecha');
+      if (wrap) wrap.style.display = 'none';
+      if (btn)  btn.textContent = '+ Agregar fecha';
+      if (inp)  inp.value = '';
     } else {
       if (sb) sb.classList.add('active');
-      if (fallaSection) fallaSection.style.display = 'none';
+      if (fallaSection)   fallaSection.style.display   = 'none';
+      if (barridoSection) barridoSection.style.display = 'none';
     }
     state.chipState.estado = tipo;
+  }
+
+  function toggleUltAct() {
+    const wrap = document.getElementById('bulkUltActWrap');
+    const btn  = document.getElementById('bulkUltActBtn');
+    const inp  = document.getElementById('bulkUltActFecha');
+    if (!wrap) return;
+    const visible = wrap.style.display !== 'none';
+    wrap.style.display = visible ? 'none' : '';
+    btn.textContent    = visible ? '+ Agregar fecha' : '✕ Quitar fecha';
+    if (!visible && inp && !inp.value) {
+      // Pre-fill con ayer a las 00:00 como sugerencia
+      const ayer = new Date(); ayer.setDate(ayer.getDate() - 1);
+      ayer.setHours(0,0,0,0);
+      inp.value = ayer.toISOString().slice(0,16);
+    }
+    if (visible && inp) inp.value = '';
   }
 
   function selChip(key, val, el) {
@@ -783,6 +915,12 @@ const BULK = (() => {
     if (estado === 'barrido') {
       state.unidades[state.currentIdx].status  = 'barrido';
       state.unidades[state.currentIdx].enLinea = true;
+      // Guardar fecha de última actualización si fue ingresada
+      const ultActFechaEl = document.getElementById('bulkUltActFecha');
+      const ultActWrap    = document.getElementById('bulkUltActWrap');
+      const ultActVal     = (ultActWrap && ultActWrap.style.display !== 'none' && ultActFechaEl?.value)
+                            ? ultActFechaEl.value : null;
+      state.unidades[state.currentIdx].ultimaActualizacion = ultActVal || null;
       UI.toast(`📶 Unidad ${current.numero} marcada en línea`);
       UI.updateHeaderCounts();
       const nextPend = state.unidades.findIndex((u, i) => i > state.currentIdx && u.status === 'pending');
@@ -945,6 +1083,7 @@ const BULK = (() => {
     enviarAlSistema,
     volverALista,
     copiarBarrido,
+    toggleUltAct,
     state,
     onBaseChange,
     onTecnicoChange,
