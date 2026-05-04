@@ -410,9 +410,9 @@ const TECH = (() => {
           font-size:9px;font-weight:700;align-items:center;justify-content:center;
           border:2px solid #060810;line-height:1">0</span>
       </button>
-      <div id="techNotifDropdown" style="display:none;position:absolute;top:calc(100%+8px);right:0;
-        z-index:9999;background:#0a0d16;border:1px solid #242d45;border-radius:12px;
-        box-shadow:0 20px 50px rgba(0,0,0,0.8);width:340px;overflow:hidden">
+      <div id="techNotifDropdown" style="display:none;position:fixed;top:68px;right:12px;
+        z-index:99999;background:#0a0d16;border:1px solid #242d45;border-radius:12px;
+        box-shadow:0 20px 50px rgba(0,0,0,0.8);width:min(340px,calc(100vw - 24px));overflow:hidden">
         <div style="padding:12px 16px;border-bottom:1px solid #1a2035;display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:12px;font-weight:700;color:#e2e8f0">Notificaciones</span>
           <button id="techNotifMarkAll" style="font-size:10px;color:#4f8ef7;background:none;border:none;cursor:pointer;padding:2px 6px">Marcar leídas</button>
@@ -615,19 +615,18 @@ const TECH = (() => {
   function renderFilterBar() {
     let bar = document.getElementById('techFilterBar');
     if (!bar) {
+      // Si no existe en el HTML, crearlo antes del kpi-strip
       bar = document.createElement('div');
       bar.id = 'techFilterBar';
-      bar.style.cssText = 'background:#0a0d16;border-bottom:1px solid #1a2035;padding:10px 16px';
       const kpiStrip = document.querySelector('.kpi-strip');
-      const main     = document.querySelector('.tech-main');
       if (kpiStrip && kpiStrip.parentNode) {
-        kpiStrip.parentNode.insertBefore(bar, kpiStrip);
-      } else if (main) {
-        main.insertBefore(bar, main.firstChild);
+        kpiStrip.parentNode.insertBefore(bar, kpiStrip.nextSibling);
       } else {
-        document.body.insertBefore(bar, document.body.firstChild);
+        document.querySelector('.tech-main')?.prepend(bar);
       }
     }
+    // Resetear estilos inline para que el CSS controle el layout
+    bar.style.cssText = '';
 
     const isGeneral  = state.viewMode === 'general';
     const hasMiBase  = !!state.myBase;
@@ -1262,6 +1261,11 @@ const TECH = (() => {
     const d = document.getElementById('techNotifDropdown');
     if (d) d.style.display = 'none';
   }
+
+  // Exponer state globalmente para tecnico-ui.js (Visión, Perfil)
+  window._techState = state;
+  // Actualizar referencia cuando renderAll carga datos frescos
+  const _origRenderAll = renderAll;
 
   return { init, showAtenderModal, openNotifReport };
 
