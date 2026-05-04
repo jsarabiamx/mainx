@@ -19,26 +19,48 @@
   window.closeSheet     = closeSheet;
   window.doAtender      = doAtender;
 
-  /* ─── Esperar a que tecnico.js termine su init ─── */
-  const _readyInterval = setInterval(() => {
-    if (typeof TECH !== 'undefined' && TECH._uiReady) {
-      clearInterval(_readyInterval);
-      _hookIntoTech();
-    }
-  }, 100);
+  /* ─── Esperar a que tecnico.js termine su init (más robusto) ─── */
+  let _hookDone = false;
 
-  function _hookIntoTech() {
-    // Sobrescribir las funciones de render de tecnico.js con las nuevas
+  function _tryHook() {
+    if (_hookDone) return;
+    if (typeof TECH === 'undefined') return;
+
+    // Registrar los hooks aunque _uiReady todavía no esté
     TECH._renderCards   = renderNewCards;
     TECH._renderKPIs    = renderNewKPIs;
     TECH._renderPerfil  = renderNewPerfil;
     TECH._renderEmpresa = renderNewEmpresaStrip;
+    _hookDone = true;
 
-    // Trigger inicial
-    renderNewCards();
-    renderNewKPIs();
-    renderNewPerfil();
-    renderNewEmpresaStrip();
+    // Si ya hay datos disponibles, renderizar inmediatamente
+    if (TECH._uiReady && TECH.state && TECH.state.fallas) {
+      renderNewCards();
+      renderNewKPIs();
+      renderNewPerfil();
+      renderNewEmpresaStrip();
+    }
+  }
+
+  // Intentar hookear inmediatamente y luego con polling
+  _tryHook();
+  const _readyInterval = setInterval(() => {
+    _tryHook();
+    // Una vez que hay datos, renderizar y parar el polling de arranque
+    if (_hookDone && typeof TECH !== 'undefined' && TECH._uiReady) {
+      clearInterval(_readyInterval);
+      renderNewCards();
+      renderNewKPIs();
+      renderNewPerfil();
+      renderNewEmpresaStrip();
+    }
+  }, 150);
+
+  // También escuchar el evento DOMContentLoaded por si acaso
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _tryHook);
+  } else {
+    setTimeout(_tryHook, 50);
   }
 
   /* ─── EMPRESA STRIP ─── */
