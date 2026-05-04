@@ -934,41 +934,48 @@ const TECH = (() => {
     const enProc   = (f.estatus||'').toLowerCase().includes('proceso');
     const myName   = state.session ? (state.session.nombre || state.session.username) : '';
 
+    const accentCls = enProc ? 'proceso-item' : _isAtendidoEst(f.estatus, f.empresa) ? 'atendido-item' : 'pendiente-item';
+
     return `
-      <div class="report-item${isActive?' active':''}" data-id="${f.id}" style="cursor:pointer">
+      <div class="report-item ${accentCls}${isActive?' active':''}" data-id="${f.id}">
         <div class="report-item-top">
           <span class="report-folio">${f.folio||f.id}</span>
-          <span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;
-            color:${clr};background:rgba(0,0,0,0.2);border:1px solid ${clr}40;border-radius:4px;padding:1px 7px;flex-shrink:0">${f.empresa}</span>
+          <span style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;
+            color:${clr};background:${clr}18;border:1px solid ${clr}35;border-radius:4px;padding:1px 7px;flex-shrink:0">${f.empresa}</span>
           <span class="report-status-badge ${badgeCls}">${f.estatus||'Pendiente'}</span>
         </div>
         <div class="report-unidad">Unidad ${f.unidad||'—'}</div>
         <div class="report-desc">${f.descripcion||'Sin descripción'}</div>
         <div class="report-meta">
           <span class="meta-chip"><span class="priority-dot ${prioCls}"></span>${f.prioridad||'Media'}</span>
-          <span class="meta-chip">📁 ${f.categoria||'—'}</span>
-          <span class="meta-chip">🕐 ${fmtDateShort(f.fecha)}</span>
-          ${f.base?`<span class="meta-chip">📍 ${f.base}</span>`:''}
-          ${f.proveedor?`<span class="meta-chip" style="color:#06b6d4">📡 ${f.proveedor}</span>`:''}
+          <span class="meta-chip">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="7" height="9"/><rect x="15" y="12" width="7" height="9"/></svg>
+            ${f.categoria||'—'}
+          </span>
+          <span class="meta-chip">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            ${fmtDateShort(f.fecha)}
+          </span>
+          ${f.base?`<span class="meta-chip">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/></svg>
+            ${f.base}</span>`:''}
+          ${f.proveedor?`<span class="meta-chip" style="color:#4fd1c5;font-weight:600">${f.proveedor}</span>`:''}
           ${f.tecnico&&enProc?`<span class="meta-chip" style="color:#f59e0b">🔧 ${f.tecnico}</span>`:''}
           ${f.fechaAtencion?`<span class="meta-chip" style="color:#22c55e">✓ ${fmtDateShort(f.fechaAtencion)}</span>`:''}
         </div>
         ${pend && !enProc ? `
-          <div style="margin-top:8px">
-            <button data-atender="${f.id}" style="
-              display:inline-flex;align-items:center;gap:6px;padding:6px 14px;
-              background:linear-gradient(135deg,#4f8ef7,#2b63d6);border:none;border-radius:7px;
-              color:white;font-size:11px;font-weight:700;cursor:pointer;
-              box-shadow:0 4px 12px rgba(79,142,247,0.3)">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          <div style="padding:0 10px 10px">
+            <button data-atender="${f.id}" class="atender-btn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
               Atender
             </button>
           </div>` : ''}
-        ${enProc && f.tecnico === myName ? `
-          <div style="margin-top:8px">
-            <span style="font-size:10px;color:#f59e0b;background:rgba(245,158,11,0.1);
-              border:1px solid rgba(245,158,11,0.25);border-radius:6px;padding:3px 8px">
-              🔧 En atención — esperando validación del admin
+        ${enProc ? `
+          <div style="padding:0 10px 10px">
+            <span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:#f59e0b;
+              background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);
+              border-radius:8px;padding:5px 10px;font-weight:600">
+              🔧 En atención — esperando validación
             </span>
           </div>` : ''}
       </div>`;
