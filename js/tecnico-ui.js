@@ -1,457 +1,270 @@
-/* tecnico-ui.js — Nueva UI Mobile para CCTV Fleet Control Técnico
-   Puente entre tecnico.js (lógica/datos) y la nueva interfaz */
-
-(function () {
+/* tecnico-ui.js — Mejoras visuales + Visión + Perfil
+   Trabaja SOBRE la UI existente. No reemplaza nada. */
+(function() {
   'use strict';
 
-  /* ─── Estado de la nueva UI ─── */
-  let _activeTab    = 'pendiente'; // pendiente | proceso | atendido | total
-  let _activeScreen = 'inicio';
-  let _selectedId   = null;
-  let _visionPeriod = 'dia';
-  let _activeFilter = 'miBase'; // miBase | general
-
-  /* ─── Exponer globales requeridas por el HTML ─── */
-  window.setTab         = setTab;
-  window.goScreen       = goScreen;
-  window.setVisionPeriod= setVisionPeriod;
-  window.toggleFilter   = toggleFilter;
-  window.closeSheet     = closeSheet;
-  window.doAtender      = doAtender;
-
-  /* ─── Esperar a que tecnico.js termine su init (más robusto) ─── */
-  let _hookDone = false;
-
-  function _tryHook() {
-    if (_hookDone) return;
-    if (typeof TECH === 'undefined') return;
-
-    // Registrar los hooks aunque _uiReady todavía no esté
-    TECH._renderCards   = renderNewCards;
-    TECH._renderKPIs    = renderNewKPIs;
-    TECH._renderPerfil  = renderNewPerfil;
-    TECH._renderEmpresa = renderNewEmpresaStrip;
-    _hookDone = true;
-
-    // Si ya hay datos disponibles, renderizar inmediatamente
-    if (TECH._uiReady && TECH.state && TECH.state.fallas) {
-      renderNewCards();
-      renderNewKPIs();
-      renderNewPerfil();
-      renderNewEmpresaStrip();
-    }
+  /* Esperar a que el body esté listo */
+  function onReady(cb) {
+    if (document.readyState !== 'loading') { cb(); return; }
+    document.addEventListener('DOMContentLoaded', cb);
   }
 
-  // Intentar hookear inmediatamente y luego con polling
-  _tryHook();
-  const _readyInterval = setInterval(() => {
-    _tryHook();
-    // Una vez que hay datos, renderizar y parar el polling de arranque
-    if (_hookDone && typeof TECH !== 'undefined' && TECH._uiReady) {
-      clearInterval(_readyInterval);
-      renderNewCards();
-      renderNewKPIs();
-      renderNewPerfil();
-      renderNewEmpresaStrip();
-    }
-  }, 150);
+  onReady(function() {
+    injectStyles();
+    addBottomNav();
+    watchLoadingOverlay();
+  });
 
-  // También escuchar el evento DOMContentLoaded por si acaso
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _tryHook);
-  } else {
-    setTimeout(_tryHook, 50);
+  /* ── ESTILOS ── */
+  function injectStyles() {
+    const s = document.createElement('style');
+    s.textContent = `
+      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
+      body { padding-bottom: 76px; }
+      .tech-header { background: rgba(7,9,15,.96) !important; backdrop-filter: blur(16px) !important; border-bottom: 1px solid rgba(255,255,255,.07) !important; }
+      .kpi-strip { display: grid !important; grid-template-columns: repeat(4,1fr) !important; gap: 1px !important; background: rgba(255,255,255,.06) !important; border-bottom: 1px solid rgba(255,255,255,.07) !important; padding: 0 !important; }
+      .kpi-card { background: rgba(10,13,22,1) !important; border: none !important; border-radius: 0 !important; padding: 14px 8px !important; flex-direction: column !important; align-items: center !important; gap: 4px !important; position: relative !important; box-shadow: none !important; }
+      .kpi-icon { display: none !important; }
+      .kpi-value { font-size: 22px !important; font-weight: 700 !important; line-height: 1 !important; }
+      .kpi-label { font-size: 9px !important; color: rgba(255,255,255,.35) !important; font-weight: 500 !important; text-transform: uppercase !important; letter-spacing: .05em !important; }
+      .kpi-pending .kpi-value { color: #f59e0b !important; }
+      .kpi-process .kpi-value { color: #4f8ef7 !important; }
+      .kpi-done    .kpi-value { color: #22c55e !important; }
+      .kpi-total   .kpi-value { color: #a855f7 !important; }
+      .panels-grid { display: flex !important; flex-direction: column !important; gap: 12px !important; padding: 12px !important; }
+      .panel { border-radius: 14px !important; border: 1px solid rgba(255,255,255,.07) !important; }
+      .toast-container { bottom: 80px !important; }
+
+      /* ── BOTTOM NAV ── */
+      #tuiNav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 999; height: 68px; background: rgba(7,9,15,.97); backdrop-filter: blur(20px); border-top: 1px solid rgba(255,255,255,.07); display: grid; grid-template-columns: repeat(3,1fr); padding-bottom: env(safe-area-inset-bottom); }
+      .tni { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; }
+      .tni-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.3); transition: all .15s; }
+      .tni.active .tni-icon { background: rgba(79,142,247,.15); color: #4f8ef7; }
+      .tni-lbl { font-size: 10px; font-weight: 600; color: rgba(255,255,255,.3); }
+      .tni.active .tni-lbl { color: #4f8ef7; }
+
+      /* ── PANELES EXTRAS ── */
+      #tuiPanelVision, #tuiPanelPerfil { display: none; padding: 16px; min-height: 60vh; }
+      #tuiPanelVision.show, #tuiPanelPerfil.show { display: block; }
+      .tui-hidden { display: none !important; }
+
+      /* Vision */
+      .vp-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+      .vp-tab { flex: 1; padding: 8px; background: rgba(17,22,34,1); border: 1px solid rgba(255,255,255,.1); border-radius: 8px; font-size: 11px; font-weight: 600; color: rgba(255,255,255,.5); cursor: pointer; text-align: center; font-family: inherit; }
+      .vp-tab.active { background: rgba(79,142,247,.15); border-color: rgba(79,142,247,.4); color: #4f8ef7; }
+      .vp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+      .vp-card { background: rgba(17,22,34,1); border: 1px solid rgba(255,255,255,.07); border-radius: 14px; padding: 16px; }
+      .vp-val { font-size: 30px; font-weight: 700; font-family: monospace; line-height: 1; margin-bottom: 4px; }
+      .vp-lbl { font-size: 11px; color: rgba(255,255,255,.4); }
+      .vp-chart { background: rgba(17,22,34,1); border: 1px solid rgba(255,255,255,.07); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+      .vp-chart-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: rgba(255,255,255,.4); margin-bottom: 12px; }
+      .vp-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+      .vp-bar-lbl { font-size: 11px; color: rgba(255,255,255,.5); width: 90px; text-align: right; flex-shrink: 0; }
+      .vp-bar-track { flex: 1; height: 8px; background: rgba(255,255,255,.06); border-radius: 4px; overflow: hidden; }
+      .vp-bar-fill { height: 100%; border-radius: 4px; transition: width .6s; }
+      .vp-bar-n { font-size: 11px; font-family: monospace; color: rgba(255,255,255,.5); width: 20px; text-align: right; }
+
+      /* Perfil */
+      .pp-avatar-wrap { display: flex; flex-direction: column; align-items: center; padding: 24px 0 20px; }
+      .pp-avatar { width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg,#1e3a6e,#2a4a8a); border: 2px solid rgba(79,142,247,.3); display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; color: #4f8ef7; margin-bottom: 12px; }
+      .pp-name { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+      .pp-role { font-size: 12px; color: rgba(255,255,255,.4); }
+      .pp-card { background: rgba(17,22,34,1); border: 1px solid rgba(255,255,255,.07); border-radius: 14px; overflow: hidden; margin-bottom: 12px; }
+      .pp-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,.05); }
+      .pp-row:last-child { border-bottom: none; }
+      .pp-lbl { font-size: 12px; color: rgba(255,255,255,.4); }
+      .pp-val { font-size: 13px; font-weight: 600; font-family: monospace; text-align: right; max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
+    `;
+    document.head.appendChild(s);
   }
 
-  /* ─── EMPRESA STRIP ─── */
-  function renderNewEmpresaStrip() {
-    if (typeof TECH === 'undefined') return;
-    const strip = document.getElementById('empresaStrip');
-    if (!strip) return;
+  /* ── BOTTOM NAV ── */
+  function addBottomNav() {
+    const nav = document.createElement('nav');
+    nav.id = 'tuiNav';
+    nav.innerHTML = `
+      <div class="tni active" id="tniInicio" onclick="tuiScreen('inicio')">
+        <div class="tni-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
+        <div class="tni-lbl">Inicio</div>
+      </div>
+      <div class="tni" id="tniVision" onclick="tuiScreen('vision')">
+        <div class="tni-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+        <div class="tni-lbl">Visión</div>
+      </div>
+      <div class="tni" id="tniPerfil" onclick="tuiScreen('perfil')">
+        <div class="tni-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        <div class="tni-lbl">Perfil</div>
+      </div>
+    `;
+    document.body.appendChild(nav);
 
-    const s = TECH.state;
-    if (!s || !s.empresas) return;
-
-    strip.innerHTML = '<span class="t-emp-label">Empresa:</span>' +
-      s.empresas.map(emp => {
-        const colors = { GHO: ['#4f8ef7','rgba(79,142,247,.2)'], ETN: ['#f59e0b','rgba(245,158,11,.2)'], AERS: ['#22c55e','rgba(34,197,94,.2)'], AMEALSENSE: ['#a855f7','rgba(168,85,247,.2)'] };
-        const [fg, bg] = colors[emp] || ['#e8edf8','rgba(255,255,255,.1)'];
-        const isActive = s.empresasSel.length === 0 || s.empresasSel.includes(emp);
-        return `<div class="t-emp-chip ${isActive?'active':''}" style="color:${fg};border-color:${bg};background:${isActive?bg:'transparent'}"
-          onclick="TECH._toggleEmpresa('${emp}')">${emp}</div>`;
-      }).join('');
-  }
-
-  /* ─── KPIs ─── */
-  function renderNewKPIs() {
-    if (typeof TECH === 'undefined') return;
-    const fallas = TECH._getFallas ? TECH._getFallas() : [];
-
-    const isAtendido = (est, emp) => /atendid/i.test(est || '');
-    const isProceso  = (est) => /proceso|process|en.proc/i.test(est || '');
-
-    const pendientes = fallas.filter(f => !isAtendido(f.estatus) && !isProceso(f.estatus)).length;
-    const proceso    = fallas.filter(f => isProceso(f.estatus)).length;
-    const atendidos  = fallas.filter(f => isAtendido(f.estatus)).length;
-    const total      = fallas.length;
-
-    _setText('kpiPendiente', pendientes);
-    _setText('kpiProceso',   proceso);
-    _setText('kpiAtendido',  atendidos);
-    _setText('kpiTotal',     total);
-  }
-
-  /* ─── CARDS ─── */
-  function renderNewCards() {
-    if (typeof TECH === 'undefined') return;
-    const list = document.getElementById('reportList');
-    if (!list) return;
-
-    let fallas = TECH._getFallas ? TECH._getFallas() : [];
-
-    // Filtro de tab
-    const isAtendido = (est) => /atendid/i.test(est || '');
-    const isProceso  = (est) => /proceso|en.proc/i.test(est || '');
-
-    if (_activeTab === 'pendiente') fallas = fallas.filter(f => !isAtendido(f.estatus) && !isProceso(f.estatus));
-    else if (_activeTab === 'proceso')  fallas = fallas.filter(f => isProceso(f.estatus));
-    else if (_activeTab === 'atendido') fallas = fallas.filter(f => isAtendido(f.estatus));
-    // total: sin filtro
-
-    // Filtro de búsqueda
-    const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
-    if (q) fallas = fallas.filter(f =>
-      (f.unidad||'').toLowerCase().includes(q) ||
-      (f.folio||'').toLowerCase().includes(q) ||
-      (f.categoria||'').toLowerCase().includes(q) ||
-      (f.descripcion||'').toLowerCase().includes(q)
-    );
-
-    // Filtro miBase/general
-    const session = typeof AUTH !== 'undefined' ? AUTH.checkSession() : null;
-    if (_activeFilter === 'miBase' && session?.base) {
-      fallas = fallas.filter(f => (f.base||'').toUpperCase() === (session.base||'').toUpperCase());
-    }
-
-    if (fallas.length === 0) {
-      list.innerHTML = `<div class="t-empty">
-        <div class="t-empty-icon">${_activeTab === 'atendido' ? '✅' : _activeTab === 'proceso' ? '🔧' : '📋'}</div>
-        <div class="t-empty-title">Sin reportes</div>
-        <div class="t-empty-sub">${_activeTab === 'pendiente' ? 'Todos los reportes están atendidos' : 'No hay reportes en este estado'}</div>
+    /* Panel Visión */
+    const pv = document.createElement('div');
+    pv.id = 'tuiPanelVision';
+    pv.innerHTML = `
+      <div class="vp-tabs">
+        <button class="vp-tab active" onclick="tuiPeriod('dia',this)">Hoy</button>
+        <button class="vp-tab" onclick="tuiPeriod('semana',this)">Semana</button>
+        <button class="vp-tab" onclick="tuiPeriod('mes',this)">Mes</button>
+      </div>
+      <div class="vp-grid">
+        <div class="vp-card"><div class="vp-val" style="color:#4f8ef7" id="tvAtend">0</div><div class="vp-lbl">Atendidos</div></div>
+        <div class="vp-card"><div class="vp-val" style="color:#f59e0b" id="tvPend">0</div><div class="vp-lbl">Pendientes</div></div>
+        <div class="vp-card"><div class="vp-val" style="color:#ef4444" id="tvCorr">0</div><div class="vp-lbl">Correctivos</div></div>
+        <div class="vp-card"><div class="vp-val" style="color:#22c55e" id="tvPrev">0</div><div class="vp-lbl">Preventivos</div></div>
+      </div>
+      <div class="vp-chart">
+        <div class="vp-chart-title">Distribución</div>
+        <div id="tvChart"></div>
       </div>`;
-      return;
-    }
+    document.body.appendChild(pv);
 
-    list.innerHTML = fallas.map(f => _buildCard(f)).join('');
-    renderNewKPIs();
-  }
-
-  function _buildCard(f) {
-    const est = (f.estatus || '').toLowerCase();
-    const statusClass = /atendid/i.test(est) ? 'atendido' : /proceso/i.test(est) ? 'proceso' : 'pendiente';
-    const statusLabel = /atendid/i.test(est) ? 'Atendidos' : /proceso/i.test(est) ? 'En proceso' : 'Pendiente';
-    const isSelected  = _selectedId === f.id;
-
-    const empColors = { GHO: '#4f8ef7', ETN: '#f59e0b', AERS: '#22c55e', AMEALSENSE: '#a855f7' };
-    const empColor  = empColors[f.empresa] || '#e8edf8';
-    const fecha = f.fecha ? new Date(f.fecha).toLocaleDateString('es-MX',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
-
-    const canAtender = statusClass === 'pendiente';
-
-    return `<div class="t-card ${isSelected?'selected':''}" id="card-${f.id}" onclick="openSheet('${f.id}')">
-      <div class="t-card-accent ${statusClass}"></div>
-      <div class="t-card-body">
-        <div class="t-card-thumb">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="15" height="10" rx="1"/><path d="M17 9l4-2v10l-4-2"/></svg>
-        </div>
-        <div class="t-card-info">
-          <div class="t-card-top">
-            <span class="t-card-folio">${f.folio||'—'}</span>
-            <span class="t-card-emp-tag" style="background:${empColor}22;color:${empColor}">${f.empresa||'—'}</span>
-            <span class="t-card-status ${statusClass}">${statusLabel}</span>
-          </div>
-          <div class="t-card-unidad">Unidad ${f.unidad||'—'}</div>
-          <div class="t-card-desc">${f.descripcion||f.categoria||'Sin descripción'}</div>
-          <div class="t-card-meta">
-            ${f.prioridad ? `<span class="t-card-meta-item">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-              ${f.prioridad}
-            </span>` : ''}
-            ${f.categoria ? `<span class="t-card-meta-item">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="7" height="9"/><rect x="15" y="12" width="7" height="9"/></svg>
-              ${f.categoria}
-            </span>` : ''}
-            ${f.base ? `<span class="t-card-meta-item">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/></svg>
-              ${f.base}
-            </span>` : ''}
-            ${f.proveedor ? `<span class="t-card-proveedor">${f.proveedor}</span>` : ''}
-          </div>
-        </div>
+    /* Panel Perfil */
+    const pp = document.createElement('div');
+    pp.id = 'tuiPanelPerfil';
+    pp.innerHTML = `
+      <div class="pp-avatar-wrap">
+        <div class="pp-avatar" id="ppAvatar">T</div>
+        <div class="pp-name" id="ppNombre">—</div>
+        <div class="pp-role">Técnico de campo</div>
       </div>
-      <div class="t-card-actions">
-        <button class="t-card-btn" onclick="event.stopPropagation();openSheet('${f.id}')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          Ver detalle
-        </button>
-        ${canAtender ? `<button class="t-card-btn primary" onclick="event.stopPropagation();atenderCard('${f.id}')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-          Atender
-        </button>` : `<button class="t-card-btn" style="color:var(--text3)" disabled>
-          ${statusClass === 'atendido' ? '✅ Atendido' : '🔧 En proceso'}
-        </button>`}
-      </div>
-    </div>`;
+      <div class="pp-card">
+        <div class="pp-row"><span class="pp-lbl">Usuario</span><span class="pp-val" id="ppUser">—</span></div>
+        <div class="pp-row"><span class="pp-lbl">Base</span><span class="pp-val" id="ppBase">—</span></div>
+        <div class="pp-row"><span class="pp-lbl">Teléfono</span><span class="pp-val" id="ppTel">—</span></div>
+        <div class="pp-row"><span class="pp-lbl">ID Empleado</span><span class="pp-val" id="ppEmp">—</span></div>
+        <div class="pp-row"><span class="pp-lbl">Email</span><span class="pp-val" id="ppEmail" style="font-size:11px">—</span></div>
+        <div class="pp-row"><span class="pp-lbl">Empresas</span><span class="pp-val" id="ppEmps">—</span></div>
+      </div>`;
+    document.body.appendChild(pp);
   }
 
-  /* ─── BOTTOM SHEET ─── */
-  window.openSheet = function(id) {
-    if (typeof TECH === 'undefined') return;
-    _selectedId = id;
-    const fallas = TECH._getFallas ? TECH._getFallas() : [];
-    const f = fallas.find(x => x.id === id);
-    if (!f) return;
+  /* ── Navegación ── */
+  const MAIN_SELECTORS = ['.tech-main', '.empresa-strip', '.kpi-strip'];
 
-    const empColors = { GHO: '#4f8ef7', ETN: '#f59e0b', AERS: '#22c55e', AMEALSENSE: '#a855f7' };
-    const empColor  = empColors[f.empresa] || '#e8edf8';
-    const est = (f.estatus||'').toLowerCase();
-    const statusClass = /atendid/i.test(est) ? 'atendido' : /proceso/i.test(est) ? 'proceso' : 'pendiente';
-    const statusLabel = /atendid/i.test(est) ? 'Atendidos' : /proceso/i.test(est) ? 'En proceso' : 'Pendiente';
-    const fecha = f.fecha ? new Date(f.fecha).toLocaleDateString('es-MX',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:true}) : '—';
+  window.tuiScreen = function(screen) {
+    // Nav active
+    ['Inicio','Vision','Perfil'].forEach(n => document.getElementById('tni'+n)?.classList.remove('active'));
+    document.getElementById('tni' + screen.charAt(0).toUpperCase() + screen.slice(1))?.classList.add('active');
 
-    _setText('sheetFolio',     f.folio || '—');
-    _setText('sheetUnidad',    'Unidad ' + (f.unidad || '—'));
-    _setText('sheetBase',      f.base || '—');
-    _setText('sheetServicio',  f.servicio || '—');
-    _setText('sheetPrioridad', f.prioridad || '—');
-    _setText('sheetOperador',  f.proveedor || '—');
-    _setText('sheetCategoria', f.categoria || '—');
-    _setText('sheetComponente',f.componente || '—');
-    _setText('sheetDesc',      f.descripcion || 'Sin descripción');
-    _setText('sheetTecnico',   f.tecnico || '—');
-    _setText('sheetFechaAten', f.fechaAtencion ? new Date(f.fechaAtencion).toLocaleDateString('es-MX',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:true}) : '—');
-    _setText('sheetObs',       f.resultado || 'Sin observaciones');
-    _setText('sheetDate',      fecha);
+    // Paneles extras
+    document.getElementById('tuiPanelVision')?.classList.remove('show');
+    document.getElementById('tuiPanelPerfil')?.classList.remove('show');
 
-    const empEl = document.getElementById('sheetEmpresa');
-    if (empEl) { empEl.textContent = f.empresa || '—'; empEl.style.background = empColor + '22'; empEl.style.color = empColor; }
+    // Mostrar/ocultar contenido principal
+    const mainEls = document.querySelectorAll('.tech-main, .empresa-strip, .kpi-strip');
 
-    const statusEl = document.getElementById('sheetStatus');
-    if (statusEl) { statusEl.textContent = statusLabel; statusEl.className = 't-card-status ' + statusClass; }
-
-    // Botón atender
-    const btn = document.getElementById('sheetAtenderBtn');
-    if (btn) {
-      if (statusClass === 'pendiente') {
-        btn.textContent = ''; btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Atender';
-        btn.style.display = '';
-        btn.onclick = () => doAtender();
-      } else {
-        btn.style.display = 'none';
-      }
-    }
-
-    // Mostrar sheet
-    document.getElementById('sheetOverlay')?.classList.add('show');
-    document.getElementById('detailSheet')?.classList.add('show');
-
-    // Highlight card
-    document.querySelectorAll('.t-card').forEach(c => c.classList.remove('selected'));
-    document.getElementById('card-' + id)?.classList.add('selected');
-  };
-
-  window.closeSheet = function() {
-    _selectedId = null;
-    document.getElementById('sheetOverlay')?.classList.remove('show');
-    document.getElementById('detailSheet')?.classList.remove('show');
-    document.querySelectorAll('.t-card').forEach(c => c.classList.remove('selected'));
-  };
-
-  /* ─── ATENDER ─── */
-  window.atenderCard = function(id) {
-    _selectedId = id;
-    doAtender();
-  };
-
-  window.doAtender = function() {
-    if (!_selectedId || typeof TECH === 'undefined') return;
-    const fallas = TECH._getFallas ? TECH._getFallas() : [];
-    const f = fallas.find(x => x.id === _selectedId);
-    if (!f) return;
-
-    // Usar el modal de atender de tecnico.js
-    if (typeof TECH._openAtenderModal === 'function') {
-      TECH._openAtenderModal(_selectedId);
+    if (screen === 'inicio') {
+      mainEls.forEach(el => el.classList.remove('tui-hidden'));
+    } else if (screen === 'vision') {
+      mainEls.forEach(el => el.classList.add('tui-hidden'));
+      document.getElementById('tuiPanelVision')?.classList.add('show');
+      tuiRenderVision();
+    } else if (screen === 'perfil') {
+      mainEls.forEach(el => el.classList.add('tui-hidden'));
+      document.getElementById('tuiPanelPerfil')?.classList.add('show');
+      tuiRenderPerfil();
     }
   };
 
-  /* ─── TAB SWITCH ─── */
-  function setTab(tab) {
-    _activeTab = tab;
-    document.querySelectorAll('.t-kpi').forEach(k => k.classList.remove('active'));
-    document.querySelector(`.t-kpi[data-tab="${tab}"]`)?.classList.add('active');
-    renderNewCards();
-  }
+  /* ── Visión ── */
+  let _period = 'dia';
 
-  /* ─── SCREEN SWITCH ─── */
-  function goScreen(screen) {
-    _activeScreen = screen;
-    document.querySelectorAll('.t-screen').forEach(s => s.classList.remove('active'));
-    document.querySelectorAll('.t-nav-item').forEach(n => n.classList.remove('active'));
-    document.getElementById('screen' + cap(screen))?.classList.add('active');
-    document.getElementById('nav-' + screen)?.classList.add('active');
-    if (screen === 'vision') renderVision();
-    if (screen === 'perfil') renderNewPerfil();
-  }
-
-  /* ─── FILTER ─── */
-  function toggleFilter(el) {
-    document.querySelectorAll('.t-filter-chip').forEach(c => c.classList.remove('active'));
-    el.classList.add('active');
-    _activeFilter = el.dataset.filter;
-    renderNewCards();
-  }
-
-  /* ─── VISION ─── */
-  function setVisionPeriod(period, btn) {
-    _visionPeriod = period;
-    document.querySelectorAll('.v-period-tab').forEach(b => b.classList.remove('active'));
+  window.tuiPeriod = function(p, btn) {
+    _period = p;
+    document.querySelectorAll('.vp-tab').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
-    renderVision();
-  }
+    tuiRenderVision();
+  };
 
-  function renderVision() {
-    if (typeof TECH === 'undefined') return;
-    const session = typeof AUTH !== 'undefined' ? AUTH.checkSession() : null;
-    const allFallas = TECH._getAllFallas ? TECH._getAllFallas() : (TECH._getFallas ? TECH._getFallas() : []);
-
-    // Filtrar por período
-    const now  = new Date();
-    const msDay  = 86400000;
-    const cutoff = _visionPeriod === 'dia'    ? new Date(now - msDay)
-                 : _visionPeriod === 'semana' ? new Date(now - 7 * msDay)
-                 : new Date(now - 30 * msDay);
-
-    // Solo mis fallas (técnico logueado)
-    const username = session?.username || '';
-    const nombre   = session?.nombre || session?.name || '';
-    const misF = allFallas.filter(f =>
-      (f.tecnicoUsername === username || f.tecnico === nombre || f.tecnico === session?.username) &&
-      (!f.fecha || new Date(f.fecha) >= cutoff)
-    );
-
-    const isAtendido = (est) => /atendid/i.test(est || '');
-
-    const atendidos  = misF.filter(f => isAtendido(f.estatus)).length;
-    const pendF      = allFallas.filter(f => !isAtendido(f.estatus) && (f.tecnicoUsername === username || f.tecnico === nombre));
-    const correctivos= misF.filter(f => /correctiv/i.test(f.tipo)).length;
-    const preventivos= misF.filter(f => /preventiv/i.test(f.tipo)).length;
-
-    _setText('vAtendidos',   atendidos);
-    _setText('vPendientes',  pendF.length);
-    _setText('vCorrectivos', correctivos);
-    _setText('vPreventivos', preventivos);
-
-    // Chart de distribución
-    const chartEl = document.getElementById('visionChart');
-    if (chartEl) {
-      const total = Math.max(correctivos + preventivos, 1);
-      chartEl.innerHTML = [
-        { label: 'Correctivos', val: correctivos, color: '#ef4444' },
-        { label: 'Preventivos', val: preventivos, color: '#22c55e' },
-        { label: 'Atendidos',   val: atendidos,   color: '#4f8ef7' },
-      ].map(({label, val, color}) => `
-        <div class="v-bar-row">
-          <div class="v-bar-label">${label}</div>
-          <div class="v-bar-track">
-            <div class="v-bar-fill" style="width:${Math.round(val/Math.max(atendidos||1,total)*100)}%;background:${color}"></div>
-          </div>
-          <div class="v-bar-val">${val}</div>
-        </div>`).join('');
-    }
-
-    // Chart por empresa
-    const empEl = document.getElementById('visionEmpChart');
-    if (empEl && session) {
-      const empresas = session.empresas || [];
-      const maxEmp = Math.max(...empresas.map(e => misF.filter(f => f.empresa === e).length), 1);
-      const empColors = { GHO: '#4f8ef7', ETN: '#f59e0b', AERS: '#22c55e', AMEALSENSE: '#a855f7' };
-      empEl.innerHTML = empresas.map(e => {
-        const cnt = misF.filter(f => f.empresa === e).length;
-        return `<div class="v-bar-row">
-          <div class="v-bar-label">${e}</div>
-          <div class="v-bar-track">
-            <div class="v-bar-fill" style="width:${Math.round(cnt/maxEmp*100)}%;background:${empColors[e]||'#4f8ef7'}"></div>
-          </div>
-          <div class="v-bar-val">${cnt}</div>
-        </div>`;
-      }).join('');
-    }
-  }
-
-  /* ─── PERFIL ─── */
-  function renderNewPerfil() {
+  function tuiRenderVision() {
     const session = typeof AUTH !== 'undefined' ? AUTH.checkSession() : null;
     if (!session) return;
 
+    const kpiAtend = parseInt(document.getElementById('kpiAtendido')?.textContent || '0');
+    const kpiPend  = parseInt(document.getElementById('kpiPendiente')?.textContent || '0');
+
+    // Intentar obtener datos detallados si están disponibles
+    let atend = kpiAtend, pend = kpiPend, corr = 0, prev = 0;
+
+    try {
+      if (typeof TECH !== 'undefined' && TECH.state && Array.isArray(TECH.state.fallas)) {
+        const now    = new Date();
+        const cutoff = _period === 'dia'    ? new Date(now - 86400000)
+                     : _period === 'semana' ? new Date(now - 7*86400000)
+                     : new Date(now - 30*86400000);
+        const un = session.username || '';
+        const nm = session.nombre || session.name || '';
+        const misF = TECH.state.fallas.filter(f =>
+          (f.tecnicoUsername === un || f.tecnico === nm) &&
+          (!f.fecha || new Date(f.fecha) >= cutoff)
+        );
+        const isA = (e) => /atendid/i.test(e || '');
+        atend = misF.filter(f => isA(f.estatus)).length;
+        pend  = TECH.state.fallas.filter(f => !isA(f.estatus) && (f.tecnicoUsername === un || f.tecnico === nm)).length;
+        corr  = misF.filter(f => /correctiv/i.test(f.tipo)).length;
+        prev  = misF.filter(f => /preventiv/i.test(f.tipo)).length;
+      }
+    } catch(e) {}
+
+    T('tvAtend', atend); T('tvPend', pend); T('tvCorr', corr); T('tvPrev', prev);
+
+    const chart = document.getElementById('tvChart');
+    if (chart) {
+      const max = Math.max(corr, prev, atend, 1);
+      chart.innerHTML = [
+        ['Correctivos', corr, '#ef4444'],
+        ['Preventivos', prev, '#22c55e'],
+        ['Atendidos',   atend,'#4f8ef7'],
+      ].map(([l,v,c]) =>
+        `<div class="vp-bar-row">
+          <div class="vp-bar-lbl">${l}</div>
+          <div class="vp-bar-track"><div class="vp-bar-fill" style="width:${Math.round(v/max*100)}%;background:${c}"></div></div>
+          <div class="vp-bar-n">${v}</div>
+        </div>`
+      ).join('');
+    }
+  }
+
+  /* ── Perfil ── */
+  function tuiRenderPerfil() {
+    const session = typeof AUTH !== 'undefined' ? AUTH.checkSession() : null;
+    if (!session) return;
     const nombre  = session.nombre || session.name || session.username || '—';
     const initial = nombre.charAt(0).toUpperCase();
-
-    _setText('perfilAvatar',   initial);
-    _setText('perfilNombre',   nombre);
-    _setText('perfilUsername', '@' + (session.username || '—'));
-    _setText('perfilBase',     session.base || '—');
-    _setText('perfilTel',      session.telefono || '—');
-    _setText('perfilEmpleado', session.empleadoId || '—');
-    _setText('perfilEmail',    session.email || '—');
-    _setText('perfilEmpresas', (session.empresas || []).join(', ') || '—');
-
-    const avatar = document.getElementById('userAvatar');
-    if (avatar) avatar.textContent = initial;
-    const bigAvatar = document.getElementById('perfilAvatar');
-    if (bigAvatar) bigAvatar.textContent = initial;
-
-    // Logout
-    const logoutBtn = document.getElementById('btnLogout');
-    if (logoutBtn && !logoutBtn._bound) {
-      logoutBtn._bound = true;
-      logoutBtn.onclick = async () => {
-        if (typeof AUTH !== 'undefined') await AUTH.logout();
-        window.location.href = 'index.html';
-      };
-    }
+    T('ppAvatar',  initial);
+    T('ppNombre',  nombre);
+    T('ppUser',    '@' + (session.username || '—'));
+    T('ppBase',    session.base || '—');
+    T('ppTel',     session.telefono || '—');
+    T('ppEmp',     session.empleadoId || '—');
+    T('ppEmail',   session.email || '—');
+    T('ppEmps',    (session.empresas || []).join(', ') || '—');
   }
 
-  /* ─── HELPERS ─── */
-  function _setText(id, val) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val ?? '—';
-  }
-  function cap(str) { return str ? str.charAt(0).toUpperCase() + str.slice(1) : str; }
+  /* ── Detectar cuando loading desaparece para saber que la app cargó ── */
+  function watchLoadingOverlay() {
+    const overlay = document.getElementById('loadingOverlay');
+    if (!overlay) return;
 
-  /* ─── HOOK DE TECNICO.JS: detectar cuando renderAll() corre y actualizar la nueva UI ─── */
-  // Sobreescribir showToast para redirigir a nuestra implementación
-  if (typeof window.showToast === 'undefined') {
-    window.showToast = function(msg, type='ok') {
-      const container = document.getElementById('toastContainer');
-      if (!container) return;
-      const t = document.createElement('div');
-      t.className = 'toast ' + type;
-      t.textContent = msg;
-      container.appendChild(t);
-      setTimeout(() => t.remove(), 3200);
-    };
+    const obs = new MutationObserver(() => {
+      const hidden = overlay.style.display === 'none' || overlay.style.opacity === '0' ||
+                     overlay.classList.contains('hidden') || overlay.style.visibility === 'hidden';
+      if (hidden) {
+        obs.disconnect();
+        // La app cargó — exponer TECH.state si está disponible
+        setTimeout(() => {
+          try {
+            if (typeof TECH !== 'undefined' && TECH.state) {
+              window.TECH = TECH;
+            }
+          } catch(e) {}
+        }, 500);
+      }
+    });
+    obs.observe(overlay, { attributes: true, attributeFilter: ['style','class'] });
   }
 
-  /* ─── Polling de renderizado para sincronizar con tecnico.js ─── */
-  // tecnico.js llama internamente a sus propias funciones de render.
-  // Hacemos polling ligero cada 500ms para sincronizar la nueva UI.
-  setInterval(() => {
-    if (typeof TECH !== 'undefined' && TECH._uiReady) {
-      renderNewCards();
-      renderNewKPIs();
-      renderNewEmpresaStrip();
-    }
-  }, 3000);
+  function T(id, v) { const e = document.getElementById(id); if (e) e.textContent = v ?? '—'; }
 
 })();
