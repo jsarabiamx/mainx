@@ -434,7 +434,7 @@ const FLOTA = (() => {
     if (!state.filas.length) return;
     const emp    = DATA.state.currentEmpresa || 'GHO';
     const session = AUTH.checkSession();
-    const userId  = session?.id || session?.userId || null;
+    const userId  = session?.username || session?.nombre || 'sistema';
     const mesAnio = state.mesAnio;
     const archivo = state.archivoNom;
 
@@ -481,7 +481,7 @@ const FLOTA = (() => {
         fuera_op:    fuera,
         para_venta:  venta,
         otros:       otros,
-        cargado_por: userId,
+        cargado_por: String(userId),
       });
 
       UI.toast(`✅ ${state.filas.length} unidades guardadas correctamente`);
@@ -700,11 +700,13 @@ const FLOTA = (() => {
 
   // ─── HELPERS ──────────────────────────────────
   function _getClient() {
-    const cfg = window.CCTV_SUPABASE_CONFIG || { url:'https://sxzhmcrpeyuqslupttby.supabase.co', anonKey:'' };
-    if (!_getClient._instance) {
-      _getClient._instance = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: true } });
+    if (!_getClient._fb) {
+      const cfg = window.CCTV_SUPABASE_CONFIG || {};
+      const url  = cfg.url     || 'https://sxzhmcrpeyuqslupttby.supabase.co';
+      const key  = cfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
+      _getClient._fb = window.supabase.createClient(url, key);
     }
-    return _getClient._instance;
+    return _getClient._fb;
   }
 
   function _fmtMes(mesAnio) {
