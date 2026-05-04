@@ -2,10 +2,9 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-  <title>CCTV Fleet Control — Vista Técnico</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CCTV Fleet Control — Técnico</title>
   <link rel="stylesheet" href="css/tecnico.css">
-  <link rel="stylesheet" href="css/responsive.css">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📹</text></svg>">
 </head>
 <body>
@@ -24,10 +23,9 @@
       <div class="brand-icon">📹</div>
       <div class="brand-info">
         <h1>CCTV Fleet Control</h1>
-        <p>Panel de atención técnica</p>
+        <p id="headerSub">Panel técnico</p>
       </div>
     </div>
-
     <div class="header-right">
       <span class="tech-badge">Técnico</span>
       <div class="user-info-header">
@@ -38,7 +36,8 @@
         </div>
       </div>
       <button class="btn-logout" id="btnLogout">
-        <span>⬡</span> Salir
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        Salir
       </button>
     </div>
   </header>
@@ -46,195 +45,168 @@
   <!-- EMPRESA STRIP -->
   <div class="empresa-strip">
     <span class="strip-label">Empresa:</span>
-    <div id="empresaStrip" style="display:flex;gap:8px;align-items:center;"></div>
+    <div id="empresaStrip" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"></div>
+  </div>
+
+  <!-- KPI TABS: Pendiente / En proceso / Atendidos = tabs | Total = estático -->
+  <div class="kpi-strip">
+    <div class="kpi-card kpi-pending kpi-tab active-tab" id="tab_pendiente" onclick="tuiSetTab('pendiente')">
+      <div class="kpi-value" id="kpiPendiente">0</div>
+      <div class="kpi-label">Pendientes</div>
+    </div>
+    <div class="kpi-card kpi-process kpi-tab" id="tab_proceso" onclick="tuiSetTab('proceso')">
+      <div class="kpi-value" id="kpiProceso">0</div>
+      <div class="kpi-label">En proceso</div>
+    </div>
+    <div class="kpi-card kpi-done kpi-tab" id="tab_atendido" onclick="tuiSetTab('atendido')">
+      <div class="kpi-value" id="kpiAtendido">0</div>
+      <div class="kpi-label">Atendidos</div>
+    </div>
+    <div class="kpi-card kpi-total" style="cursor:default">
+      <div class="kpi-value" id="kpiTotal">0</div>
+      <div class="kpi-label">Total</div>
+    </div>
   </div>
 
   <!-- MAIN -->
   <main class="tech-main">
 
-    <!-- KPIs -->
-    <div class="kpi-strip">
-      <div class="kpi-card kpi-pending">
-        <span class="kpi-icon">⏳</span>
-        <div class="kpi-value" id="kpiPendiente">0</div>
-        <div class="kpi-label">Pendientes</div>
-      </div>
-      <div class="kpi-card kpi-process">
-        <span class="kpi-icon">🔧</span>
-        <div class="kpi-value" id="kpiProceso">0</div>
-        <div class="kpi-label">En proceso</div>
-      </div>
-      <div class="kpi-card kpi-done">
-        <span class="kpi-icon">✅</span>
-        <div class="kpi-value" id="kpiAtendido">0</div>
-        <div class="kpi-label">Atendidos</div>
-      </div>
-      <div class="kpi-card kpi-total">
-        <span class="kpi-icon">📊</span>
-        <div class="kpi-value" id="kpiTotal">0</div>
-        <div class="kpi-label">Total reportes</div>
-      </div>
-    </div>
+    <!-- === VISTA LISTA (default) === -->
+    <div id="viewLista">
 
-    <!-- PANELS -->
-    <div class="panels-grid">
+      <!-- Filter bar (Mi Base / General) — generado por tecnico.js -->
+      <div id="techFilterBar" style="display:flex;gap:8px;margin-bottom:10px;overflow-x:auto;padding-bottom:2px"></div>
 
-      <!-- PENDIENTES -->
+      <!-- Panel de lista -->
       <div class="panel">
         <div class="panel-header">
           <div class="panel-title">
-            <div class="panel-dot amber"></div>
-            <h2>Pendientes de atención</h2>
+            <div class="panel-dot amber" id="panelDot"></div>
+            <h2 id="panelTitle">Pendientes de atención</h2>
           </div>
-          <span class="panel-count amber" id="pendientesCount">0</span>
+          <span class="panel-count amber" id="panelCount">0</span>
         </div>
         <div class="panel-search">
           <input type="text" class="search-input" id="searchPendientes"
                  placeholder="Buscar por unidad, folio, categoría…">
         </div>
-        <div class="report-list" id="pendientesList">
-          <!-- Se llena con JS -->
-        </div>
+        <div class="report-list" id="pendientesList"></div>
       </div>
 
-      <!-- ATENDIDOS -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">
-            <div class="panel-dot green"></div>
-            <h2>Reportes atendidos</h2>
-          </div>
-          <span class="panel-count green" id="atendidosCount">0</span>
-        </div>
-        <div class="panel-search">
-          <input type="text" class="search-input" id="searchAtendidos"
-                 placeholder="Buscar en atendidos…">
-        </div>
-        <div class="report-list" id="atendidosList">
-          <!-- Se llena con JS -->
-        </div>
-      </div>
+      <!-- IDs requeridos por tecnico.js internamente -->
+      <div id="searchAtendidos" style="display:none"></div>
+      <div id="atendidosList" style="display:none"></div>
+      <div id="pendientesCount" style="display:none"></div>
+      <div id="atendidosCount" style="display:none"></div>
 
-    </div><!-- /panels-grid -->
+    </div><!-- /viewLista -->
 
-    <!-- DETALLE (aparece al seleccionar) -->
-    <div style="margin-top:20px;">
+    <!-- === VISTA DETALLE (al tocar un reporte) === -->
+    <div id="viewDetalle" style="display:none">
+
+      <!-- Botón regresar -->
+      <button class="btn-regresar" onclick="tuiCerrarDetalle()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        Regresar a la lista
+      </button>
+
+      <!-- Detalle del reporte -->
       <div class="detail-panel" id="detailPanel">
-
-        <!-- Placeholder -->
-        <div class="detail-placeholder" id="detailPlaceholder">
-          <span class="empty-icon">👆</span>
-          <div class="empty-title">Selecciona un reporte</div>
-          <div class="empty-sub">Toca cualquier reporte de la lista para ver todos sus detalles</div>
-        </div>
-
-        <!-- Contenido detalle -->
+        <div class="detail-placeholder" id="detailPlaceholder"></div>
         <div class="detail-content" id="detailContent">
 
-          <!-- Header detalle -->
           <div class="detail-header">
             <div class="detail-folio-row">
               <span class="detail-folio" id="detailFolio">—</span>
               <span class="report-status-badge badge-pendiente" id="detailStatusBadge">—</span>
             </div>
             <div class="detail-unidad" id="detailUnidad">Unidad —</div>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               <span class="detail-empresa-tag" id="detailEmpresa">—</span>
               <span class="detail-date" id="detailDate">—</span>
             </div>
           </div>
 
-          <!-- Body detalle -->
           <div class="detail-body">
 
-            <!-- Info general -->
             <div class="detail-section">
               <div class="detail-section-title">Información general</div>
               <div class="detail-grid">
-                <div class="detail-field">
-                  <div class="detail-field-label">Empresa</div>
-                  <div class="detail-field-value" id="dEmpresa">—</div>
-                </div>
-                <div class="detail-field">
-                  <div class="detail-field-label">Base</div>
-                  <div class="detail-field-value" id="dBase">—</div>
-                </div>
-                <div class="detail-field">
-                  <div class="detail-field-label">Servicio</div>
-                  <div class="detail-field-value" id="dServicio">—</div>
-                </div>
-                <div class="detail-field">
-                  <div class="detail-field-label">Piso</div>
-                  <div class="detail-field-value" id="dPiso">—</div>
-                </div>
-                <div class="detail-field">
-                  <div class="detail-field-label">Prioridad</div>
-                  <div class="detail-field-value" id="dPrioridad">—</div>
-                </div>
-                <div class="detail-field">
-                  <div class="detail-field-label">Operador</div>
-                  <div class="detail-field-value" id="dOperador">—</div>
-                </div>
+                <div><div class="detail-field-label">Empresa</div><div class="detail-field-value" id="dEmpresa">—</div></div>
+                <div><div class="detail-field-label">Base</div><div class="detail-field-value" id="dBase">—</div></div>
+                <div><div class="detail-field-label">Servicio</div><div class="detail-field-value" id="dServicio">—</div></div>
+                <div><div class="detail-field-label">Piso</div><div class="detail-field-value" id="dPiso">—</div></div>
+                <div><div class="detail-field-label">Prioridad</div><div class="detail-field-value" id="dPrioridad">—</div></div>
+                <div><div class="detail-field-label">Operador</div><div class="detail-field-value" id="dOperador">—</div></div>
               </div>
             </div>
 
-            <!-- Falla técnica -->
             <div class="detail-section">
               <div class="detail-section-title">Falla técnica</div>
               <div class="detail-grid">
-                <div class="detail-field">
-                  <div class="detail-field-label">Categoría</div>
-                  <div class="detail-field-value" id="dCategoria">—</div>
-                </div>
-                <div class="detail-field">
-                  <div class="detail-field-label">Componente</div>
-                  <div class="detail-field-value" id="dComponente">—</div>
-                </div>
-                <div class="detail-field detail-full">
-                  <div class="detail-field-label">Descripción de falla</div>
-                  <div class="detail-desc-text" id="dDescripcion">—</div>
-                </div>
+                <div><div class="detail-field-label">Categoría</div><div class="detail-field-value" id="dCategoria">—</div></div>
+                <div><div class="detail-field-label">Componente</div><div class="detail-field-value" id="dComponente">—</div></div>
+                <div class="detail-full"><div class="detail-field-label">Descripción de falla</div><div class="detail-desc-text" id="dDescripcion">—</div></div>
               </div>
             </div>
 
-            <!-- Atención -->
             <div class="detail-section">
               <div class="detail-section-title">Atención</div>
               <div class="detail-grid">
-                <div class="detail-field">
-                  <div class="detail-field-label">Técnico asignado</div>
-                  <div class="detail-field-value" id="dTecnico">—</div>
-                </div>
-                <div class="detail-field">
-                  <div class="detail-field-label">Fecha de atención</div>
-                  <div class="detail-field-value" id="dFechaAten">—</div>
-                </div>
-                <div class="detail-field detail-full">
-                  <div class="detail-field-label">Observaciones</div>
-                  <div class="detail-obs-text" id="dObservaciones">—</div>
-                </div>
+                <div><div class="detail-field-label">Técnico asignado</div><div class="detail-field-value" id="dTecnico">—</div></div>
+                <div><div class="detail-field-label">Fecha de atención</div><div class="detail-field-value" id="dFechaAten">—</div></div>
+                <div class="detail-full"><div class="detail-field-label">Observaciones</div><div class="detail-obs-text" id="dObservaciones">—</div></div>
               </div>
             </div>
 
-            <!-- Historial oculto en vista técnico -->
             <div id="detailHistory" style="display:none"></div>
 
           </div><!-- /detail-body -->
+
+          <!-- Botón Atender dentro del detalle -->
+          <div class="update-section" id="detalleAtenderSection">
+            <button class="btn-guardar" id="detalleAtenderBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              Atender este reporte
+            </button>
+          </div>
+
         </div><!-- /detail-content -->
-
       </div><!-- /detail-panel -->
-    </div>
 
-  </main><!-- /tech-main -->
+    </div><!-- /viewDetalle -->
+
+  </main>
+
+  <!-- BOTTOM NAV -->
+  <nav id="tuiNav">
+    <div class="tni active" id="tniInicio" onclick="tuiScreen('inicio')">
+      <div class="tni-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </div>
+      <div class="tni-lbl">Inicio</div>
+    </div>
+    <div class="tni" id="tniVision" onclick="tuiScreen('vision')">
+      <div class="tni-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+      <div class="tni-lbl">Visión</div>
+    </div>
+    <div class="tni" id="tniPerfil" onclick="tuiScreen('perfil')">
+      <div class="tni-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="tni-lbl">Perfil</div>
+    </div>
+  </nav>
 
   <!-- TOAST -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <!-- SCRIPTS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/supabase-config.js"></script>
-<script src="js/supabaseService.js"></script>
-<script src="js/dataService.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/supabaseService.js"></script>
+  <script src="js/dataService.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/tecnico.js"></script>
   <script src="js/tecnico-ui.js"></script>
