@@ -193,63 +193,46 @@ const TECH = (() => {
   }
 
   /* ── Técnico presiona Atender ── */
-  async function tecnicoAtender(reporteId, tecnicoNombre, tecnicoUsername, esApoyo = false, apoyoNombre = '', apoyoUsername = '') {
+  async function tecnicoAtender(reporteId, tecnicoNombre, tecnicoUsername) {
     const fallas = await getFallas();
     const idx = fallas.findIndex(f => f.id === reporteId);
     if (idx < 0) return null;
 
-    const f = fallas[idx];
-    const quienActua = apoyoNombre || tecnicoNombre;
-    const accion  = esApoyo ? 'Técnico de apoyo atendiendo' : 'Técnico atendiendo';
-    const detalle = esApoyo
-      ? `${quienActua} (apoyo) apoya en atención de ${f.base || ''}`
-      : `${tecnicoNombre} inició atención`;
-
     const histEntry = {
       fecha:   new Date().toISOString(),
-      accion,
-      usuario: quienActua,
-      detalle
+      accion:  'Técnico atendiendo',
+      usuario: tecnicoNombre,
+      detalle: `${tecnicoNombre} inició atención`
     };
 
     const changes = {
-      estatus:              'En proceso',
-      // Si es apoyo: mantener técnico original; si no, asignar el nuevo
-      tecnico:              esApoyo ? (f.tecnico || tecnicoNombre) : tecnicoNombre,
-      tecnicoUsername:      esApoyo ? (f.tecnicoUsername || tecnicoUsername) : (tecnicoUsername || ''),
-      tecnicoApoyoNombre:   esApoyo ? quienActua : '',
-      tecnicoApoyoUsername: esApoyo ? (apoyoUsername || tecnicoUsername) : '',
-      esApoyo:              esApoyo,
-      fechaInicioAtencion:  new Date().toISOString(),
-      historial: [histEntry, ...(f.historial || [])],
+      estatus:             'En proceso',
+      tecnico:             tecnicoNombre,
+      tecnicoUsername:     tecnicoUsername || '',
+      fechaInicioAtencion: new Date().toISOString(),
+      historial: [histEntry, ...(fallas[idx].historial || [])],
     };
 
-    // Persistir via DS
-    await DS.updateReporte(reporteId, changes, { usuario: quienActua });
+    // Persistir via DS (registro individual, no lista completa)
+    await DS.updateReporte(reporteId, changes, { usuario: tecnicoNombre });
     // Reflejo local
     Object.assign(fallas[idx], changes);
     state.fallas = fallas;
 
     // Notificar admin
-    const tituloNotif = esApoyo
-      ? `${quienActua} (apoyo) — Unidad ${f.unidad} atendiendo`
-      : `${tecnicoNombre} — Unidad ${f.unidad} atendiendo`;
-    const mensajeNotif = esApoyo
-      ? `${quienActua} está apoyando la unidad ${f.unidad} (${f.folio}). Técnico asignado: ${f.tecnico || tecnicoNombre}.`
-      : `${tecnicoNombre} está atendiendo la unidad ${f.unidad} (${f.folio}). Valida cuando esté listo.`;
-
     await crearNotificacion('TECH_ATENDIENDO', {
-      reporteId: f.id,
-      folio:     f.folio,
-      unidad:    f.unidad,
-      empresa:   f.empresa,
-      tecnico:   quienActua,
+      reporteId: fallas[idx].id,
+      folio:     fallas[idx].folio,
+      unidad:    fallas[idx].unidad,
+      empresa:   fallas[idx].empresa,
+      tecnico:   tecnicoNombre,
       destino:   'admin',
-      titulo:    tituloNotif,
-      mensaje:   mensajeNotif,
+      titulo:    `${tecnicoNombre} — Unidad ${fallas[idx].unidad} atendiendo`,
+      mensaje:   `${tecnicoNombre} está atendiendo la unidad ${fallas[idx].unidad} (${fallas[idx].folio}). Valida cuando esté listo.`,
     });
 
-    await AUTH.log('TECH_ATENDER', `${esApoyo ? 'APOYO' : 'Técnico'} ${quienActua} atiende ${f.folio}`, quienActua);
+    // Log
+    await AUTH.log('TECH_ATENDER', `Técnico ${tecnicoNombre} atiende ${fallas[idx].folio}`, tecnicoNombre);
     return fallas[idx];
   }
 
@@ -360,17 +343,7 @@ const TECH = (() => {
     await refreshSharedData();
     const session = await AUTH.checkSessionAsync();
     if (!session) { window.location.href = 'index.html'; return; }
-
-    // Si tiene first_login pendiente, regresar al login para completar datos
-    if (session.firstLogin) { window.location.replace('index.html'); return; }
-
     if (session.role !== AUTH.ROLES.TECH) { window.location.href = 'app.html'; return; }
-
-    // Bloquear el botón "atrás" del navegador
-    history.pushState(null, '', window.location.href);
-    window.addEventListener('popstate', () => {
-      history.pushState(null, '', window.location.href);
-    });
 
     state.session  = session;
     state.empresas = (session.empresas && session.empresas.length > 0) ? session.empresas : ['GHO'];
@@ -842,12 +815,6 @@ const TECH = (() => {
     renderPendientes();
     renderAtendidos();
     if (state.selectedId) renderDetail(state.selectedId);
-    // Notificar a la nueva UI si está cargada
-    if (window.TECH) {
-      if (typeof window.TECH._renderCards   === 'function') window.TECH._renderCards();
-      if (typeof window.TECH._renderKPIs    === 'function') window.TECH._renderKPIs();
-      if (typeof window.TECH._renderEmpresa === 'function') window.TECH._renderEmpresa();
-    }
   }
 
   let _lastFilterOptions = { bases: [], provs: [], estados: [] };
@@ -934,48 +901,41 @@ const TECH = (() => {
     const enProc   = (f.estatus||'').toLowerCase().includes('proceso');
     const myName   = state.session ? (state.session.nombre || state.session.username) : '';
 
-    const accentCls = enProc ? 'proceso-item' : _isAtendidoEst(f.estatus, f.empresa) ? 'atendido-item' : 'pendiente-item';
-
     return `
-      <div class="report-item ${accentCls}${isActive?' active':''}" data-id="${f.id}">
+      <div class="report-item${isActive?' active':''}" data-id="${f.id}" style="cursor:pointer">
         <div class="report-item-top">
           <span class="report-folio">${f.folio||f.id}</span>
-          <span style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;
-            color:${clr};background:${clr}18;border:1px solid ${clr}35;border-radius:4px;padding:1px 7px;flex-shrink:0">${f.empresa}</span>
+          <span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;
+            color:${clr};background:rgba(0,0,0,0.2);border:1px solid ${clr}40;border-radius:4px;padding:1px 7px;flex-shrink:0">${f.empresa}</span>
           <span class="report-status-badge ${badgeCls}">${f.estatus||'Pendiente'}</span>
         </div>
         <div class="report-unidad">Unidad ${f.unidad||'—'}</div>
         <div class="report-desc">${f.descripcion||'Sin descripción'}</div>
         <div class="report-meta">
           <span class="meta-chip"><span class="priority-dot ${prioCls}"></span>${f.prioridad||'Media'}</span>
-          <span class="meta-chip">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="7" height="9"/><rect x="15" y="12" width="7" height="9"/></svg>
-            ${f.categoria||'—'}
-          </span>
-          <span class="meta-chip">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            ${fmtDateShort(f.fecha)}
-          </span>
-          ${f.base?`<span class="meta-chip">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/></svg>
-            ${f.base}</span>`:''}
-          ${f.proveedor?`<span class="meta-chip" style="color:#4fd1c5;font-weight:600">${f.proveedor}</span>`:''}
+          <span class="meta-chip">📁 ${f.categoria||'—'}</span>
+          <span class="meta-chip">🕐 ${fmtDateShort(f.fecha)}</span>
+          ${f.base?`<span class="meta-chip">📍 ${f.base}</span>`:''}
+          ${f.proveedor?`<span class="meta-chip" style="color:#06b6d4">📡 ${f.proveedor}</span>`:''}
           ${f.tecnico&&enProc?`<span class="meta-chip" style="color:#f59e0b">🔧 ${f.tecnico}</span>`:''}
           ${f.fechaAtencion?`<span class="meta-chip" style="color:#22c55e">✓ ${fmtDateShort(f.fechaAtencion)}</span>`:''}
         </div>
         ${pend && !enProc ? `
-          <div style="padding:0 10px 10px">
-            <button data-atender="${f.id}" class="atender-btn">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          <div style="margin-top:8px">
+            <button data-atender="${f.id}" style="
+              display:inline-flex;align-items:center;gap:6px;padding:6px 14px;
+              background:linear-gradient(135deg,#4f8ef7,#2b63d6);border:none;border-radius:7px;
+              color:white;font-size:11px;font-weight:700;cursor:pointer;
+              box-shadow:0 4px 12px rgba(79,142,247,0.3)">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
               Atender
             </button>
           </div>` : ''}
-        ${enProc ? `
-          <div style="padding:0 10px 10px">
-            <span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:#f59e0b;
-              background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);
-              border-radius:8px;padding:5px 10px;font-weight:600">
-              🔧 En atención — esperando validación
+        ${enProc && f.tecnico === myName ? `
+          <div style="margin-top:8px">
+            <span style="font-size:10px;color:#f59e0b;background:rgba(245,158,11,0.1);
+              border:1px solid rgba(245,158,11,0.25);border-radius:6px;padding:3px 8px">
+              🔧 En atención — esperando validación del admin
             </span>
           </div>` : ''}
       </div>`;
@@ -1052,7 +1012,7 @@ const TECH = (() => {
               Base de atención: <strong style="color:#4f8ef7">${base||'No especificada'}</strong>
             </div>
             <div style="font-size:10px;color:${hintColor};margin-bottom:10px">${hintText}</div>
-            <label id="atenderTecLabel" style="display:block;font-size:11px;font-weight:700;color:#7c8ba1;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Técnico que atiende</label>
+            <label style="display:block;font-size:11px;font-weight:700;color:#7c8ba1;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Técnico que atiende</label>
             <select id="atenderTecSel" style="width:100%;background:#0f1320;border:1px solid #1a2035;border-radius:8px;color:#e2e8f0;font-size:13px;padding:9px 12px;outline:none;box-sizing:border-box">
               ${tecOptions}
             </select>
@@ -1077,49 +1037,21 @@ const TECH = (() => {
 
     overlay.querySelector('#atenderCancelBtn').onclick = () => overlay.remove();
 
-    // Detectar si este técnico es de otra base (modo apoyo)
-    const myBase      = (session.base || '').toUpperCase();
-    const reporteBase = (f.base || '').toUpperCase();
-    const esApoyo     = myBase && reporteBase && myBase !== reporteBase;
-
-    // Actualizar label y hint si es apoyo
-    if (esApoyo) {
-      const lbl = overlay.querySelector('#atenderTecLabel');
-      if (lbl) { lbl.textContent = 'Apoyo a atender'; lbl.style.color = '#f59e0b'; }
-      const nota = overlay.querySelector('strong[style*="4f8ef7"]');
-      // Agregar nota de apoyo al banner informativo
-      const banner = overlay.querySelector('div[style*="rgba(79,142,247,0.07)"]');
-      if (banner) banner.innerHTML += `<br><span style="color:#f59e0b;font-weight:600">⚡ Apoyo: eres de base ${myBase}, el reporte es de ${reporteBase}. El conteo irá al técnico asignado.</span>`;
-    }
-
     overlay.querySelector('#atenderConfirmBtn').onclick = async () => {
-      let nombre = '', username = session.username;
+      let nombre = '';
       if (sel.value === '__self__' || sel.value === '') {
         nombre = myName;
       } else if (sel.value === '__otro__') {
         nombre = otroInp.value.trim();
         if (!nombre) { otroInp.style.borderColor='#ef4444'; otroInp.focus(); return; }
-        username = nombre; // para "Otro" no hay username conocido
       } else {
         nombre = sel.value;
-        // Buscar el username del técnico seleccionado
-        const allUsers = AUTH.getUsers() || [];
-        const found = allUsers.find(u => (u.nombre || u.username) === nombre);
-        if (found) username = found.username;
       }
 
       overlay.remove();
-
-      // Si es apoyo: el nombre real que atiende es "yo" (session), el técnico del reporte se mantiene
-      const result = esApoyo
-        ? await tecnicoAtender(reporteId, f.tecnico || nombre, f.tecnicoUsername || username, true, myName, session.username)
-        : await tecnicoAtender(reporteId, nombre, username, false, '', '');
-
+      const result = await tecnicoAtender(reporteId, nombre, session.username);
       if (result) {
-        const msg = esApoyo
-          ? `Apoyo registrado — Unidad ${result.unidad} en proceso ✓`
-          : `Atendiendo unidad ${result.unidad} — Admin notificado ✓`;
-        showToast(msg, 'success');
+        showToast(`Atendiendo unidad ${result.unidad} — Admin notificado ✓`, 'success');
         renderAll();
         renderDetail(reporteId);
       }
@@ -1285,39 +1217,6 @@ const TECH = (() => {
     const d = document.getElementById('techNotifDropdown');
     if (d) d.style.display = 'none';
   }
-
-  // ── Exponer para tecnico-ui.js ──
-  function _getFallas() {
-    return state.fallas || [];
-  }
-  function _getAllFallas() {
-    return state.fallas || [];
-  }
-  function _openAtenderModal(id) {
-    // Encontrar la falla y abrir el modal de atender
-    const falla = (state.fallas || []).find(f => f.id === id);
-    if (!falla) return;
-    // Simular click en el botón Atender del card existente (via el modal interno)
-    showAtenderModal(id);
-  }
-
-  window.TECH = {
-    state,
-    _uiReady: true,
-    _getFallas,
-    _getAllFallas,
-    _openAtenderModal,
-    _toggleEmpresa: (emp) => {
-      const idx = state.empresasSel.indexOf(emp);
-      if (idx >= 0) state.empresasSel.splice(idx, 1);
-      else state.empresasSel.push(emp);
-      renderAll();
-    },
-    _renderCards:   null,
-    _renderKPIs:    null,
-    _renderPerfil:  null,
-    _renderEmpresa: null,
-  };
 
   return { init, showAtenderModal, openNotifReport };
 
