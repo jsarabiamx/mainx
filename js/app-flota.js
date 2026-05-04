@@ -259,7 +259,12 @@ const FLOTA = (() => {
               </tr>
             </thead>
             <tbody id="flotaTbody">
-              <tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text3)">Cargando...</td></tr>
+              <tr><td colspan="7" style="padding:32px;text-align:center;color:var(--text3)">
+                <div style="display:inline-flex;align-items:center;gap:8px">
+                  <div style="width:14px;height:14px;border:2px solid rgba(255,255,255,.1);border-top-color:#8b5cf6;border-radius:50%;animation:spin .7s linear infinite"></div>
+                  Cargando datos...
+                </div>
+              </td></tr>
             </tbody>
           </table>
         </div>
@@ -331,7 +336,19 @@ const FLOTA = (() => {
   }
 
   // ─── LEER EXCEL ───────────────────────────────
+  async function _ensureXLSX() {
+    if (window.XLSX) return;
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload  = resolve;
+      s.onerror = () => reject(new Error('No se pudo cargar la librería de Excel. Verifica tu conexión.'));
+      document.head.appendChild(s);
+    });
+  }
+
   async function leerExcel(file) {
+    await _ensureXLSX();
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = e => {
@@ -774,30 +791,41 @@ const FLOTA = (() => {
 
   // ─── INICIALIZAR (llamado cuando se carga el módulo) ──
   function init() {
-    cargarHistorial();
-    // Si ya hay datos guardados para esta empresa, mostrar concentrado
-    const emp = DATA.state.currentEmpresa || 'GHO';
-    const sb  = _getClient();
-    sb.from('flota_asignacion').select('id', { count: 'exact', head: true })
-      .eq('empresa_id', emp)
-      .then(({ count }) => {
-        if (count > 0) {
-          // Ya hay datos — mostrar concentrado directamente
-          const main = document.getElementById('flotaContent');
-          if (main) { main.innerHTML = renderConcentrado(emp); cargarConcentrado(emp); }
-        }
-      }).catch(() => {});
+    // Cargar historial y verificar datos guardados de forma no bloqueante
+    // con pequeño delay para no congelar el render inicial del módulo
+    setTimeout(() => {
+      cargarHistorial();
+      const emp = DATA.state.currentEmpresa || 'GHO';
+      _getClient().from('flota_asignacion')
+        .select('id', { count: 'exact', head: true })
+        .eq('empresa_id', emp)
+        .then(({ count }) => {
+          if (count > 0) {
+            const main = document.getElementById('flotaContent');
+            if (main) { main.innerHTML = renderConcentrado(emp); cargarConcentrado(emp); }
+          } else {
+            // Sin datos — asegurarse de que el historial diga "Sin cargas previas"
+            const el = document.getElementById('flotaHistorial');
+            if (el && el.textContent === 'Cargando...') el.textContent = 'Sin cargas previas';
+          }
+        })
+        .catch(() => {
+          const el = document.getElementById('flotaHistorial');
+          if (el) el.textContent = 'Sin cargas previas';
+        });
+    }, 150);
   }
 
   // ─── HELPERS ──────────────────────────────────
   function _getClient() {
-    if (!_getClient._fb) {
+    // Crear cliente solo una vez (lazy, nunca en el top-level del módulo)
+    if (!window._flotaSbClient) {
       const cfg = window.CCTV_SUPABASE_CONFIG || {};
       const url  = cfg.url     || 'https://sxzhmcrpeyuqslupttby.supabase.co';
       const key  = cfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
-      _getClient._fb = window.supabase.createClient(url, key);
+      window._flotaSbClient = window.supabase.createClient(url, key);
     }
-    return _getClient._fb;
+    return window._flotaSbClient;
   }
 
   function _fmtMes(mesAnio) {
