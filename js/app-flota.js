@@ -75,6 +75,8 @@ const FLOTA = (() => {
 
   // ─── Render principal ──────────────────────────
   function renderCargaAsignacion(session) {
+    const emp = DATA.state.currentEmpresa || 'GHO';
+    const esquema = getEsquema(emp);
     return `
     <div id="mod-flota" class="module active">
       <div class="mod-header">
@@ -90,7 +92,7 @@ const FLOTA = (() => {
             </div>
             <div>
               <h2 class="mod-title">Carga de Asignación Mensual</h2>
-              <p class="mod-subtitle" id="flotaSubtitle">Sube el archivo Excel — hoja <strong>Detalle1</strong></p>
+              <p class="mod-subtitle" id="flotaSubtitle">Sube el archivo Excel <strong>${esquema.nombre_archivo}</strong> — hoja <strong>Detalle1</strong></p>
             </div>
           </div>
         </div>
@@ -693,15 +695,16 @@ const FLOTA = (() => {
     await cargarPorMes(emp, mes);
   }
 
-  // ─── RENDER PISOS CELL (sin backtick anidado) ──
+  // ─── RENDER PISOS CELL ───────────────────────
   function _renderPisosCel(r) {
+    const eid = r.id.replace(/'/g, '');
     if (r.pisos) {
       return '<span style="color:var(--text2)">' + r.pisos + '</span>'
-           + ' <button onclick="FLOTA.editarPisos('' + r.id + '')" '
-           + 'style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--text3);padding:0 2px" title="Cambiar">✏️</button>';
+           + ' <button onclick="FLOTA.editarPisos(\'' + eid + '\')"'
+           + ' style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--text3);padding:0 2px" title="Cambiar">✏️</button>';
     }
-    const sel_id = 'psel_' + r.id;
-    return '<select id="' + sel_id + '" onchange="FLOTA.actualizarPisos('' + r.id + '',this.value)"'
+    const sel_id = 'psel_' + eid;
+    return '<select id="' + sel_id + '" onchange="FLOTA.actualizarPisos(\'' + eid + '\',this.value)"'
       + ' style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);'
       + 'border-radius:6px;color:#f59e0b;font-size:10px;padding:2px 6px;cursor:pointer;font-family:inherit">'
       + '<option value="">Pendiente</option>'
@@ -763,6 +766,7 @@ const FLOTA = (() => {
   }
 
   function showUpload() {
+    _initToken++; // cancelar cualquier init pendiente
     const main = document.getElementById('flotaContent');
     if (main) { main.innerHTML = renderStep1(); cargarHistorial(); }
   }
@@ -790,26 +794,53 @@ const FLOTA = (() => {
   }
 
   // ─── INICIALIZAR (llamado cuando se carga el módulo) ──
+  // Token para cancelar callbacks asíncronos si el usuario navega antes de que terminen
+  let _initToken = 0;
+
   function init() {
-    // Cargar historial y verificar datos guardados de forma no bloqueante
-    // con pequeño delay para no congelar el render inicial del módulo
+    const token = ++_initToken;
+
     setTimeout(() => {
+      // Si el módulo ya no está en el DOM, abortar
+      if (!document.getElementById('mod-flota')) return;
+      if (token !== _initToken) return;
+
       cargarHistorial();
+
       const emp = DATA.state.currentEmpresa || 'GHO';
       _getClient().from('flota_asignacion')
         .select('id', { count: 'exact', head: true })
         .eq('empresa_id', emp)
-        .then(({ count }) => {
+        .then(({ count, error }) => {
+          // Verificar que seguimos en el módulo flota y con el mismo token
+          if (token !== _initToken) return;
+          if (!document.getElementById('mod-flota')) return;
+
+          if (error) {
+            console.warn('[FLOTA init] count error:', error.message);
+            const el = document.getElementById('flotaHistorial');
+            if (el && el.textContent === 'Cargando...') el.textContent = 'Sin cargas previas';
+            return;
+          }
+
           if (count > 0) {
             const main = document.getElementById('flotaContent');
-            if (main) { main.innerHTML = renderConcentrado(emp); cargarConcentrado(emp); }
+            if (main) {
+              try {
+                main.innerHTML = renderConcentrado(emp);
+                cargarConcentrado(emp);
+              } catch(e) {
+                console.error('[FLOTA init] renderConcentrado error:', e);
+              }
+            }
           } else {
-            // Sin datos — asegurarse de que el historial diga "Sin cargas previas"
             const el = document.getElementById('flotaHistorial');
             if (el && el.textContent === 'Cargando...') el.textContent = 'Sin cargas previas';
           }
         })
-        .catch(() => {
+        .catch((err) => {
+          if (token !== _initToken) return;
+          console.warn('[FLOTA init] catch:', err);
           const el = document.getElementById('flotaHistorial');
           if (el) el.textContent = 'Sin cargas previas';
         });
