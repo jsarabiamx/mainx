@@ -437,7 +437,7 @@ async function authLogin(username, password) {
     await persistSession(session);
 
     if (!user.firstLogin) {
-      await authLog('LOGIN', `Inicio de sesiÃ³n de ${user.nombre}`, user.username);
+      await authLog('LOGIN', `Inicio de sesión de ${user.nombre}`, user.username);
     }
 
     AUTH_CACHE.users = await DS.getUsers();
@@ -1162,4 +1162,3 @@ window.AUTH = {
   EMPRESAS_DEFAULT,
   SUPER_ADMIN_EMAIL: SUPER_ADMIN.email
 };
-
