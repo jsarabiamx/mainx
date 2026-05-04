@@ -291,6 +291,7 @@ const APP = (() => {
       config:    AUTH.can('viewConfig'),
       usuarios:  AUTH.can('manageUsers'),
       historial: AUTH.can('viewAudit'),
+      flota:     AUTH.can('viewAudit'), // solo master
     };
 
     if (!perms[mod]) {
@@ -330,6 +331,10 @@ const APP = (() => {
         break;
       case 'historial':
         main.innerHTML = MODS.renderHistorial(session);
+        break;
+      case 'flota':
+        main.innerHTML = FLOTA.renderCargaAsignacion(session);
+        setTimeout(() => FLOTA.init(), 80);
         break;
     }
 
