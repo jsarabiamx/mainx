@@ -333,8 +333,13 @@ const APP = (() => {
         main.innerHTML = MODS.renderHistorial(session);
         break;
       case 'flota':
-        main.innerHTML = FLOTA.renderCargaAsignacion(session);
-        setTimeout(() => FLOTA.init(), 80);
+        try {
+          main.innerHTML = FLOTA.renderCargaAsignacion(session);
+          setTimeout(() => FLOTA.init(), 80);
+        } catch(e) {
+          console.error('[APP] Error al renderizar Carga Asignación:', e);
+          main.innerHTML = '<div class="module active"><div class="mod-header"><h2 class="mod-title">Carga Asignación</h2></div><div style="padding:40px;text-align:center;color:var(--red)">Error al cargar el módulo. Recarga la página.</div></div>';
+        }
         break;
     }
 
