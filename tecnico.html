@@ -17,6 +17,38 @@
     </div>
   </div>
 
+  <!-- ══════════════════════════════════════════
+       PANEL VISIÓN  (fuera del main, z-index alto)
+  ══════════════════════════════════════════ -->
+  <div id="tuiPanelVision" style="display:none;position:fixed;inset:0;z-index:20000;background:#07090f;overflow-y:auto;padding:16px 16px 90px;">
+    <div style="font-size:15px;font-weight:700;margin-bottom:16px;padding-top:8px;display:flex;align-items:center;justify-content:space-between;">
+      📊 Mi Visión
+      <button onclick="tuiScreen('inicio')" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:rgba(255,255,255,.5);font-size:11px;padding:5px 12px;cursor:pointer;font-family:inherit">← Regresar</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:16px;">
+      <button class="vp-tab active" onclick="tuiPeriod('dia',this)">Hoy</button>
+      <button class="vp-tab" onclick="tuiPeriod('semana',this)">Semana</button>
+      <button class="vp-tab" onclick="tuiPeriod('mes',this)">Mes</button>
+      <button class="vp-tab" onclick="tuiPeriod('total',this)">Total</button>
+    </div>
+    <div id="tvContent">
+      <div class="vp-loader"><div class="vp-spinner"></div> Cargando...</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       PANEL PERFIL  (fuera del main, z-index alto)
+  ══════════════════════════════════════════ -->
+  <div id="tuiPanelPerfil" style="display:none;position:fixed;inset:0;z-index:20000;background:#07090f;overflow-y:auto;padding:16px 16px 90px;">
+    <div style="font-size:15px;font-weight:700;margin-bottom:16px;padding-top:8px;display:flex;align-items:center;justify-content:space-between;">
+      👤 Mi Perfil
+      <button onclick="tuiScreen('inicio')" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:rgba(255,255,255,.5);font-size:11px;padding:5px 12px;cursor:pointer;font-family:inherit">← Regresar</button>
+    </div>
+    <div id="ppContent">
+      <div class="vp-loader"><div class="vp-spinner"></div> Cargando...</div>
+    </div>
+  </div>
+
   <!-- HEADER -->
   <header class="tech-header">
     <div class="header-brand">
@@ -48,7 +80,7 @@
     <div id="empresaStrip" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"></div>
   </div>
 
-  <!-- KPI TABS: Pendiente / En proceso / Atendidos = tabs | Total = estático -->
+  <!-- KPI TABS -->
   <div class="kpi-strip">
     <div class="kpi-card kpi-pending kpi-tab active-tab" id="tab_pendiente" onclick="tuiSetTab('pendiente')">
       <div class="kpi-value" id="kpiPendiente">0</div>
@@ -71,13 +103,9 @@
   <!-- MAIN -->
   <main class="tech-main">
 
-    <!-- === VISTA LISTA (default) === -->
+    <!-- VISTA LISTA -->
     <div id="viewLista">
-
-      <!-- Filter bar (Mi Base / General) — generado por tecnico.js -->
       <div id="techFilterBar" style="display:flex;gap:8px;margin-bottom:10px;overflow-x:auto;padding-bottom:2px"></div>
-
-      <!-- Panel de lista -->
       <div class="panel">
         <div class="panel-header">
           <div class="panel-title">
@@ -87,34 +115,25 @@
           <span class="panel-count amber" id="panelCount">0</span>
         </div>
         <div class="panel-search">
-          <input type="text" class="search-input" id="searchPendientes"
-                 placeholder="Buscar por unidad, folio, categoría…">
+          <input type="text" class="search-input" id="searchPendientes" placeholder="Buscar por unidad, folio, categoría…">
         </div>
         <div class="report-list" id="pendientesList"></div>
       </div>
-
-      <!-- IDs requeridos por tecnico.js internamente -->
       <div id="searchAtendidos" style="display:none"></div>
       <div id="atendidosList" style="display:none"></div>
       <div id="pendientesCount" style="display:none"></div>
       <div id="atendidosCount" style="display:none"></div>
-
     </div><!-- /viewLista -->
 
-    <!-- === VISTA DETALLE (al tocar un reporte) === -->
+    <!-- VISTA DETALLE -->
     <div id="viewDetalle" style="display:none">
-
-      <!-- Botón regresar -->
       <button class="btn-regresar" onclick="tuiCerrarDetalle()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
         Regresar a la lista
       </button>
-
-      <!-- Detalle del reporte -->
       <div class="detail-panel" id="detailPanel">
         <div class="detail-placeholder" id="detailPlaceholder"></div>
         <div class="detail-content" id="detailContent">
-
           <div class="detail-header">
             <div class="detail-folio-row">
               <span class="detail-folio" id="detailFolio">—</span>
@@ -126,9 +145,7 @@
               <span class="detail-date" id="detailDate">—</span>
             </div>
           </div>
-
           <div class="detail-body">
-
             <div class="detail-section">
               <div class="detail-section-title">Información general</div>
               <div class="detail-grid">
@@ -140,7 +157,6 @@
                 <div><div class="detail-field-label">Operador</div><div class="detail-field-value" id="dOperador">—</div></div>
               </div>
             </div>
-
             <div class="detail-section">
               <div class="detail-section-title">Falla técnica</div>
               <div class="detail-grid">
@@ -149,7 +165,6 @@
                 <div class="detail-full"><div class="detail-field-label">Descripción de falla</div><div class="detail-desc-text" id="dDescripcion">—</div></div>
               </div>
             </div>
-
             <div class="detail-section">
               <div class="detail-section-title">Atención</div>
               <div class="detail-grid">
@@ -158,22 +173,16 @@
                 <div class="detail-full"><div class="detail-field-label">Observaciones</div><div class="detail-obs-text" id="dObservaciones">—</div></div>
               </div>
             </div>
-
             <div id="detailHistory" style="display:none"></div>
-
-          </div><!-- /detail-body -->
-
-          <!-- Botón Atender dentro del detalle -->
+          </div>
           <div class="update-section" id="detalleAtenderSection">
             <button class="btn-guardar" id="detalleAtenderBtn">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
               Atender este reporte
             </button>
           </div>
-
-        </div><!-- /detail-content -->
-      </div><!-- /detail-panel -->
-
+        </div>
+      </div>
     </div><!-- /viewDetalle -->
 
   </main>
