@@ -152,7 +152,7 @@ const BULK = (() => {
       <div class="mod-header">
         <div class="mod-title-wrap">
           <div style="display:flex;align-items:center;gap:10px">
-            <button class="btn btn-ghost btn-sm" onclick="APP.showModule('registro')" style="padding:5px 8px">
+            <button class="btn btn-ghost btn-sm" onclick="BULK.salirDeBulk()" style="padding:5px 8px">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
               Volver
             </button>
@@ -996,11 +996,22 @@ const BULK = (() => {
 
   function volverALista(){state.active=false;APP.showModule('bulk');}
 
+  // Salir completamente de carga masiva (desde pantalla 1) — limpia el estado
+  function salirDeBulk(){
+    state.active=false;
+    state.unidades=[];
+    state._lastInput='';
+    state.dondeReporta='';
+    state.tecnicoQueReporta='';
+    state.proveedorFuente='';
+    APP.showModule('registro');
+  }
+
   return {
     renderCargaMasiva, onInputChange, procesarLista, selChip, selPrio, selEstado,
     onCategoriaChange, goToUnit, prevUnit, nextUnit, skipUnit, refreshList,
     enviarAlSistema, volverALista, copiarBarrido, toggleUltAct, state,
     onBaseChange, onDondeReportaChange, onTecnicoReportaChange, onTecnicoAdicionalChange,
-    editarReportePendiente, ignorarPendienteYContinuar, _actualizarResumenTag,
+    editarReportePendiente, ignorarPendienteYContinuar, _actualizarResumenTag, salirDeBulk,
   };
 })();
