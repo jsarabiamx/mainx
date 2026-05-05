@@ -693,23 +693,50 @@ const BULK = (() => {
     const rawParts=raw.replace(/,/g,' ').replace(/[\r\n\t]+/g,' ').replace(/\s+/g,' ').trim().split(' ').map(s=>s.trim()).filter(s=>s.length>0);
     const dups=rawParts.length-count;
     const fallas=DATA.state.fallas||[], emp=DATA.state.currentEmpresa;
+
+    // Detectar con reporte pendiente
     const conPendiente=fallas.filter(f=>f.empresa===emp&&units.includes(f.unidad)&&/pendiente/i.test(f.estatus||''));
     const existingCount=new Set(conPendiente.map(f=>f.unidad)).size;
+
+    // Detectar sin DVR desde caché local de flota (disponible si ya se visitó Carga Asignación o se procesó lista antes)
+    const cache=window._flotaConcentradoCache||[];
+    const sinDvrUnits=units.filter(u=>{
+      const fd=cache.find(r=>String(r.num_economico).trim()===String(u).trim()&&r.empresa_id===emp);
+      return fd?.sin_dvr===true;
+    });
+
     const detectedEl=document.getElementById('bulkDetectedCount');
-    if (detectedEl){detectedEl.textContent=`${count} unidades detectadas`;detectedEl.style.color=count>0?'var(--green)':'var(--text3)';}
+    if(detectedEl){detectedEl.textContent=`${count} unidades detectadas`;detectedEl.style.color=count>0?'var(--green)':'var(--text3)';}
     const btn=document.getElementById('bulkProcesarBtn');if(btn)btn.disabled=count===0;
     const bT=document.getElementById('bscTotal'),bD=document.getElementById('bscDups'),bE=document.getElementById('bscExisting'),bN=document.getElementById('bscNew');
     if(bT)bT.textContent=count;if(bD)bD.textContent=dups;if(bE)bE.textContent=existingCount;if(bN)bN.textContent=Math.max(0,count-existingCount);
+
     const infoBox=document.getElementById('bulkSummaryInfo'),infoText=document.getElementById('bulkSummaryInfoText');
     if(infoBox&&infoText&&count>0){
       infoBox.style.display='flex';
-      infoText.textContent=existingCount>0?`⚠ ${existingCount} unidad(es) ya tienen reporte pendiente.`:Math.max(0,count-existingCount)>0?`Se crearán ${Math.max(0,count-existingCount)} registros.`:'Todas las unidades ya están registradas.';
+      let msg='';
+      if(existingCount>0) msg+=`⚠ ${existingCount} unidad(es) con reporte pendiente. `;
+      if(sinDvrUnits.length>0) msg+=`📵 ${sinDvrUnits.length} sin DVR: ${sinDvrUnits.join(', ')}. `;
+      if(!msg) msg=Math.max(0,count-existingCount)>0?`Se crearán ${Math.max(0,count-existingCount)} registros.`:'Todas ya registradas.';
+      infoText.textContent=msg;
     }else if(infoBox){infoBox.style.display='none';}
+
+    // Panel de alertas: pendientes + sin DVR
     const pendWrap=document.getElementById('bulkPendientesWrap');
-    if(pendWrap&&conPendiente.length>0){
+    const hayAlgo=conPendiente.length>0||sinDvrUnits.length>0;
+    if(pendWrap&&hayAlgo){
       pendWrap.style.display='';
-      pendWrap.innerHTML=`<div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:6px">⚠ Con reporte pendiente:</div>`
-        +conPendiente.map(f=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:6px;margin-bottom:4px;font-size:11px"><span style="font-weight:700">${f.unidad}</span><span style="color:var(--text2)">${f.base||''} · ${f.servicio||''}</span><span style="color:#f59e0b;font-family:var(--mono)">${f.folio||''}</span></div>`).join('');
+      let html='';
+      if(conPendiente.length>0){
+        html+=`<div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:4px">⚠ Con reporte pendiente:</div>`;
+        html+=conPendiente.map(f=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 10px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:6px;margin-bottom:3px;font-size:11px"><span style="font-weight:700">${f.unidad}</span><span style="color:var(--text2)">${f.base||''} · ${f.servicio||''}</span><span style="color:#f59e0b;font-family:var(--mono)">${f.folio||''}</span></div>`).join('');
+      }
+      if(sinDvrUnits.length>0){
+        if(html) html+='<div style="margin-top:6px"></div>';
+        html+=`<div style="font-size:11px;font-weight:700;color:#9ca3af;margin-bottom:4px">📵 Sin DVR registrado en asignación:</div>`;
+        html+=sinDvrUnits.map(u=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:rgba(107,114,128,.08);border:1px solid rgba(107,114,128,.2);border-radius:6px;margin-bottom:3px;font-size:11px"><span style="font-weight:700;font-family:var(--mono)">${u}</span><span style="color:#9ca3af">Sin equipo DVR</span></div>`).join('');
+      }
+      pendWrap.innerHTML=html;
     }else if(pendWrap){pendWrap.style.display='none';}
   }
 
