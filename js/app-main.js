@@ -227,25 +227,33 @@ const APP = (() => {
     const drop = document.getElementById('adminNotifDropdown');
     if (drop) drop.style.display = 'none';
 
-    // Si el reporte pertenece a otra empresa, cambiar primero
     const falla = DATA.state.fallas.find(f => f.id === reporteId);
+
+    // Asegurar que estamos en el módulo atencion con la empresa correcta
     if (falla && falla.empresa && falla.empresa !== DATA.state.currentEmpresa) {
-      await changeEmpresa(falla.empresa);
-    } else {
-      await showModule('atencion');
+      // Cambiar empresa sin llamar showModule internamente — lo hacemos manualmente
+      DATA.state.currentEmpresa = falla.empresa;
+      DATA.state.viewMode = 'individual';
+      await DATA.persistAll();
+      const mi = document.getElementById('modeIndividual');
+      const mg = document.getElementById('modeGeneral');
+      if (mi) mi.classList.add('active');
+      if (mg) mg.classList.remove('active');
+      UI.renderEmpresaStrip(AUTH.checkSession());
     }
 
-    // Esperar render completo antes de seleccionar
-    setTimeout(() => {
-      if (typeof MODS !== 'undefined' && MODS.selAtencion) {
-        MODS.selAtencion(reporteId);
-        // Scroll la card activa a la vista en la lista
-        setTimeout(() => {
-          const card = document.querySelector(`.aten-card2[data-id="${reporteId}"]`);
-          if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 80);
-      }
-    }, 200);
+    // Siempre renderizar el módulo atencion limpio
+    await showModule('atencion');
+
+    // Ahora el DOM está listo — seleccionar el reporte directamente (sin setTimeout)
+    if (typeof MODS !== 'undefined' && MODS.selAtencion) {
+      MODS.selAtencion(reporteId);
+      // Scroll la card a la vista
+      requestAnimationFrame(() => {
+        const card = document.querySelector(`.aten-card2[data-id="${reporteId}"]`);
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    }
   }
 
   async function validarDesdeNotif(reporteId) {
