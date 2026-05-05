@@ -30,6 +30,36 @@ const BULK = (() => {
   function getPendingCount()  { return state.unidades.filter(u=>u.status==='pending'&&!u.sinDvr).length; }
   function getDoneCount()     { return state.unidades.filter(u=>u.status==='done').length; }
 
+  // Actualiza sin_dvr en flota_asignacion para una unidad
+  async function _updateFlotaSinDvr(numEco, value) {
+    try {
+      const emp = DATA.state.currentEmpresa;
+      const cfg = window.CCTV_SUPABASE_CONFIG;
+      if (!cfg) return;
+      let authToken = cfg.anonKey;
+      try {
+        const sb = window._flotaSbClient || (window.supabase && window.supabase.createClient(cfg.url, cfg.anonKey));
+        if (sb) { const { data:{session} } = await sb.auth.getSession(); if(session?.access_token) authToken=session.access_token; }
+      } catch(e){}
+      // PATCH — actualiza el registro más reciente de la unidad en esta empresa
+      const resp = await fetch(
+        cfg.restUrl + '/flota_asignacion?empresa_id=eq.' + encodeURIComponent(emp) + '&num_economico=eq.' + encodeURIComponent(numEco),
+        {
+          method: 'PATCH',
+          headers: { 'apikey':cfg.anonKey, 'Authorization':'Bearer '+authToken, 'Content-Type':'application/json', 'Prefer':'return=minimal' },
+          body: JSON.stringify({ sin_dvr: value, updated_at: new Date().toISOString() })
+        }
+      );
+      if (!resp.ok) console.warn('[BULK sinDvr PATCH]', resp.status, await resp.text());
+      else {
+        // Actualizar caché local también
+        const cache = window._flotaConcentradoCache||[];
+        cache.filter(r=>String(r.num_economico)===String(numEco)&&r.empresa_id===emp).forEach(r=>r.sin_dvr=value);
+        console.log('[BULK sinDvr]', numEco, '→ sin_dvr=', value);
+      }
+    } catch(e) { console.warn('[BULK sinDvr]', e); }
+  }
+
   // Obtiene datos de flota para UNA unidad - desde cache
   function _getFlotaData(numEco) {
     try {
@@ -49,7 +79,7 @@ const BULK = (() => {
       // Construir query REST directa — más confiable que el cliente JS
       const numList = numeros.map(n => `"${String(n).trim()}"`).join(',');
       const url = cfg.restUrl + '/flota_asignacion'
-        + '?select=num_economico,cromatica,servicio,base,pisos,empresa_id,mes_anio'
+        + '?select=num_economico,cromatica,servicio,base,pisos,empresa_id,mes_anio,sin_dvr'
         + '&empresa_id=eq.' + encodeURIComponent(emp)
         + '&num_economico=in.(' + numList + ')'
         + '&order=mes_anio.desc';  // traer el mes más reciente primero
@@ -356,8 +386,8 @@ const BULK = (() => {
           <div class="vsb-list" id="validacionSidebarList">
             ${state.unidades.map((u,i)=>{
               const isDone=u.status==='done', isBarrido=u.status==='barrido', isSinDvr=u.sinDvr;
-              const badgeClass=isSinDvr?'vsb-badge-barrido':isBarrido?'vsb-badge-barrido':isDone?'vsb-badge-done':'vsb-badge-pending';
-              const badgeTxt=isSinDvr?'📵 Sin DVR':isBarrido?'📡 Barrido':isDone?'✓ Listo':u.reportePendiente?'⚠ Existente':'• Pendiente';
+              const badgeClass=isSinDvr?'vsb-badge-barrido':isBarrido?'vsb-badge-barrido':isDone?'vsb-badge-done':u.reportePendiente?'vsb-badge-barrido':'vsb-badge-pending';
+              const badgeTxt=isSinDvr?'📵 Sin DVR':isBarrido?'📡 Barrido':isDone?'✓ Listo':u.reportePendiente?('⚠ '+( u.reportePendiente.folio||'Pendiente')):'• Pendiente';
               const itemClass=['vsb-item',i===state.currentIdx?'vsb-item-active':'',isBarrido?'vsb-item-barrido':isDone?'vsb-item-done':''].filter(Boolean).join(' ');
               return `<div class="${itemClass}" onclick="BULK.goToUnit(${i})" id="vsb-item-${i}">
                 <span class="vsb-item-num">${i+1}</span>
@@ -381,7 +411,7 @@ const BULK = (() => {
             <div class="vub-left">
               <div class="vub-label">Unidad actual</div>
               <div class="vub-unidad">${current.numero}</div>
-              ${autoCromatica?`<div style="font-size:10px;color:var(--accent);margin-top:2px">🎨 ${autoCromatica}${autoServicio?' · '+autoServicio:''}</div>`:''}
+              ${current.sinDvr&&current.flotaData?.sin_dvr?`<div style="font-size:10px;color:#6b7280;margin-top:2px">📵 Sin DVR registrado en asignación</div>`:autoCromatica?`<div style="font-size:10px;color:var(--accent);margin-top:2px">🎨 ${autoCromatica}${autoServicio?' · '+autoServicio:''}</div>`:''}
             </div>
             <div class="vub-nav">
               <button class="btn btn-ghost btn-sm vub-nav-btn" onclick="BULK.prevUnit()" ${state.currentIdx===0?'disabled':''}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>
@@ -701,11 +731,19 @@ const BULK = (() => {
     // Pre-fetch datos de flota para autocompletar cromática/servicio/base/pisos
     const flotaMap = await _prefetchFlotaData(units);
 
-    state.unidades=units.map(u=>({
-      id:DATA.uid(), numero:u, status:'pending',
-      reportePendiente:fallas.find(f=>f.empresa===emp&&f.unidad===u&&/pendiente/i.test(f.estatus||''))||null,
-      flotaData:flotaMap[u]||_getFlotaData(u)||null,
-    }));
+    state.unidades=units.map(u=>{
+      const fd=flotaMap[u]||_getFlotaData(u)||null;
+      const pendiente=fallas.find(f=>f.empresa===emp&&f.unidad===u&&/pendiente/i.test(f.estatus||''))||null;
+      const yaSinDvr=fd?.sin_dvr===true;
+      return {
+        id:DATA.uid(), numero:u,
+        // Si ya está marcada sin DVR en asignación, arrancar como barrido/sinDvr
+        status: yaSinDvr ? 'barrido' : 'pending',
+        sinDvr: yaSinDvr,
+        reportePendiente: pendiente,
+        flotaData: fd,
+      };
+    });
     state.currentIdx=0; state.chipState={piso:'',tipo:''}; state.prioSel='Media'; state.active=true;
     renderCurrentValidacion();
   }
@@ -852,11 +890,20 @@ const BULK = (() => {
 
     if(estado==='sindvr'){
       state.unidades[state.currentIdx].sinDvr=true; state.unidades[state.currentIdx].status='barrido';
+      // Guardar sin_dvr=true en flota_asignacion via REST
+      _updateFlotaSinDvr(current.numero, true).catch(e=>console.warn('[BULK sinDvr update]',e));
       UI.toast(`📵 Unidad ${current.numero} — Sin DVR registrado`);
       UI.updateHeaderCounts(); _avanzarSiguientePendiente(); return;
     }
 
     if(estado==='barrido'){
+      // Si tiene reporte pendiente existente, advertir antes de marcar en línea
+      if(current.reportePendiente && !current._confirmadoBarrido){
+        current._confirmadoBarrido=true;
+        UI.toast(`⚠ ${current.numero} tiene reporte pendiente (${current.reportePendiente.folio||''}). Presiona Barrido de nuevo si confirmas que está en línea.`,'warn');
+        return;
+      }
+      current._confirmadoBarrido=false;
       state.unidades[state.currentIdx].status='barrido'; state.unidades[state.currentIdx].enLinea=true;
       const ultActFechaEl=document.getElementById('bulkUltActFecha'),ultActWrap=document.getElementById('bulkUltActWrap');
       const ultActVal=(ultActWrap&&ultActWrap.style.display!=='none'&&ultActFechaEl?.value)?ultActFechaEl.value:null;
