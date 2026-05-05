@@ -738,11 +738,11 @@ const FLOTA = (() => {
     const eid = r.id.replace(/'/g, '');
     if (r.sin_dvr) {
       return '<span style="background:rgba(107,114,128,.15);color:#9ca3af;border:1px solid rgba(107,114,128,.3);border-radius:4px;padding:2px 8px;font-size:10px;font-weight:600;white-space:nowrap">📵 Sin DVR</span>'
-           + ' <button onclick="FLOTA.toggleDvr('' + eid + '',false)" '
-           + 'style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--text3);padding:0 2px" title="Marcar con DVR">✅</button>';
+           + ' <button onclick="FLOTA.toggleDvr(\' + eid + \',false)"'
+           + ' style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--text3);padding:0 2px" title="Marcar con DVR">✅</button>';
     }
-    return '<button onclick="FLOTA.toggleDvr('' + eid + '',true)" '
-      + 'style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.15);border-radius:4px;color:var(--green);font-size:10px;padding:2px 8px;cursor:pointer;font-family:inherit" title="Marcar sin DVR">'
+    return '<button onclick="FLOTA.toggleDvr(\' + eid + \',true)"'
+      + ' style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.15);border-radius:4px;color:var(--green);font-size:10px;padding:2px 8px;cursor:pointer;font-family:inherit" title="Marcar sin DVR">'
       + 'Con DVR</button>';
   }
 
