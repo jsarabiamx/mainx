@@ -622,6 +622,7 @@ const FLOTA = (() => {
 
       if (error) throw error;
       _allRows      = data || [];
+      window._flotaConcentradoCache = _allRows; // para BULK autocomplete
       _filteredRows = _allRows;
       _page         = 0;
 
