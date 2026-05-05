@@ -322,6 +322,18 @@ const APP = (() => {
       return;
     }
 
+    // ── RESTAURAR CARGA MASIVA AL VOLVER A "REGISTRO" ────────────────
+    // Si el usuario navega a "Nuevo Registro" y hay una sesión bulk en curso,
+    // redirigir a bulk en lugar de mostrar el formulario manual
+    if (mod === 'registro' && typeof BULK !== 'undefined') {
+      const bulkTieneDatos = BULK.state.active ||
+        (BULK.state._lastInput && BULK.state._lastInput.trim().length > 0) ||
+        (BULK.state.dondeReporta && BULK.state.dondeReporta.length > 0);
+      if (bulkTieneDatos) {
+        mod = 'bulk'; // redirigir a bulk transparentemente
+      }
+    }
+
     currentModule = mod;
 
     document.querySelectorAll('.nav-btn').forEach(b => {
