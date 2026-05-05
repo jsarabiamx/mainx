@@ -340,59 +340,105 @@ const MODS = (() => {
   // ══════════════════════════════════════════
   function renderAtencion(session) {
     const fallas  = DATA.getFilteredFallas();
-    // Estatus que NO deben aparecer en Pendientes·En Proceso (son de cierre/especiales)
     const ESTATUS_EXCLUIR_PEND = /atendid|vandaliz|venta|sin sim|sin operac|renta|en operaci/i;
     const pend    = fallas.filter(f => {
-      if (!f.estatus) return true; // sin estatus = pendiente
+      if (!f.estatus) return true;
       if (_isAtendidoEst(f.estatus, f.empresa)) return false;
       if (ESTATUS_EXCLUIR_PEND.test(f.estatus)) return false;
       return true;
     });
     const aten    = fallas.filter(f => _isAtendidoEst(f.estatus, f.empresa));
     const canEdit = AUTH.can('changeStatus') || AUTH.can('editReports');
+    const emp     = DATA.state.currentEmpresa;
+    const selBase = [...new Set(fallas.map(f=>f.base).filter(Boolean))].sort();
+    const selTec  = [...new Set(fallas.map(f=>f.tecnico).filter(Boolean))].sort();
 
     return `
     <div id="mod-atencion" class="module active">
-      <div class="mod-header">
+      <div class="mod-header" style="padding-bottom:10px">
         <div class="mod-title-wrap">
           <h2 class="mod-title">Atención Técnica</h2>
-          <span class="mod-subtitle">${DATA.state.viewMode === 'general' ? 'Vista general · Todas las empresas' : DATA.state.currentEmpresa + ' · Reportes activos'}</span>
-        </div>
-        <div class="mod-header-right">
-          <span style="font-family:var(--mono);font-size:11px;color:var(--red);background:var(--red-bg);border:1px solid rgba(239,68,68,0.2);border-radius:6px;padding:3px 10px">${pend.length} pendientes</span>
-          <span style="font-family:var(--mono);font-size:11px;color:var(--green);background:var(--green-bg);border:1px solid rgba(34,197,94,0.2);border-radius:6px;padding:3px 10px">${aten.length} atendidos</span>
+          <span class="mod-subtitle">${DATA.state.viewMode === 'general' ? 'Vista general · Todas las empresas' : emp + ' · Reportes activos'}</span>
         </div>
       </div>
 
-      <div class="aten-panels">
-        <div class="card">
-          <div class="card-hdr">
-            <div class="card-icon card-icon-red"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
-            <span class="card-title">Pendientes · En Proceso</span>
-            <span class="nav-badge" style="margin-left:auto">${pend.length}</span>
+      <!-- FILTROS HEADER -->
+      <div class="aten-filters-bar">
+        <div class="aten-filter-group">
+          <label>Prev</label>
+          <input type="date" id="atenFiltroDesde" class="aten-filter-input" onchange="MODS.filtrarAten()" placeholder="mm/dd/aaaa">
+        </div>
+        <div class="aten-filter-group">
+          <label>Hasta</label>
+          <input type="date" id="atenFiltroHasta" class="aten-filter-input" onchange="MODS.filtrarAten()" placeholder="mm/dd/aaaa">
+        </div>
+        <div class="aten-filter-group" style="flex:1">
+          <label>Empresa</label>
+          <select id="atenFiltroEmp" class="aten-filter-select" onchange="MODS.filtrarAten()">
+            <option value="">Seleccionar empresa</option>
+            ${(DATA.state.empresas||[]).map(e=>`<option value="${e}"${e===emp?' selected':''}>${e}</option>`).join('')}
+          </select>
+        </div>
+        <div class="aten-filter-group" style="flex:1">
+          <label>Base</label>
+          <select id="atenFiltroBase" class="aten-filter-select" onchange="MODS.filtrarAten()">
+            <option value="">Seleccionar base</option>
+            ${selBase.map(b=>`<option value="${b}">${b}</option>`).join('')}
+          </select>
+        </div>
+        <div class="aten-filter-group" style="flex:2">
+          <label>Técnico</label>
+          <select id="atenFiltroTec" class="aten-filter-select" onchange="MODS.filtrarAten()">
+            <option value="">Todos los técnicos</option>
+            ${selTec.map(t=>`<option value="${t}">${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="aten-filter-group" style="flex:1">
+          <label>Buscar</label>
+          <input type="text" id="atenFiltroQ" class="aten-filter-input" placeholder="Buscar unidad / folio" oninput="MODS.filtrarAten()">
+        </div>
+      </div>
+
+      <!-- LAYOUT 3 COLUMNAS -->
+      <div class="aten-tri-layout">
+
+        <!-- COL 1: PENDIENTES -->
+        <div class="aten-col aten-col-pend">
+          <div class="aten-col-hdr">
+            <span class="aten-col-dot" style="background:var(--red)"></span>
+            <span class="aten-col-title">PENDIENTES · EN PROCESO</span>
+            <span class="aten-col-badge aten-badge-red" id="atenBadgePend">${pend.length}</span>
           </div>
           <div class="aten-list" id="listaAtenPend">
             ${pend.length === 0
-              ? '<div class="empty-state"><span class="empty-icon">✓</span><p class="empty-msg">Sin pendientes</p><p class="empty-sub">Todos los reportes han sido atendidos</p></div>'
+              ? '<div class="empty-state"><span class="empty-icon">✓</span><p class="empty-msg">Sin pendientes</p></div>'
               : pend.map(f => atenCard(f, canEdit)).join('')}
           </div>
         </div>
 
-        <div class="card">
-          <div class="card-hdr">
-            <div class="card-icon card-icon-green"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
-            <span class="card-title">Atendidos</span>
-            <span style="font-family:var(--mono);font-size:11px;color:var(--green);margin-left:auto">${aten.length}</span>
+        <!-- COL 2: ATENDIDOS -->
+        <div class="aten-col aten-col-aten">
+          <div class="aten-col-hdr">
+            <span class="aten-col-dot" style="background:var(--green)"></span>
+            <span class="aten-col-title">ATENDIDOS</span>
+            <span class="aten-col-badge aten-badge-green" id="atenBadgeOk">${aten.length}</span>
           </div>
           <div class="aten-list" id="listaAtenOk">
             ${aten.length === 0
-              ? '<div class="empty-state"><span class="empty-icon">📋</span><p class="empty-msg">Sin reportes atendidos</p></div>'
-              : aten.slice(0, 50).map(f => atenCard(f, canEdit)).join('')}
+              ? '<div class="empty-state"><span class="empty-icon">📋</span><p class="empty-msg">Sin atendidos</p></div>'
+              : aten.slice(0,60).map(f => atenCard(f, canEdit)).join('')}
           </div>
         </div>
-      </div>
 
-      <div id="atenDetailPanel"></div>
+        <!-- COL 3: DETALLE (siempre visible) -->
+        <div class="aten-col aten-col-detail" id="atenDetailPanel">
+          <div class="aten-detail-empty">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text3)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <p style="color:var(--text3);font-size:12px;margin-top:8px">Selecciona un reporte</p>
+          </div>
+        </div>
+
+      </div>
     </div>`;
   }
 
@@ -400,24 +446,35 @@ const MODS = (() => {
     const prio   = f.prioridad || 'Media';
     const pcolor = UI.prioColor(prio);
     const bClass = UI.badgeClass(f.estatus);
-    return `<div class="aten-card" onclick="MODS.selAtencion('${f.id}')" style="--prio-color:${pcolor}">
-      <div class="aten-card-main">
-        <div class="aten-card-title">
-          <span style="font-family:var(--mono);font-weight:700;color:var(--text)">Ud. ${f.unidad}</span>
-          ${UI.empresaBadgeHTML(f.empresa)}
-          <span class="badge ${bClass}">${f.estatus}</span>
-        </div>
-        <div class="aten-card-sub">
-          <span>${f.categoria} · ${f.componente || '—'}${f.proveedor ? ' · <span style="color:var(--cyan)">'+f.proveedor+'</span>' : ''}</span>
-        </div>
-        <div class="aten-card-meta">
-          ${f.folio} · ${UI.fmtDt(f.fecha)} · ${f.base || '—'}
-          ${f.tecnico ? ' · <strong>' + f.tecnico + '</strong>' : ''}
-          ${f.fechaAtencion ? ' · <span style="color:var(--green);font-size:10px">✓ ' + UI.fmtDt(f.fechaAtencion) + '</span>' : ''}
-        </div>
+    const emp    = f.empresa || '';
+    // Línea resumen: categoria→componente, proveedor badge
+    const cat  = [f.categoria, f.componente].filter(Boolean).join(' · ') || '—';
+    const provBadge = f.proveedor
+      ? `<span style="background:rgba(6,182,212,.12);color:var(--cyan);border:1px solid rgba(6,182,212,.25);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600">${f.proveedor}</span>`
+      : '';
+    const techLine = f.tecnico
+      ? `<span style="font-weight:600;color:var(--text2)">${f.tecnico}</span>`
+      : `<span style="color:var(--text3)">Sin asignar</span>`;
+    const atenLine = f.fechaAtencion
+      ? `<span style="color:var(--green);font-size:10px">✓ ${UI.fmtDt(f.fechaAtencion)}</span>`
+      : '';
+    return `<div class="aten-card2" onclick="MODS.selAtencion('${f.id}')" data-id="${f.id}" style="--prio-color:${pcolor}">
+      <div class="ac2-top">
+        <span class="ac2-unidad">Ud. ${f.unidad}</span>
+        ${UI.empresaBadgeHTML(emp)}
+        <span class="badge ${bClass}" style="font-size:9px">${f.estatus}</span>
+        <span class="ac2-prio" style="color:${pcolor}">${prio}</span>
       </div>
-      <div class="aten-card-actions">
-        <span style="color:${pcolor};font-size:10px;font-weight:700;font-family:var(--mono)">${prio}</span>
+      <div class="ac2-cat">${cat} ${provBadge}</div>
+      <div class="ac2-meta">
+        <span style="font-family:var(--mono);color:var(--text3);font-size:10px">${f.folio}</span>
+        <span style="color:var(--text3)">·</span>
+        <span style="color:var(--text3);font-size:10px">${UI.fmtDt(f.fecha)}</span>
+        <span style="color:var(--text3)">·</span>
+        <span style="color:var(--text3);font-size:10px">${f.base||'—'}</span>
+        <span style="color:var(--text3)">·</span>
+        ${techLine}
+        ${atenLine ? '<span style="color:var(--text3)">·</span>' + atenLine : ''}
       </div>
     </div>`;
   }
@@ -432,140 +489,123 @@ const MODS = (() => {
     const estatusList = DATA.getSel('estatus', f.empresa);
     const panel       = document.getElementById('atenDetailPanel');
 
+    // Highlight active card
+    document.querySelectorAll('.aten-card2').forEach(c => c.classList.toggle('aten-card2-active', c.dataset.id === id));
+
     panel.innerHTML = `
-    <div class="aten-detail-panel" data-reporte-id="${id}">
-      <div class="aten-detail-hdr">
-        <div class="aten-detail-title">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          Detalle — Unidad ${f.unidad} · ${f.folio}
-          <span class="badge ${UI.badgeClass(f.estatus)}">${f.estatus}</span>
+    <div class="aten-detail-inner" data-reporte-id="${id}">
+      <div class="aten-detail-hdr2">
+        <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--accent);flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span style="font-weight:700;font-size:13px">Detalle — Unidad ${f.unidad} · ${f.folio}</span>
+          ${UI.empresaBadgeHTML(f.empresa)}
+          <span class="badge ${UI.badgeClass(f.estatus)}" style="font-size:9px">${f.estatus}</span>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('atenDetailPanel').innerHTML=''">✕ Cerrar</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('atenDetailPanel').innerHTML='<div class=\'aten-detail-empty\'><p style=\'color:var(--text3);font-size:12px;padding:40px;text-align:center\'>Selecciona un reporte</p></div>';document.querySelectorAll(\'.aten-card2\').forEach(c=>c.classList.remove(\'aten-card2-active\'))">✕</button>
       </div>
 
-      <div class="aten-split">
-        <div class="aten-preview-col">
-          <p class="preview-title">Datos del Reporte</p>
-          <div>
-            ${previewRow('Folio',        `<span style="font-family:var(--mono)">${f.folio}</span>`)}
-            ${previewRow('Empresa',      UI.empresaBadgeHTML(f.empresa))}
-            ${previewRow('Unidad',       f.unidad)}
-            ${previewRow('Base',         f.base || '—')}
-            ${previewRow('Servicio',     f.servicio || '—')}
-            ${previewRow('Tipo',         f.tipo || '—')}
-            ${previewRow('Proveedor',    f.proveedor ? `<span style="color:var(--cyan)">${f.proveedor}</span>` : '—')}
-            ${previewRow('Categoría',    f.categoria || '—')}
-            ${previewRow('Componente',   f.componente || '—')}
-            ${previewRow('Prioridad',    `<span style="color:${UI.prioColor(f.prioridad)};font-weight:700">${f.prioridad || '—'}</span>`)}
-            ${previewRow('Descripción',  f.descripcion || '—')}
-            ${previewRow('Técnico',      f.tecnico || 'Sin asignar')}
-            ${previewRow('Fecha',        UI.fmtDt(f.fecha))}
-            ${previewRow('Registrado',   UI.fmtDt(f.createdAt))}
-            ${f.fechaAtencion ? previewRow('Fecha Atención', `<span style="color:var(--green)">${UI.fmtDt(f.fechaAtencion)}</span>`) : ''}
-          </div>
-
-          ${f.historial && f.historial.length ? `
-          <p class="preview-title" style="margin-top:16px">Historial</p>
-          <div class="audit-timeline" style="max-height:180px;overflow-y:auto">
-            ${[...f.historial].map(h => `
-            <div class="audit-item" style="padding:8px 0">
-              <div class="audit-dot" style="background:var(--accent)"></div>
-              <div class="audit-body">
-                <div class="audit-tipo" style="color:var(--accent);font-size:10px">${h.accion}</div>
-                <div class="audit-det">${h.detalle}</div>
-                <div class="audit-meta"><span>${h.usuario}</span><span>·</span><span>${UI.fmtDt(h.fecha)}</span></div>
-              </div>
-            </div>`).join('')}
-          </div>` : ''}
-        </div>
-
-        <div class="aten-form-col">
-          <p class="preview-title">Actualización</p>
+      <div class="aten-detail-body">
+        <!-- ACTUALIZACIÓN (arriba) -->
+        <div class="aten-det-section">
+          <div class="aten-det-section-title">ACTUALIZACIÓN</div>
           ${canEdit ? `
-          <div style="display:flex;flex-direction:column;gap:12px">
-            <div class="form-group">
-              <label>Estatus</label>
-              <div class="select-wrap">
-                <select id="atenEstatus" onchange="MODS.onAtenEstatusChange()">
-                  ${estatusList.map(e => `<option${e===f.estatus?' selected':''}>${e}</option>`).join('')}
-                </select>
+          <div class="aten-det-form">
+            <div class="aten-det-row2">
+              <div class="form-group">
+                <label>Estatus</label>
+                <div class="select-wrap">
+                  <select id="atenEstatus" onchange="MODS.onAtenEstatusChange()">
+                    ${estatusList.map(e => `<option${e===f.estatus?' selected':''}>${e}</option>`).join('')}
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Técnico Asignado</label>
+                <div class="select-wrap">
+                  <select id="atenTecnico">
+                    ${(() => {
+                      const emp2 = f.empresa || DATA.state.currentEmpresa;
+                      const todosLosTecs = DATA.getTecnicosPorBase(emp2, '');
+                      let opts = '<option value="">— Sin asignar —</option>';
+                      const tecsBase   = todosLosTecs.filter(t => t.base === f.base);
+                      const tecsOtros  = todosLosTecs.filter(t => t.base !== f.base);
+                      if (tecsBase.length) opts += '<optgroup label="Misma base">';
+                      tecsBase.forEach(t => { const sel=(f.tecnico===t.nombre)?' selected':''; opts+=`<option value="${t.nombre}" data-username="${t.username||t.nombre}"${sel}>${t.nombre}${t.base?' ('+t.base+')':''}</option>`; });
+                      if (tecsBase.length) opts += '</optgroup>';
+                      if (tecsOtros.length) opts += '<optgroup label="Otras bases">';
+                      tecsOtros.forEach(t => { const esApoyo=f.tecnicoApoyoNombre===t.nombre; const sel=(f.tecnico===t.nombre||esApoyo)?' selected':''; opts+=`<option value="${t.nombre}" data-username="${t.username||t.nombre}"${sel}>${t.nombre}${t.base?' ('+t.base+')':''}${esApoyo?' ⚡':''}</option>`; });
+                      if (tecsOtros.length) opts += '</optgroup>';
+                      if (f.tecnico && !todosLosTecs.find(t=>t.nombre===f.tecnico)) opts+=`<option value="${f.tecnico}" data-username="${f.tecnicoUsername||f.tecnico}" selected>${f.tecnico}</option>`;
+                      return opts;
+                    })()}
+                  </select>
+                </div>
               </div>
             </div>
             <div class="form-group" id="atenFechaWrap" style="${_isAtendidoEst(f.estatus, f.empresa)?'':'display:none'}">
-              <label>Fecha de Atención</label>
-              <div style="font-family:var(--mono);font-size:12px;color:var(--green);padding:8px;background:var(--green-bg);border-radius:var(--r);border:1px solid rgba(34,197,94,0.2)" id="atenFechaDisplay">
-                ${f.fechaAtencion ? UI.fmtDt(f.fechaAtencion) : 'Se registrará al guardar'}
+              <div style="font-size:11px;color:var(--green);padding:6px 10px;background:var(--green-bg);border-radius:6px;border:1px solid rgba(34,197,94,.2)" id="atenFechaDisplay">
+                ${f.fechaAtencion ? '✓ ' + UI.fmtDt(f.fechaAtencion) : 'Se registrará al guardar'}
               </div>
-            </div>
-            <div class="form-group">
-              <label>Técnico Asignado</label>
-              <div class="select-wrap">
-                <select id="atenTecnico">
-                  ${(() => {
-                    const emp = f.empresa || DATA.state.currentEmpresa;
-                    // Mostrar TODOS los técnicos de la empresa, sin filtrar por base
-                    // para que el admin pueda ver y seleccionar a técnicos de apoyo
-                    const todosLosTecs = DATA.getTecnicosPorBase(emp, '');
-                    let opts = '<option value="">— Sin asignar —</option>';
-
-                    // Técnicos de la misma base primero
-                    const tecsBase   = todosLosTecs.filter(t => t.base === f.base);
-                    const tecsOtros  = todosLosTecs.filter(t => t.base !== f.base);
-
-                    if (tecsBase.length) opts += `<optgroup label="Técnicos base ${f.base || 'del reporte'}">`;
-                    tecsBase.forEach(t => {
-                      const label = t.nombre + (t.base ? ` (${t.base})` : '');
-                      const sel = (f.tecnico === t.nombre) ? ' selected' : '';
-                      opts += `<option value="${t.nombre}" data-username="${t.username || t.nombre}"${sel}>${label}</option>`;
-                    });
-                    if (tecsBase.length) opts += '</optgroup>';
-
-                    if (tecsOtros.length) opts += `<optgroup label="Técnicos de otras bases">`;
-                    tecsOtros.forEach(t => {
-                      const label = t.nombre + (t.base ? ` (${t.base})` : '');
-                      // Marcar al técnico de apoyo si ya atendió
-                      const esApoyo = f.tecnicoApoyoNombre === t.nombre;
-                      const sel = (f.tecnico === t.nombre || esApoyo) ? ' selected' : '';
-                      const sufijo = esApoyo ? ' ⚡apoyo' : '';
-                      opts += `<option value="${t.nombre}" data-username="${t.username || t.nombre}"${sel}>${label}${sufijo}</option>`;
-                    });
-                    if (tecsOtros.length) opts += '</optgroup>';
-
-                    // Si el técnico actual no está en la lista, agregarlo
-                    if (f.tecnico && !todosLosTecs.find(t => t.nombre === f.tecnico)) {
-                      opts += `<option value="${f.tecnico}" data-username="${f.tecnicoUsername || f.tecnico}" selected>${f.tecnico}</option>`;
-                    }
-                    return opts;
-                  })()}
-                </select>
-              </div>
-              ${f.esApoyo && f.tecnicoApoyoNombre ? `
-              <div style="font-size:11px;color:#f59e0b;margin-top:4px;padding:4px 8px;background:rgba(245,158,11,0.08);border-radius:4px;border-left:2px solid #f59e0b">
-                ⚡ Atendido por apoyo: <strong>${f.tecnicoApoyoNombre}</strong> (base ${DATA.getTecnicosPorBase(f.empresa||'','').find(t=>t.nombre===f.tecnicoApoyoNombre)?.base || '—'})
-              </div>` : ''}
-              <div style="font-size:11px;color:var(--text3);margin-top:4px" id="atenTecnicoHint">Técnicos de la base ${f.base || '—'} (${f.empresa || ''})</div>
             </div>
             <div class="form-group">
               <label>Resultado / Notas</label>
-              <textarea id="atenResultado" placeholder="Describir acción tomada...">${f.resultado || ''}</textarea>
+              <textarea id="atenResultado" placeholder="Describir acción tomada..." style="min-height:70px">${f.resultado || ''}</textarea>
             </div>
-            <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
-              ${AUTH.can('manageUsers') ? `<button class="btn btn-danger btn-sm" onclick="MODS.eliminarAtencion('${f.id}')" title="Eliminar ticket">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+              ${AUTH.can('manageUsers') ? `<button class="btn btn-danger btn-sm" onclick="MODS.eliminarAtencion('${f.id}')">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
                 Eliminar
               </button>` : ''}
-              <button class="btn btn-primary" onclick="MODS.guardarAtencion()">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <button class="btn btn-primary btn-sm" onclick="MODS.guardarAtencion()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                 Guardar Cambios
               </button>
             </div>
           </div>
-          ` : '<p style="color:var(--text3);font-size:12.5px">Solo lectura — Sin permisos de edición</p>'}
+          ` : '<p style="color:var(--text3);font-size:12px;padding:4px 0">Solo lectura</p>'}
         </div>
+
+        <!-- DATOS DEL REPORTE -->
+        <div class="aten-det-section">
+          <div class="aten-det-section-title">DATOS DEL REPORTE</div>
+          <div class="aten-det-grid">
+            ${previewRow('Folio',      `<span style="font-family:var(--mono)">${f.folio}</span>`)}
+            ${previewRow('Empresa',    UI.empresaBadgeHTML(f.empresa))}
+            ${previewRow('Unidad',     f.unidad)}
+            ${previewRow('Base',       f.base||'—')}
+            ${previewRow('Servicio',   f.servicio||'—')}
+            ${previewRow('Tipo',       f.tipo||'—')}
+            ${previewRow('Proveedor',  f.proveedor?`<span style="color:var(--cyan)">${f.proveedor}</span>`:'—')}
+            ${previewRow('Categoría',  f.categoria||'—')}
+            ${previewRow('Componente', f.componente||'—')}
+            ${previewRow('Prioridad',  `<span style="color:${UI.prioColor(f.prioridad)};font-weight:700">${f.prioridad||'—'}</span>`)}
+            ${previewRow('Descripción',f.descripcion||'—')}
+            ${previewRow('Técnico',    f.tecnico||'Sin asignar')}
+            ${previewRow('Fecha',      UI.fmtDt(f.fecha))}
+            ${previewRow('Registrado', UI.fmtDt(f.createdAt))}
+            ${f.fechaAtencion?previewRow('Atendido',`<span style="color:var(--green)">${UI.fmtDt(f.fechaAtencion)}</span>`):''}
+          </div>
+        </div>
+
+        <!-- HISTORIAL -->
+        ${f.historial && f.historial.length ? `
+        <div class="aten-det-section">
+          <div class="aten-det-section-title">HISTORIAL</div>
+          <div class="audit-timeline" style="max-height:220px;overflow-y:auto;padding:0 4px">
+            ${[...f.historial].reverse().map(h => `
+            <div class="audit-item" style="padding:6px 0">
+              <div class="audit-dot" style="background:var(--accent)"></div>
+              <div class="audit-body">
+                <div class="audit-tipo" style="color:var(--accent);font-size:10px;text-transform:uppercase">${h.accion}</div>
+                <div class="audit-det" style="font-size:11px">${h.detalle}</div>
+                <div class="audit-meta"><span>${h.usuario}</span><span>·</span><span>${UI.fmtDt(h.fecha)}</span></div>
+              </div>
+            </div>`).join('')}
+          </div>
+        </div>` : ''}
+
       </div>
     </div>`;
-
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   async function eliminarAtencion(id) {
@@ -588,6 +628,59 @@ const MODS = (() => {
     UI.toast(`Ticket ${f.folio} eliminado`);
     UI.updateHeaderCounts();
     await APP.showModule('atencion');
+  }
+
+  // Filtrar listas de atención en tiempo real
+  function filtrarAten() {
+    const q    = (document.getElementById('atenFiltroQ')?.value||'').toLowerCase().trim();
+    const emp  = document.getElementById('atenFiltroEmp')?.value||'';
+    const base = document.getElementById('atenFiltroBase')?.value||'';
+    const tec  = document.getElementById('atenFiltroTec')?.value||'';
+    const desde= document.getElementById('atenFiltroDesde')?.value||'';
+    const hasta= document.getElementById('atenFiltroHasta')?.value||'';
+    const canEdit = AUTH.can('changeStatus')||AUTH.can('editReports');
+
+    const fallas = DATA.getFilteredFallas();
+    const ESTATUS_EXCLUIR_PEND = /atendid|vandaliz|venta|sin sim|sin operac|renta|en operaci/i;
+
+    function pasaFiltros(f) {
+      if (emp  && f.empresa !== emp) return false;
+      if (base && f.base    !== base) return false;
+      if (tec  && f.tecnico !== tec) return false;
+      if (q && !(
+        (f.unidad||'').toLowerCase().includes(q) ||
+        (f.folio||'').toLowerCase().includes(q)  ||
+        (f.tecnico||'').toLowerCase().includes(q)||
+        (f.base||'').toLowerCase().includes(q)
+      )) return false;
+      if (desde || hasta) {
+        const d = f.fecha ? new Date(f.fecha) : null;
+        if (d) {
+          if (desde && d < new Date(desde)) return false;
+          if (hasta && d > new Date(hasta+'T23:59:59')) return false;
+        }
+      }
+      return true;
+    }
+
+    const pend = fallas.filter(f => {
+      if (!f.estatus||_isAtendidoEst(f.estatus,f.empresa)||ESTATUS_EXCLUIR_PEND.test(f.estatus)) return false;
+      return pasaFiltros(f);
+    });
+    const aten = fallas.filter(f => _isAtendidoEst(f.estatus,f.empresa) && pasaFiltros(f));
+
+    const lp = document.getElementById('listaAtenPend');
+    const la = document.getElementById('listaAtenOk');
+    const bp = document.getElementById('atenBadgePend');
+    const ba = document.getElementById('atenBadgeOk');
+    if (lp) lp.innerHTML = pend.length===0
+      ? '<div class="empty-state"><span class="empty-icon">✓</span><p class="empty-msg">Sin resultados</p></div>'
+      : pend.map(f=>atenCard(f,canEdit)).join('');
+    if (la) la.innerHTML = aten.length===0
+      ? '<div class="empty-state"><span class="empty-icon">📋</span><p class="empty-msg">Sin resultados</p></div>'
+      : aten.slice(0,60).map(f=>atenCard(f,canEdit)).join('');
+    if (bp) bp.textContent = pend.length;
+    if (ba) ba.textContent = aten.length;
   }
 
   function onAtenEstatusChange() {
@@ -2800,7 +2893,7 @@ const MODS = (() => {
     setTechMode, setTechBase,
     initDashboard, renderDashTable, renderAtendidosTable, setAtendPeriodo, exportAtendidosCSV, clearAtendFilters,
     clearFilters, exportCSV,
-    selAtencion, selAtencionFromDash, eliminarDesideDash, guardarAtencion, onAtenEstatusChange, eliminarAtencion,
+    selAtencion, selAtencionFromDash, eliminarDesideDash, guardarAtencion, onAtenEstatusChange, eliminarAtencion, filtrarAten,
     updateFolioPreview, selChip, selPrio, onCategoriaChange, limpiarRegistro, guardarRegistro,
     onBaseChangeRegistro, onTecnicoSelChange, getRegistroTecnicoValue,
     toggleConfigGrid, toggleConfigSec,
