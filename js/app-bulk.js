@@ -30,12 +30,47 @@ const BULK = (() => {
   function getPendingCount()  { return state.unidades.filter(u=>u.status==='pending'&&!u.sinDvr).length; }
   function getDoneCount()     { return state.unidades.filter(u=>u.status==='done').length; }
 
+  // Cliente Supabase para consultas de flota desde BULK
+  function _getBulkSbClient() {
+    if (window._flotaSbClient) return window._flotaSbClient;
+    const cfg = window.CCTV_SUPABASE_CONFIG;
+    if (!cfg || !window.supabase) return null;
+    window._flotaSbClient = window.supabase.createClient(cfg.url, cfg.anonKey);
+    return window._flotaSbClient;
+  }
+
+  // Obtiene datos de flota para UNA unidad - primero cache, luego Supabase
   function _getFlotaData(numEco) {
     try {
       const cache = window._flotaConcentradoCache||[];
       const emp   = DATA.state.currentEmpresa;
       return cache.find(r=>String(r.num_economico).trim()===String(numEco).trim()&&r.empresa_id===emp)||null;
     } catch(e){ return null; }
+  }
+
+  // Pre-fetch async de datos de flota para TODAS las unidades de la lista
+  async function _prefetchFlotaData(numeros) {
+    try {
+      const emp = DATA.state.currentEmpresa;
+      const sb  = _getBulkSbClient();
+      if (!sb) return {};
+      const { data, error } = await sb
+        .from('flota_asignacion')
+        .select('num_economico,cromatica,servicio,base,pisos,empresa_id')
+        .eq('empresa_id', emp)
+        .in('num_economico', numeros);
+      if (error || !data) return {};
+      const map = {};
+      data.forEach(r => { map[String(r.num_economico).trim()] = r; });
+      // Actualizar caché global también
+      const existing = window._flotaConcentradoCache || [];
+      data.forEach(r => {
+        const idx = existing.findIndex(e => e.num_economico === r.num_economico && e.empresa_id === r.empresa_id);
+        if (idx === -1) existing.push(r); else existing[idx] = r;
+      });
+      window._flotaConcentradoCache = existing;
+      return map;
+    } catch(e) { console.warn('[BULK prefetch]', e); return {}; }
   }
 
   // ─── PANTALLA 1: Ingreso de lista ────────────
@@ -359,14 +394,28 @@ const BULK = (() => {
               <!-- TIPO DE SERVICIO (auto desde cromática) -->
               <div class="form-group">
                 <label class="required">Tipo de Servicio</label>
-                ${autoCromatica
-                  ?`<div style="background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.2);border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;color:var(--accent)">${autoServicio||autoCromatica}</div>
-                    <input type="hidden" id="bulkServicio" value="${autoServicio||autoCromatica}">
-                    <div style="font-size:10px;color:var(--text3);margin-top:3px">🎨 Detectado por cromática: ${autoCromatica}</div>`
-                  :`<div class="select-wrap"><select id="bulkServicio">
-                      <option value="">— Seleccionar —</option>
-                      ${selSvc.map(s=>`<option>${s}</option>`).join('')}
-                    </select></div>`}
+                ${(()=>{
+                    if (fd && autoServicio) {
+                      // Datos completos de flota: mostrar servicio como badge fijo
+                      return `<div style="background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.2);border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;color:var(--accent)">${autoServicio}</div>
+                        <input type="hidden" id="bulkServicio" value="${autoServicio}">
+                        <div style="font-size:10px;color:var(--text3);margin-top:3px">🎨 Cromática: ${autoCromatica} · Detectado de asignación</div>`;
+                    } else if (fd && autoCromatica) {
+                      // Hay flota pero sin servicio: mostrar cromática como info y dejar select editable
+                      return `<div class="select-wrap"><select id="bulkServicio">
+                        <option value="">— Seleccionar —</option>
+                        ${selSvc.map(s=>`<option>${s}</option>`).join('')}
+                      </select></div>
+                      <div style="font-size:10px;color:var(--accent);margin-top:3px">🎨 Cromática en asignación: ${autoCromatica}</div>`;
+                    } else {
+                      // Sin datos de flota: select libre
+                      return `<div class="select-wrap"><select id="bulkServicio">
+                        <option value="">— Seleccionar —</option>
+                        ${selSvc.map(s=>`<option>${s}</option>`).join('')}
+                      </select></div>
+                      <div style="font-size:10px;color:var(--text3);margin-top:3px">⚠ Unidad no encontrada en asignación ${emp}</div>`;
+                    }
+                  })()}
               </div>
               <!-- PROVEEDOR (vista desde pantalla 1) -->
               <div class="form-group">
@@ -599,7 +648,7 @@ const BULK = (() => {
     }else if(pendWrap){pendWrap.style.display='none';}
   }
 
-  function procesarLista() {
+  async function procesarLista() {
     const raw=document.getElementById('bulkInput')?.value||'', units=parseUnidades(raw);
     if(units.length===0){UI.toast('Ingresa al menos una unidad','err');return;}
     const base=document.getElementById('bulkDondeReporta')?.value||'';
@@ -609,10 +658,18 @@ const BULK = (() => {
     state.proveedorFuente  =document.getElementById('bulkProveedorFuente')?.value||'';
     state.procesarTs       =UI.nowISO();
     const fallas=DATA.state.fallas||[], emp=DATA.state.currentEmpresa;
+
+    // Deshabilitar botón mientras consulta
+    const btn=document.getElementById('bulkProcesarBtn');
+    if(btn){btn.disabled=true;btn.textContent='Buscando en asignación...';}
+
+    // Pre-fetch datos de flota para autocompletar cromática/servicio/base/pisos
+    const flotaMap = await _prefetchFlotaData(units);
+
     state.unidades=units.map(u=>({
       id:DATA.uid(), numero:u, status:'pending',
       reportePendiente:fallas.find(f=>f.empresa===emp&&f.unidad===u&&/pendiente/i.test(f.estatus||''))||null,
-      flotaData:_getFlotaData(u),
+      flotaData:flotaMap[u]||_getFlotaData(u)||null,
     }));
     state.currentIdx=0; state.chipState={piso:'',tipo:''}; state.prioSel='Media'; state.active=true;
     renderCurrentValidacion();
