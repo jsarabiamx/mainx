@@ -274,11 +274,12 @@ const FLOTA = (() => {
                 <th style="padding:10px 12px;text-align:left;color:var(--text3);font-weight:600">Servicio</th>
                 <th style="padding:10px 12px;text-align:left;color:var(--text3);font-weight:600">Estatus</th>
                 <th style="padding:10px 12px;text-align:left;color:var(--text3);font-weight:600">Pisos</th>
+                <th style="padding:10px 12px;text-align:left;color:var(--text3);font-weight:600">DVR</th>
                 <th style="padding:10px 12px;text-align:left;color:var(--text3);font-weight:600">Mes</th>
               </tr>
             </thead>
             <tbody id="flotaTbody">
-              <tr><td colspan="7" style="padding:32px;text-align:center;color:var(--text3)">
+              <tr><td colspan="8" style="padding:32px;text-align:center;color:var(--text3)">
                 <div style="display:inline-flex;align-items:center;gap:8px">
                   <div style="width:14px;height:14px;border:2px solid rgba(255,255,255,.1);border-top-color:#8b5cf6;border-radius:50%;animation:spin .7s linear infinite"></div>
                   Cargando datos...
@@ -662,7 +663,7 @@ const FLOTA = (() => {
     const pages  = Math.ceil(total / PAGE_SIZE);
 
     if (slice.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text3)">Sin resultados</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text3)">Sin resultados</td></tr>';
     } else {
       tbody.innerHTML = slice.map(r => `
         <tr style="border-bottom:1px solid rgba(255,255,255,.03);transition:background .1s" onmouseover="this.style.background='rgba(255,255,255,.02)'" onmouseout="this.style.background=''">
@@ -672,6 +673,7 @@ const FLOTA = (() => {
           <td style="padding:8px 12px;color:var(--text2)">${r.servicio || '—'}</td>
           <td style="padding:8px 12px">${estatusBadge(r.estatus_informe)}</td>
           <td style="padding:8px 12px">${_renderPisosCel(r)}</td>
+          <td style="padding:8px 12px">${_renderDvrCel(r)}</td>
           <td style="padding:8px 12px;font-family:var(--mono);font-size:11px;color:var(--text3)">${_fmtMes(r.mes_anio)}</td>
         </tr>
       `).join('');
@@ -729,6 +731,41 @@ const FLOTA = (() => {
       + '<option value="UNO">1 Piso</option>'
       + '<option value="DOS">2 Pisos</option>'
       + '</select>';
+  }
+
+  // ─── RENDER DVR CELL ─────────────────────────
+  function _renderDvrCel(r) {
+    const eid = r.id.replace(/'/g, '');
+    if (r.sin_dvr) {
+      return '<span style="background:rgba(107,114,128,.15);color:#9ca3af;border:1px solid rgba(107,114,128,.3);border-radius:4px;padding:2px 8px;font-size:10px;font-weight:600;white-space:nowrap">📵 Sin DVR</span>'
+           + ' <button onclick="FLOTA.toggleDvr('' + eid + '',false)" '
+           + 'style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--text3);padding:0 2px" title="Marcar con DVR">✅</button>';
+    }
+    return '<button onclick="FLOTA.toggleDvr('' + eid + '',true)" '
+      + 'style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.15);border-radius:4px;color:var(--green);font-size:10px;padding:2px 8px;cursor:pointer;font-family:inherit" title="Marcar sin DVR">'
+      + 'Con DVR</button>';
+  }
+
+  // Toggle DVR desde la tabla de concentrado
+  async function toggleDvr(id, sinDvr) {
+    try {
+      const { error } = await _getClient()
+        .from('flota_asignacion')
+        .update({ sin_dvr: sinDvr, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+      // Actualizar en memoria
+      [_allRows, _filteredRows].forEach(arr => {
+        const row = arr.find(r => r.id === id);
+        if (row) row.sin_dvr = sinDvr;
+      });
+      window._flotaConcentradoCache = _allRows;
+      renderTabla();
+      UI.toast(sinDvr ? '📵 Sin DVR registrado' : '✅ Con DVR');
+    } catch(err) {
+      console.error('[FLOTA dvr]', err);
+      UI.toast('Error al actualizar DVR', 'err');
+    }
   }
 
   function editarPisos(id) {
@@ -900,6 +937,8 @@ const FLOTA = (() => {
     init,
     cargarConcentrado,
     actualizarPisos,
+    editarPisos,
+    toggleDvr,
   };
 
 })();
