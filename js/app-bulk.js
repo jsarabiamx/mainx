@@ -30,16 +30,7 @@ const BULK = (() => {
   function getPendingCount()  { return state.unidades.filter(u=>u.status==='pending'&&!u.sinDvr).length; }
   function getDoneCount()     { return state.unidades.filter(u=>u.status==='done').length; }
 
-  // Cliente Supabase para consultas de flota desde BULK
-  function _getBulkSbClient() {
-    if (window._flotaSbClient) return window._flotaSbClient;
-    const cfg = window.CCTV_SUPABASE_CONFIG;
-    if (!cfg || !window.supabase) return null;
-    window._flotaSbClient = window.supabase.createClient(cfg.url, cfg.anonKey);
-    return window._flotaSbClient;
-  }
-
-  // Obtiene datos de flota para UNA unidad - primero cache, luego Supabase
+  // Obtiene datos de flota para UNA unidad - desde cache
   function _getFlotaData(numEco) {
     try {
       const cache = window._flotaConcentradoCache||[];
@@ -48,29 +39,73 @@ const BULK = (() => {
     } catch(e){ return null; }
   }
 
-  // Pre-fetch async de datos de flota para TODAS las unidades de la lista
+  // Pre-fetch via REST API directo (no depende de window.supabase ni clientes previos)
   async function _prefetchFlotaData(numeros) {
     try {
       const emp = DATA.state.currentEmpresa;
-      const sb  = _getBulkSbClient();
-      if (!sb) return {};
-      const { data, error } = await sb
-        .from('flota_asignacion')
-        .select('num_economico,cromatica,servicio,base,pisos,empresa_id')
-        .eq('empresa_id', emp)
-        .in('num_economico', numeros);
-      if (error || !data) return {};
+      const cfg = window.CCTV_SUPABASE_CONFIG;
+      if (!cfg) { console.warn('[BULK prefetch] Sin config Supabase'); return {}; }
+
+      // Construir query REST directa — más confiable que el cliente JS
+      const numList = numeros.map(n => `"${String(n).trim()}"`).join(',');
+      const url = cfg.restUrl + '/flota_asignacion'
+        + '?select=num_economico,cromatica,servicio,base,pisos,empresa_id,mes_anio'
+        + '&empresa_id=eq.' + encodeURIComponent(emp)
+        + '&num_economico=in.(' + numList + ')'
+        + '&order=mes_anio.desc';  // traer el mes más reciente primero
+
+      // Obtener token de sesión activa del usuario si existe
+      let authToken = cfg.anonKey;
+      try {
+        const sb = window._flotaSbClient || (window.supabase && window.supabase.createClient(cfg.url, cfg.anonKey));
+        if (sb) {
+          const { data: { session } } = await sb.auth.getSession();
+          if (session?.access_token) authToken = session.access_token;
+        }
+      } catch(e) { /* usar anon key */ }
+
+      console.log('[BULK prefetch] Consultando empresa:', emp, '| unidades:', numeros.join(','));
+
+      const resp = await fetch(url, {
+        headers: {
+          'apikey':        cfg.anonKey,
+          'Authorization': 'Bearer ' + authToken,
+          'Content-Type':  'application/json',
+          'Accept':        'application/json',
+        }
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.warn('[BULK prefetch] HTTP', resp.status, errText);
+        return {};
+      }
+
+      const data = await resp.json();
+      console.log('[BULK prefetch] Respuesta:', data);
+      if (!Array.isArray(data)) return {};
+
       const map = {};
-      data.forEach(r => { map[String(r.num_economico).trim()] = r; });
-      // Actualizar caché global también
+      // Solo guardar el primero encontrado por unidad (ya viene ordenado mes desc = más reciente)
+      data.forEach(r => {
+        const key = String(r.num_economico).trim();
+        if (!map[key]) map[key] = r;
+      });
+
+      // Actualizar caché global
       const existing = window._flotaConcentradoCache || [];
       data.forEach(r => {
-        const idx = existing.findIndex(e => e.num_economico === r.num_economico && e.empresa_id === r.empresa_id);
+        const idx = existing.findIndex(e => String(e.num_economico) === String(r.num_economico) && e.empresa_id === r.empresa_id);
         if (idx === -1) existing.push(r); else existing[idx] = r;
       });
       window._flotaConcentradoCache = existing;
+
+      console.log('[BULK prefetch]', emp, '→', data.length, 'unidades encontradas en asignación');
       return map;
-    } catch(e) { console.warn('[BULK prefetch]', e); return {}; }
+    } catch(e) {
+      console.warn('[BULK prefetch] Error:', e);
+      return {};
+    }
   }
 
   // ─── PANTALLA 1: Ingreso de lista ────────────
