@@ -307,6 +307,7 @@ const APP = (() => {
 
     const perms = {
       registro:  AUTH.can('addReports'),
+      bulk:      AUTH.can('addReports'),
       atencion:  true,
       dashboard: AUTH.can('viewDashboard'),
       atendidos: AUTH.can('viewDashboard'),
@@ -361,6 +362,24 @@ const APP = (() => {
         } catch(e) {
           console.error('[APP] Error al renderizar Carga Asignación:', e);
           main.innerHTML = '<div class="module active"><div class="mod-header"><h2 class="mod-title">Carga Asignación</h2></div><div style="padding:40px;text-align:center;color:var(--red)">Error al cargar el módulo. Recarga la página.</div></div>';
+        }
+        break;
+      case 'bulk':
+        if (typeof BULK !== 'undefined') {
+          if (BULK.state.active && BULK.state.unidades.length > 0) {
+            // Estaba en validación — restaurar
+            BULK.renderCurrentValidacion();
+          } else {
+            // Pantalla 1 — renderizar con state previo
+            main.innerHTML = BULK.renderCargaMasiva(session);
+            // Restaurar textarea y trigger técnicos si había base seleccionada
+            requestAnimationFrame(() => {
+              const ta = document.getElementById('bulkInput');
+              if (ta && BULK.state._lastInput) ta.value = BULK.state._lastInput;
+              if (BULK.state.dondeReporta) BULK.onDondeReportaChange();
+              if (BULK.state._lastInput) BULK.onInputChange();
+            });
+          }
         }
         break;
     }
