@@ -223,15 +223,29 @@ const APP = (() => {
     if (reporteId) irAReporte(reporteId);
   }
 
-  function irAReporte(reporteId) {
+  async function irAReporte(reporteId) {
     const drop = document.getElementById('adminNotifDropdown');
     if (drop) drop.style.display = 'none';
-    showModule('atencion');
+
+    // Si el reporte pertenece a otra empresa, cambiar primero
+    const falla = DATA.state.fallas.find(f => f.id === reporteId);
+    if (falla && falla.empresa && falla.empresa !== DATA.state.currentEmpresa) {
+      await changeEmpresa(falla.empresa);
+    } else {
+      await showModule('atencion');
+    }
+
+    // Esperar render completo antes de seleccionar
     setTimeout(() => {
       if (typeof MODS !== 'undefined' && MODS.selAtencion) {
         MODS.selAtencion(reporteId);
+        // Scroll la card activa a la vista en la lista
+        setTimeout(() => {
+          const card = document.querySelector(`.aten-card2[data-id="${reporteId}"]`);
+          if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 80);
       }
-    }, 100);
+    }, 200);
   }
 
   async function validarDesdeNotif(reporteId) {
