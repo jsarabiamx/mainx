@@ -291,8 +291,14 @@ const BULK = (() => {
       tecSel.innerHTML = opts;
       const otroInp = document.getElementById('bulkTecnicoReportaOtro');
       if (otroInp) otroInp.style.display='none';
+      // Si solo hay un técnico disponible, seleccionarlo automáticamente
+      if (tecnicos.length === 1) {
+        tecSel.value = tecnicos[0].nombre;
+        state.tecnicoQueReporta = tecnicos[0].nombre;
+      }
     }
-    _actualizarResumenTag();
+    // requestAnimationFrame garantiza que el DOM del select ya fue actualizado
+    requestAnimationFrame(() => _actualizarResumenTag());
   }
 
   function onTecnicoReportaChange() {
@@ -690,6 +696,7 @@ const BULK = (() => {
 
   function onInputChange() {
     const raw=document.getElementById('bulkInput')?.value||'', units=parseUnidades(raw), count=units.length;
+    state._lastInput = raw; // preservar para restauración
     const rawParts=raw.replace(/,/g,' ').replace(/[\r\n\t]+/g,' ').replace(/\s+/g,' ').trim().split(' ').map(s=>s.trim()).filter(s=>s.length>0);
     const dups=rawParts.length-count;
     const fallas=DATA.state.fallas||[], emp=DATA.state.currentEmpresa;
@@ -987,7 +994,7 @@ const BULK = (() => {
     UI.updateHeaderCounts();
   }
 
-  function volverALista(){state.active=false;APP.showModule('registro');}
+  function volverALista(){state.active=false;APP.showModule('bulk');}
 
   return {
     renderCargaMasiva, onInputChange, procesarLista, selChip, selPrio, selEstado,
