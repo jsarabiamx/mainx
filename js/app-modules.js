@@ -489,6 +489,13 @@ const MODS = (() => {
     const estatusList = DATA.getSel('estatus', f.empresa);
     const panel       = document.getElementById('atenDetailPanel');
 
+    // Toggle: si ya está abierto el mismo reporte, cerrar
+    const panelActivo = panel.querySelector('.aten-detail-inner');
+    if (panelActivo && panelActivo.dataset.reporteId === id) {
+      MODS.cerrarDetalleAten();
+      return;
+    }
+
     // Highlight active card
     document.querySelectorAll('.aten-card2').forEach(c => c.classList.toggle('aten-card2-active', c.dataset.id === id));
 
@@ -501,7 +508,7 @@ const MODS = (() => {
           ${UI.empresaBadgeHTML(f.empresa)}
           <span class="badge ${UI.badgeClass(f.estatus)}" style="font-size:9px">${f.estatus}</span>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('atenDetailPanel').innerHTML='<div class=\'aten-detail-empty\'><p style=\'color:var(--text3);font-size:12px;padding:40px;text-align:center\'>Selecciona un reporte</p></div>';document.querySelectorAll(\'.aten-card2\').forEach(c=>c.classList.remove(\'aten-card2-active\'))">✕</button>
+        <button class="btn btn-ghost btn-sm" onclick="MODS.cerrarDetalleAten()" style="flex-shrink:0">✕</button>
       </div>
 
       <div class="aten-detail-body">
@@ -628,6 +635,20 @@ const MODS = (() => {
     UI.toast(`Ticket ${f.folio} eliminado`);
     UI.updateHeaderCounts();
     await APP.showModule('atencion');
+  }
+
+  // Cerrar panel de detalle y limpiar estado activo
+  function cerrarDetalleAten() {
+    currentAtencion = null;
+    window._currentAtencion = null;
+    const panel = document.getElementById('atenDetailPanel');
+    if (panel) {
+      panel.innerHTML = `<div class="aten-detail-empty">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text3)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <p style="color:var(--text3);font-size:12px;margin-top:8px">Selecciona un reporte</p>
+      </div>`;
+    }
+    document.querySelectorAll('.aten-card2').forEach(c => c.classList.remove('aten-card2-active'));
   }
 
   // Filtrar listas de atención en tiempo real
@@ -2893,7 +2914,7 @@ const MODS = (() => {
     setTechMode, setTechBase,
     initDashboard, renderDashTable, renderAtendidosTable, setAtendPeriodo, exportAtendidosCSV, clearAtendFilters,
     clearFilters, exportCSV,
-    selAtencion, selAtencionFromDash, eliminarDesideDash, guardarAtencion, onAtenEstatusChange, eliminarAtencion, filtrarAten,
+    selAtencion, selAtencionFromDash, eliminarDesideDash, guardarAtencion, onAtenEstatusChange, eliminarAtencion, filtrarAten, cerrarDetalleAten,
     updateFolioPreview, selChip, selPrio, onCategoriaChange, limpiarRegistro, guardarRegistro,
     onBaseChangeRegistro, onTecnicoSelChange, getRegistroTecnicoValue,
     toggleConfigGrid, toggleConfigSec,
