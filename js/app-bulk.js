@@ -1,55 +1,51 @@
 /* ═══════════════════════════════════════════════
-   CCTV Fleet Control — Bulk Registration Module v1.0
-   Carga masiva de unidades con flujo secuencial
+   CCTV Fleet Control — Bulk Registration Module v2.0
+   Cambios PDF: Donde reporta, técnico que reporta,
+   autocomplete desde flota ETN, SIN DVR, validación
+   duplicados, tipo auto, pisos desde asignación.
 ═══════════════════════════════════════════════ */
 
 const BULK = (() => {
 
-  // ─── Estado del módulo ────────────────────────
   const state = {
-    unidades: [],       // [{id, numero, status: 'pending'|'done'}]
+    unidades: [],
     currentIdx: 0,
     chipState: { piso: '', tipo: '' },
     prioSel: 'Media',
     active: false,
+    dondeReporta: '',
+    tecnicoQueReporta: '',
+    proveedorFuente: '',
+    procesarTs: null,
   };
 
-  // ─── Utilidades ───────────────────────────────
   function parseUnidades(raw) {
-    // Normalizar: reemplazar comas, saltos de línea, tabulaciones y múltiples espacios
-    const normalized = raw
-      .replace(/,/g, ' ')
-      .replace(/[\r\n\t]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    const parts = normalized.split(' ').map(s => s.trim()).filter(s => s.length > 0);
-
-    // Deduplicar manteniendo orden
+    const normalized = raw.replace(/,/g,' ').replace(/[\r\n\t]+/g,' ').replace(/\s+/g,' ').trim();
+    const parts = normalized.split(' ').map(s=>s.trim()).filter(s=>s.length>0);
     const seen = new Set();
-    return parts.filter(u => {
-      if (seen.has(u)) return false;
-      seen.add(u);
-      return true;
-    });
+    return parts.filter(u=>{ if(seen.has(u))return false; seen.add(u); return true; });
   }
 
-  function getCurrentUnidad() {
-    return state.unidades[state.currentIdx] || null;
-  }
+  function getCurrentUnidad() { return state.unidades[state.currentIdx]||null; }
+  function getPendingCount()  { return state.unidades.filter(u=>u.status==='pending'&&!u.sinDvr).length; }
+  function getDoneCount()     { return state.unidades.filter(u=>u.status==='done').length; }
 
-  function getPendingCount() {
-    return state.unidades.filter(u => u.status === 'pending').length;
-  }
-
-  function getDoneCount() {
-    return state.unidades.filter(u => u.status === 'done').length;
+  function _getFlotaData(numEco) {
+    try {
+      const cache = window._flotaConcentradoCache||[];
+      const emp   = DATA.state.currentEmpresa;
+      return cache.find(r=>String(r.num_economico).trim()===String(numEco).trim()&&r.empresa_id===emp)||null;
+    } catch(e){ return null; }
   }
 
   // ─── PANTALLA 1: Ingreso de lista ────────────
   function renderCargaMasiva(session) {
     const canEdit = AUTH.can('addReports');
     const emp     = DATA.state.currentEmpresa;
+    const selBase = DATA.getSel('base');
+    const drVal   = state.dondeReporta||'';
+    const tqrVal  = state.tecnicoQueReporta||'';
+    const pfVal   = state.proveedorFuente||'';
 
     return `
     <div id="mod-bulk" class="module active">
@@ -67,17 +63,59 @@ const BULK = (() => {
           </div>
         </div>
         <div class="mod-header-right">
-          <span style="font-family:var(--mono);font-size:11px;color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-glow);border-radius:6px;padding:3px 10px">
-            ${emp}
-          </span>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-glow);border-radius:6px;padding:3px 10px">${emp}</span>
         </div>
       </div>
 
-      ${!canEdit ? `<div class="card" style="background:rgba(245,158,11,0.06);border-color:rgba(245,158,11,0.2)">
-        <p style="color:var(--amber);font-size:12.5px">⚠ Solo lectura — No tienes permisos para crear registros</p>
-      </div>` : ''}
+      ${!canEdit?`<div class="card" style="background:rgba(245,158,11,0.06);border-color:rgba(245,158,11,0.2)"><p style="color:var(--amber);font-size:12.5px">⚠ Solo lectura</p></div>`:''}
 
       <div class="bulk-layout">
+
+        <!-- DATOS DEL TÉCNICO QUE REPORTA (PRIMERO) -->
+        <div class="bulk-step-card card">
+          <div class="bulk-step-header">
+            <div class="bulk-step-num" style="background:linear-gradient(135deg,#4f8ef7,#8b5cf6);color:#fff;font-size:14px">★</div>
+            <div>
+              <div class="bulk-step-title">Datos del Técnico que Reporta</div>
+              <div class="bulk-step-sub">Se aplicarán como datos base a todas las unidades de esta carga</div>
+            </div>
+          </div>
+          <div class="form-grid" style="margin-top:4px">
+            <div class="form-group">
+              <label for="bulkDondeReporta">Donde Reporta <span style="color:var(--red)">*</span></label>
+              <div class="select-wrap">
+                <select id="bulkDondeReporta" onchange="BULK.onDondeReportaChange()">
+                  <option value="">— Seleccionar —</option>
+                  ${selBase.map(b=>`<option value="${b}"${drVal===b?' selected':''}>${b}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="bulkTecnicoReporta">Técnico que Reporta</label>
+              <div class="select-wrap">
+                <select id="bulkTecnicoReporta" onchange="BULK.onTecnicoReportaChange()">
+                  <option value="">— Seleccionar base primero —</option>
+                </select>
+              </div>
+              <input type="text" id="bulkTecnicoReportaOtro" placeholder="Escribe el nombre del técnico"
+                style="display:none;margin-top:6px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text1);font-size:12px;padding:8px 12px;width:100%;font-family:inherit" value="${tqrVal}"/>
+            </div>
+            <div class="form-group">
+              <label for="bulkProveedorFuente">De Donde Surge la Falla</label>
+              <div class="select-wrap">
+                <select id="bulkProveedorFuente" onchange="BULK._actualizarResumenTag()">
+                  <option value="">— Seleccionar —</option>
+                  ${(DATA.getSel('proveedor')||[]).map(p=>`<option value="${p}"${pfVal===p?' selected':''}>${p}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+          </div>
+          <div id="bulkReporteResumen" style="display:${drVal?'flex':'none'};margin-top:10px;padding:8px 12px;background:rgba(79,142,247,.06);border:1px solid rgba(79,142,247,.15);border-radius:8px;gap:16px;font-size:11px;flex-wrap:wrap">
+            <span>📍 <strong>Reporta:</strong> <span id="bulkRRBase">${drVal||'—'}</span></span>
+            <span>👤 <strong>Técnico:</strong> <span id="bulkRRTecnico">${tqrVal||'—'}</span></span>
+            <span>🔧 <strong>Fuente:</strong> <span id="bulkRRFuente">${pfVal||'—'}</span></span>
+          </div>
+        </div>
 
         <!-- PASO 1: Lista -->
         <div class="bulk-step-card card">
@@ -88,19 +126,15 @@ const BULK = (() => {
               <div class="bulk-step-sub">Pega o escribe la lista de unidades (una por línea)</div>
             </div>
           </div>
-          <textarea
-            id="bulkInput"
-            class="bulk-textarea"
-            placeholder="Ejemplos de formatos aceptados:&#10;&#10;• Por línea:  55185&#10;                   20095&#10;                   20166&#10;&#10;• En línea:  55185 20095 20166&#10;&#10;• Con comas: 55185, 20095, 20166"
-            oninput="BULK.onInputChange()"
-            ${!canEdit ? 'disabled' : ''}
-          ></textarea>
+          <textarea id="bulkInput" class="bulk-textarea"
+            placeholder="Ejemplos:&#10;• Por línea: 55185&#10;                  20095&#10;• En línea: 55185 20095 20166&#10;• Con comas: 55185, 20095, 20166"
+            oninput="BULK.onInputChange()" ${!canEdit?'disabled':''}></textarea>
           <div class="bulk-input-footer">
             <span class="bulk-detected" id="bulkDetectedCount">0 unidades detectadas</span>
-            ${canEdit ? `<button class="btn btn-primary" id="bulkProcesarBtn" onclick="BULK.procesarLista()" disabled>
+            ${canEdit?`<button class="btn btn-primary" id="bulkProcesarBtn" onclick="BULK.procesarLista()" disabled>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 2 15 22 11 12 2 6 22 2"/></svg>
               Procesar Lista
-            </button>` : ''}
+            </button>`:''}
           </div>
         </div>
 
@@ -113,93 +147,117 @@ const BULK = (() => {
               <div class="bulk-step-sub">Verifica el resumen antes de continuar</div>
             </div>
           </div>
-
           <div class="bulk-summary-grid" id="bulkSummaryGrid">
-            <div class="bulk-summary-card">
-              <div class="bsc-icon" style="color:var(--accent)">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v11m0 0H5m4 0h10M9 14v5m0 0H5a2 2 0 01-2-2v-3m4 5h10a2 2 0 002-2v-3"/></svg>
-              </div>
-              <div class="bsc-val" id="bscTotal">0</div>
-              <div class="bsc-lbl">Total detectadas</div>
-            </div>
-            <div class="bulk-summary-card">
-              <div class="bsc-icon" style="color:var(--amber)">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg>
-              </div>
-              <div class="bsc-val" id="bscDups">0</div>
-              <div class="bsc-lbl">Duplicadas en la lista</div>
-            </div>
-            <div class="bulk-summary-card">
-              <div class="bsc-icon" style="color:var(--green)">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="20 6 9 17 4 12"/></svg>
-              </div>
-              <div class="bsc-val" id="bscExisting">0</div>
-              <div class="bsc-lbl">Ya registradas</div>
-            </div>
-            <div class="bulk-summary-card bsc-highlight">
-              <div class="bsc-icon" style="color:var(--accent)">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              </div>
-              <div class="bsc-val" id="bscNew">0</div>
-              <div class="bsc-lbl">Nuevas para validar</div>
-            </div>
+            <div class="bulk-summary-card"><div class="bsc-icon" style="color:var(--accent)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v11m0 0H5m4 0h10M9 14v5m0 0H5a2 2 0 01-2-2v-3m4 5h10a2 2 0 002-2v-3"/></svg></div><div class="bsc-val" id="bscTotal">0</div><div class="bsc-lbl">Total detectadas</div></div>
+            <div class="bulk-summary-card"><div class="bsc-icon" style="color:var(--amber)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg></div><div class="bsc-val" id="bscDups">0</div><div class="bsc-lbl">Duplicadas</div></div>
+            <div class="bulk-summary-card"><div class="bsc-icon" style="color:var(--red)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="bsc-val" id="bscExisting">0</div><div class="bsc-lbl">Con reporte pendiente</div></div>
+            <div class="bulk-summary-card bsc-highlight"><div class="bsc-icon" style="color:var(--accent)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div><div class="bsc-val" id="bscNew">0</div><div class="bsc-lbl">Nuevas para validar</div></div>
           </div>
-
           <div id="bulkSummaryInfo" style="display:none" class="bulk-info-box">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <span id="bulkSummaryInfoText">Se crearán registros temporales para su validación.</span>
+            <span id="bulkSummaryInfoText">Se crearán registros para su validación.</span>
           </div>
+          <div id="bulkPendientesWrap" style="display:none;margin-top:10px"></div>
         </div>
 
         <!-- INSTRUCCIONES -->
         <div class="card bulk-instructions">
-          <div class="bulk-instr-title">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            Instrucciones
-          </div>
+          <div class="bulk-instr-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Instrucciones</div>
           <ol class="bulk-instr-list">
-            <li>Pega la lista completa de unidades una por línea.</li>
+            <li>Selecciona <strong>Donde Reporta</strong> y el Técnico que reporta.</li>
+            <li>Pega la lista completa de unidades.</li>
             <li>Verifica el resumen de la lista.</li>
             <li>Haz clic en <strong>"Procesar Lista"</strong>.</li>
             <li>Continúa con la validación unidad por unidad.</li>
           </ol>
-          <div class="bulk-note">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-            <strong>Nota</strong>
-          </div>
+          <div class="bulk-note"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><strong>Nota</strong></div>
           <p class="bulk-note-text">Podrás revisar y capturar la información de cada unidad en el siguiente paso.</p>
         </div>
       </div>
     </div>`;
   }
 
-  // ─── PANTALLA 2: Validación secuencial ───────
+  // ─── Handlers pantalla 1 ──────────────────────
+  function onDondeReportaChange() {
+    const base = document.getElementById('bulkDondeReporta')?.value||'';
+    state.dondeReporta = base;
+    const emp     = DATA.state.currentEmpresa;
+    const tecSel  = document.getElementById('bulkTecnicoReporta');
+    if (tecSel) {
+      const tecnicos = DATA.getTecnicosPorBase(emp, base);
+      let opts = '<option value="">— Seleccionar técnico —</option>';
+      opts += tecnicos.map(t=>`<option value="${t.nombre}">${t.nombre}${t.base?' ('+t.base+')':''}</option>`).join('');
+      opts += '<option value="__otro__">Otro (escribir manualmente)</option>';
+      tecSel.innerHTML = opts;
+      const otroInp = document.getElementById('bulkTecnicoReportaOtro');
+      if (otroInp) otroInp.style.display='none';
+    }
+    _actualizarResumenTag();
+  }
+
+  function onTecnicoReportaChange() {
+    const sel = document.getElementById('bulkTecnicoReporta');
+    const inp = document.getElementById('bulkTecnicoReportaOtro');
+    if (!sel) return;
+    if (sel.value==='__otro__') {
+      if (inp) inp.style.display='';
+      state.tecnicoQueReporta = inp?.value||'';
+    } else {
+      if (inp) inp.style.display='none';
+      state.tecnicoQueReporta = sel.value;
+    }
+    _actualizarResumenTag();
+  }
+
+  function _actualizarResumenTag() {
+    const wrap = document.getElementById('bulkReporteResumen');
+    const base = document.getElementById('bulkDondeReporta')?.value||'';
+    const tec  = _getTecnicoReportaValue();
+    const prov = document.getElementById('bulkProveedorFuente')?.value||'';
+    state.dondeReporta      = base;
+    state.tecnicoQueReporta = tec;
+    state.proveedorFuente   = prov;
+    if (wrap) {
+      wrap.style.display = base?'flex':'none';
+      const rb=document.getElementById('bulkRRBase'), rt=document.getElementById('bulkRRTecnico'), rf=document.getElementById('bulkRRFuente');
+      if (rb) rb.textContent=base||'—';
+      if (rt) rt.textContent=tec||'—';
+      if (rf) rf.textContent=prov||'—';
+    }
+  }
+
+  function _getTecnicoReportaValue() {
+    const sel = document.getElementById('bulkTecnicoReporta');
+    const inp = document.getElementById('bulkTecnicoReportaOtro');
+    if (!sel) return state.tecnicoQueReporta||'';
+    if (sel.value==='__otro__') return inp?inp.value.trim():'';
+    return sel.value||'';
+  }
+
+  // ─── PANTALLA 2: Validación ───────────────────
   function renderValidacion() {
-    const session   = AUTH.checkSession();
     const emp       = DATA.state.currentEmpresa;
     const total     = state.unidades.length;
     const doneCount = getDoneCount();
     const pendCount = getPendingCount();
     const current   = getCurrentUnidad();
+    if (!current) return renderValidacionCompleta();
 
-    if (!current) {
-      return renderValidacionCompleta();
-    }
+    const sel    = DATA.getSel('base');
+    const selCat = DATA.getSel('categoria');
 
-    const displayIdx = state.currentIdx + 1;
+    const fd = current.flotaData || _getFlotaData(current.numero);
+    if (fd && !current.flotaData) current.flotaData = fd;
 
-    // Find next pending index for display
-    const sel = DATA.getSel('base');
-    const selSvc = DATA.getSel('servicio');
-    const selProv = DATA.getSel('proveedor');
-    const selPiso = DATA.getSel('piso') || [];
-    const selTipo = DATA.getSel('tipo');
-    const selCat  = DATA.getSel('categoria');
+    const autoBase      = state.dondeReporta || fd?.base || '';
+    const autoCromatica = fd?.cromatica||'';
+    const autoServicio  = fd?.servicio||'';
+    const autoPisos     = fd?.pisos||'';
+    const selSvc        = DATA.getSel('servicio', emp);
+    const tienePendiente = current.reportePendiente;
 
     return `
     <div id="mod-validacion" class="module active">
-
-      <!-- HEADER VALIDACION -->
       <div class="mod-header">
         <div class="mod-title-wrap">
           <div style="display:flex;align-items:center;gap:10px">
@@ -216,226 +274,195 @@ const BULK = (() => {
       </div>
 
       <div class="validacion-layout">
-
-        <!-- SIDEBAR: Lista de unidades -->
+        <!-- SIDEBAR -->
         <div class="validacion-sidebar card">
           <div class="vsb-header">
             <span class="vsb-title">Lista de Unidades (${total})</span>
-            <button class="btn btn-ghost btn-sm vsb-refresh" onclick="BULK.refreshList()" title="Refrescar lista">
+            <button class="btn btn-ghost btn-sm vsb-refresh" onclick="BULK.refreshList()" title="Refrescar">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 101.14-4.52"/></svg>
               Refrescar Lista
             </button>
           </div>
           <div class="vsb-list" id="validacionSidebarList">
-            ${state.unidades.map((u, i) => {
-              const isDone     = u.status === 'done';
-              const isBarrido  = u.status === 'barrido';
-              const isFinished = isDone || isBarrido;
-              const badgeClass = isBarrido ? 'vsb-badge-barrido' : isDone ? 'vsb-badge-done' : 'vsb-badge-pending';
-              const badgeTxt   = isBarrido ? '📡 Barrido' : isDone ? '✓ Listo' : '• Pendiente';
-              const itemClass  = [
-                'vsb-item',
-                i === state.currentIdx ? 'vsb-item-active' : '',
-                isBarrido ? 'vsb-item-barrido' : isDone ? 'vsb-item-done' : ''
-              ].filter(Boolean).join(' ');
+            ${state.unidades.map((u,i)=>{
+              const isDone=u.status==='done', isBarrido=u.status==='barrido', isSinDvr=u.sinDvr;
+              const badgeClass=isSinDvr?'vsb-badge-barrido':isBarrido?'vsb-badge-barrido':isDone?'vsb-badge-done':'vsb-badge-pending';
+              const badgeTxt=isSinDvr?'📵 Sin DVR':isBarrido?'📡 Barrido':isDone?'✓ Listo':u.reportePendiente?'⚠ Existente':'• Pendiente';
+              const itemClass=['vsb-item',i===state.currentIdx?'vsb-item-active':'',isBarrido?'vsb-item-barrido':isDone?'vsb-item-done':''].filter(Boolean).join(' ');
               return `<div class="${itemClass}" onclick="BULK.goToUnit(${i})" id="vsb-item-${i}">
-                <span class="vsb-item-num">${i + 1}</span>
+                <span class="vsb-item-num">${i+1}</span>
                 <span class="vsb-item-unidad">${u.numero}</span>
                 <span class="vsb-item-badge ${badgeClass}">${badgeTxt}</span>
               </div>`;
             }).join('')}
           </div>
+          <div style="margin-top:10px;padding:8px 10px;background:rgba(79,142,247,.06);border:1px solid rgba(79,142,247,.15);border-radius:8px;font-size:10px;color:var(--text2)">
+            <div style="font-weight:700;color:#4f8ef7;margin-bottom:4px">📋 Técnico que Reporta</div>
+            <div>📍 ${state.dondeReporta||'—'}</div>
+            <div>👤 ${state.tecnicoQueReporta||'—'}</div>
+            ${state.proveedorFuente?`<div>🔧 ${state.proveedorFuente}</div>`:''}
+          </div>
         </div>
 
-        <!-- MAIN: Formulario de captura -->
+        <!-- MAIN -->
         <div class="validacion-main">
-
-          <!-- Unidad actual banner -->
+          <!-- Banner -->
           <div class="validacion-unit-banner card">
             <div class="vub-left">
               <div class="vub-label">Unidad actual</div>
               <div class="vub-unidad">${current.numero}</div>
+              ${autoCromatica?`<div style="font-size:10px;color:var(--accent);margin-top:2px">🎨 ${autoCromatica}${autoServicio?' · '+autoServicio:''}</div>`:''}
             </div>
             <div class="vub-nav">
-              <button class="btn btn-ghost btn-sm vub-nav-btn" onclick="BULK.prevUnit()" ${state.currentIdx === 0 ? 'disabled' : ''}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-              </button>
-              <span class="vub-progress">${displayIdx} / ${total}</span>
-              <button class="btn btn-ghost btn-sm vub-nav-btn" onclick="BULK.nextUnit()" ${state.currentIdx >= total - 1 ? 'disabled' : ''}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-              </button>
+              <button class="btn btn-ghost btn-sm vub-nav-btn" onclick="BULK.prevUnit()" ${state.currentIdx===0?'disabled':''}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>
+              <span class="vub-progress">${state.currentIdx+1} / ${total}</span>
+              <button class="btn btn-ghost btn-sm vub-nav-btn" onclick="BULK.nextUnit()" ${state.currentIdx>=total-1?'disabled':''}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></button>
             </div>
             <div class="vub-counters">
-              <div class="vub-counter vub-total">
-                <div class="vub-cval">${total}</div>
-                <div class="vub-clbl">Total unidades</div>
-              </div>
-              <div class="vub-counter vub-captured">
-                <div class="vub-cval">${doneCount}</div>
-                <div class="vub-clbl">Capturadas</div>
-              </div>
+              <div class="vub-counter vub-total"><div class="vub-cval">${total}</div><div class="vub-clbl">Total unidades</div></div>
+              <div class="vub-counter vub-captured"><div class="vub-cval">${doneCount}</div><div class="vub-clbl">Capturadas</div></div>
               <div class="vub-counter vub-pending" style="display:flex;align-items:center;gap:8px">
-                <div>
-                  <div class="vub-cval" style="color:var(--red)">${pendCount}</div>
-                  <div class="vub-clbl">Pendientes</div>
-                </div>
-                ${pendCount === 0 ? '' : `<button class="btn btn-primary btn-sm" onclick="BULK.enviarAlSistema()" style="white-space:nowrap">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                  Enviar al Sistema
-                </button>`}
+                <div><div class="vub-cval" style="color:var(--red)">${pendCount}</div><div class="vub-clbl">Pendientes</div></div>
+                ${pendCount===0?'':`<button class="btn btn-primary btn-sm" onclick="BULK.enviarAlSistema()" style="white-space:nowrap"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Enviar al Sistema</button>`}
               </div>
             </div>
           </div>
 
+          <!-- Aviso reporte pendiente -->
+          ${tienePendiente?`
+          <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:12px 16px;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px">
+            <span style="font-size:18px">⚠️</span>
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:700;color:#f59e0b;margin-bottom:4px">Esta unidad ya tiene un reporte pendiente</div>
+              <div style="font-size:11px;color:var(--text2)">Folio: <strong>${tienePendiente.folio||'—'}</strong> · Base: ${tienePendiente.base||'—'} · ${tienePendiente.servicio||''}</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">${tienePendiente.descripcion||''}</div>
+              <div style="display:flex;gap:8px;margin-top:8px">
+                <button class="btn btn-ghost btn-sm" onclick="BULK.editarReportePendiente()">✏️ Editar reporte existente</button>
+                <button class="btn btn-ghost btn-sm" onclick="BULK.ignorarPendienteYContinuar()">Crear nuevo de todas formas →</button>
+              </div>
+            </div>
+          </div>`:''}
+
           <!-- FORMULARIO -->
           <div class="card">
             <div class="form-grid">
-
-              <!-- BASE OPERATIVA -->
+              <!-- DONDE REPORTA -->
               <div class="form-group">
-                <label class="required" for="bulkBase">Base Operativa</label>
+                <label class="required" for="bulkBase">Donde Reporta</label>
                 <div class="select-wrap">
                   <select id="bulkBase" onchange="BULK.onBaseChange()">
                     <option value="">— Seleccionar —</option>
-                    ${sel.map(b => `<option>${b}</option>`).join('')}
+                    ${sel.map(b=>`<option value="${b}"${autoBase===b?' selected':''}>${b}</option>`).join('')}
                   </select>
                 </div>
               </div>
-
-              <!-- TIPO DE SERVICIO -->
+              <!-- TIPO DE SERVICIO (auto desde cromática) -->
               <div class="form-group">
-                <label class="required" for="bulkServicio">Tipo de Servicio</label>
-                <div class="select-wrap">
-                  <select id="bulkServicio">
-                    <option value="">— Seleccionar —</option>
-                    ${selSvc.map(s => `<option>${s}</option>`).join('')}
-                  </select>
-                </div>
+                <label class="required">Tipo de Servicio</label>
+                ${autoCromatica
+                  ?`<div style="background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.2);border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;color:var(--accent)">${autoServicio||autoCromatica}</div>
+                    <input type="hidden" id="bulkServicio" value="${autoServicio||autoCromatica}">
+                    <div style="font-size:10px;color:var(--text3);margin-top:3px">🎨 Detectado por cromática: ${autoCromatica}</div>`
+                  :`<div class="select-wrap"><select id="bulkServicio">
+                      <option value="">— Seleccionar —</option>
+                      ${selSvc.map(s=>`<option>${s}</option>`).join('')}
+                    </select></div>`}
               </div>
-
-              <!-- PROVEEDOR -->
+              <!-- PROVEEDOR (vista desde pantalla 1) -->
               <div class="form-group">
-                <label for="bulkProveedor">Proveedor del Equipo</label>
-                <div class="select-wrap">
-                  <select id="bulkProveedor">
-                    <option value="">— Seleccionar —</option>
-                    ${selProv.map(p => `<option>${p}</option>`).join('')}
-                  </select>
-                </div>
+                <label>De Donde Surge la Falla</label>
+                <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text2)">${state.proveedorFuente||'— No especificado —'}</div>
+                <input type="hidden" id="bulkProveedor" value="${state.proveedorFuente||''}">
               </div>
-
-              <!-- TÉCNICO (filtrado por base + empresa, desde usuarios reales) -->
+              <!-- TÉCNICO QUE REPORTA (vista) -->
               <div class="form-group">
-                <label for="bulkTecnico">Técnico Asignado</label>
+                <label>Técnico que Reporta</label>
+                <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text2)">${state.tecnicoQueReporta||'— No especificado —'}</div>
+                <input type="hidden" id="bulkTecnico" value="${state.tecnicoQueReporta||''}">
+              </div>
+              <!-- TÉCNICO ADICIONAL -->
+              <div class="form-group">
+                <label for="bulkTecnicoAdicional">Técnico Adicional <span style="color:var(--text3);font-size:10px">(opcional)</span></label>
                 <div class="select-wrap">
-                  <select id="bulkTecnico" onchange="BULK.onTecnicoChange()">
-                    <option value="">— Seleccionar base primero —</option>
+                  <select id="bulkTecnicoAdicional" onchange="BULK.onTecnicoAdicionalChange()">
+                    <option value="">— Ninguno —</option>
+                    ${(DATA.getTecnicosPorBase(DATA.state.currentEmpresa,autoBase)||[]).map(t=>`<option value="${t.nombre}">${t.nombre}${t.base?' ('+t.base+')':''}</option>`).join('')}
+                    <option value="__otro__">Otro (escribir manualmente)</option>
                   </select>
                 </div>
-                <div id="bulkTecnicoHint" style="font-size:10px;color:#3d4f6b;margin-top:4px">
-                  Selecciona una base para ver técnicos disponibles
-                </div>
-                <input type="text" id="bulkTecnicoOtro" placeholder="Nombre del técnico" style="display:none;margin-top:6px">
+                <input type="text" id="bulkTecnicoAdicionalOtro" placeholder="Nombre del técnico adicional"
+                  style="display:none;margin-top:6px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text1);font-size:12px;padding:8px 12px;width:100%;font-family:inherit"/>
               </div>
-
-              <!-- FECHA -->
+              <!-- FECHA Y HORA -->
               <div class="form-group">
                 <label class="required" for="bulkFecha">Fecha y Hora</label>
-                <input type="datetime-local" id="bulkFecha" value="${UI.nowISO()}">
+                <input type="datetime-local" id="bulkFecha" value="${state.procesarTs||UI.nowISO()}">
               </div>
-
               <!-- PRIORIDAD -->
               <div class="form-group">
                 <label>Prioridad</label>
                 <div class="chip-row" id="bulkPrioChips">
-                  ${['Alta','Media','Baja'].map(p => `<div class="chip${p==='Media'?' active':''}"
-                    onclick="BULK.selPrio('${p}',this)"
-                    style="--chip-r:${p==='Alta'?'239':p==='Media'?'245':'34'};--chip-g:${p==='Alta'?'68':p==='Media'?'158':'197'};--chip-b:${p==='Alta'?'68':p==='Media'?'11':'94'}"
-                  >${p}</div>`).join('')}
+                  ${['Alta','Media','Baja'].map(p=>`<div class="chip${p==='Media'?' active':''}" onclick="BULK.selPrio('${p}',this)" style="--chip-r:${p==='Alta'?'239':p==='Media'?'245':'34'};--chip-g:${p==='Alta'?'68':p==='Media'?'158':'197'};--chip-b:${p==='Alta'?'68':p==='Media'?'11':'94'}">${p}</div>`).join('')}
                 </div>
               </div>
-
               <!-- PISO -->
               <div class="form-group">
                 <label>Piso</label>
                 <div class="chip-row" id="bulkPisoChips">
-                  ${selPiso.map(p => `<div class="chip" onclick="BULK.selChip('piso','${p}',this)">${p}</div>`).join('')}
+                  ${(DATA.getSel('piso')||[]).map(p=>{
+                    const isAuto=autoPisos&&autoPisos.toUpperCase().includes(p.toUpperCase());
+                    return `<div class="chip${isAuto?' active':''}" onclick="BULK.selChip('piso','${p}',this)">${p}</div>`;
+                  }).join('')}
                 </div>
+                ${autoPisos?`<div style="font-size:10px;color:var(--text3);margin-top:3px">Detectado en asignación: ${autoPisos}</div>`:''}
               </div>
-
-              <!-- TIPO INCIDENCIA -->
+              <!-- TIPO (auto por estado) -->
               <div class="form-group">
                 <label>Tipo</label>
                 <div class="chip-row" id="bulkTipoChips">
-                  ${selTipo.map(t => `<div class="chip" onclick="BULK.selChip('tipo','${t}',this)">${t}</div>`).join('')}
+                  <div class="chip" id="bulkTipoPreventivo" onclick="BULK.selChip('tipo','Preventivo',this)">Preventivo</div>
+                  <div class="chip" id="bulkTipoCorrectivo" onclick="BULK.selChip('tipo','Correctivo',this)">Correctivo</div>
                 </div>
               </div>
-
-              <!-- ESTADO (CON FALLA / SIN FALLA) -->
+              <!-- ESTADO -->
               <div class="form-group">
                 <label>Estado <span style="color:var(--text3);font-size:10px">(obligatorio si Con Falla)</span></label>
-                <div style="display:flex;gap:8px">
-                  <div class="bulk-estado-btn bulk-estado-falla" id="bulkEstadoFalla" onclick="BULK.selEstado('falla')">
-                    <div class="bulk-estado-dot" style="background:var(--red)"></div>
-                    Con falla
-                  </div>
-                  <div class="bulk-estado-btn bulk-estado-sinfalla" id="bulkEstadoSinFalla" onclick="BULK.selEstado('sinfalla')">
-                    <div class="bulk-estado-dot" style="background:var(--green)"></div>
-                    Sin falla
-                  </div>
-                  <div class="bulk-estado-btn" id="bulkEstadoBarrido" onclick="BULK.selEstado('barrido')" style="border:1px solid var(--border);border-radius:8px;padding:8px 16px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text2);background:var(--bg3);transition:all .15s">
-                    <div class="bulk-estado-dot" style="background:#4f8ef7"></div>
-                    Barrido
-                  </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <div class="bulk-estado-btn bulk-estado-falla" id="bulkEstadoFalla" onclick="BULK.selEstado('falla')"><div class="bulk-estado-dot" style="background:var(--red)"></div>Con falla</div>
+                  <div class="bulk-estado-btn bulk-estado-sinfalla" id="bulkEstadoSinFalla" onclick="BULK.selEstado('sinfalla')"><div class="bulk-estado-dot" style="background:var(--green)"></div>Sin falla</div>
+                  <div class="bulk-estado-btn" id="bulkEstadoBarrido" onclick="BULK.selEstado('barrido')" style="border:1px solid var(--border);border-radius:8px;padding:8px 16px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text2);background:var(--bg3)"><div class="bulk-estado-dot" style="background:#4f8ef7"></div>Barrido</div>
+                  <div class="bulk-estado-btn" id="bulkEstadoSinDvr" onclick="BULK.selEstado('sindvr')" style="border:1px solid var(--border);border-radius:8px;padding:8px 16px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text2);background:var(--bg3)"><div class="bulk-estado-dot" style="background:#6b7280"></div>Sin DVR</div>
                 </div>
               </div>
-
-
-
             </div>
 
-            <!-- SECCIÓN ÚLTIMA ACTUALIZACIÓN (siempre visible, combina con cualquier estado) -->
+            <!-- ÚLTIMA ACTUALIZACIÓN -->
             <div id="bulkUltActSection" style="margin-top:10px;padding:10px 14px;background:rgba(79,142,247,.05);border:1px solid rgba(79,142,247,.15);border-radius:10px;display:none">
               <div style="display:flex;align-items:center;justify-content:space-between">
                 <span style="font-size:12px;font-weight:600;color:#4f8ef7">⏱️ Última actualización</span>
-                <button id="bulkUltActBtn" onclick="BULK.toggleUltAct()" style="background:rgba(79,142,247,.15);border:1px solid rgba(79,142,247,.3);border-radius:6px;color:#4f8ef7;font-size:11px;font-weight:600;padding:4px 10px;cursor:pointer;font-family:inherit;transition:all .15s">
-                  + Agregar fecha
-                </button>
+                <button id="bulkUltActBtn" onclick="BULK.toggleUltAct()" style="background:rgba(79,142,247,.15);border:1px solid rgba(79,142,247,.3);border-radius:6px;color:#4f8ef7;font-size:11px;font-weight:600;padding:4px 10px;cursor:pointer;font-family:inherit">+ Agregar fecha</button>
               </div>
               <div id="bulkUltActWrap" style="display:none;margin-top:8px">
                 <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Fecha de última transmisión</label>
-                <input type="datetime-local" id="bulkUltActFecha"
-                  style="background:var(--bg2);border:1px solid rgba(79,142,247,.3);border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;width:100%;max-width:280px;font-family:inherit;cursor:pointer"
-                />
+                <input type="datetime-local" id="bulkUltActFecha" style="background:var(--bg2);border:1px solid rgba(79,142,247,.3);border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;width:100%;max-width:280px;font-family:inherit"/>
                 <div style="font-size:10px;color:var(--text3);margin-top:4px">Sin fecha = unidad en línea</div>
               </div>
             </div>
 
-            <!-- SECCIÓN FALLA TÉCNICA (visible solo cuando hay falla) -->
+            <!-- FALLA TÉCNICA -->
             <div id="bulkFallaSection" style="margin-top:14px;display:none">
               <div class="card-hdr" style="margin-bottom:10px">
-                <div class="card-icon card-icon-amber">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                </div>
+                <div class="card-icon card-icon-amber"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
                 <span class="card-title">Falla Técnica</span>
               </div>
               <div class="form-grid">
                 <div class="form-group">
                   <label class="required" for="bulkCategoria">Categoría</label>
-                  <div class="select-wrap">
-                    <select id="bulkCategoria" onchange="BULK.onCategoriaChange()">
-                      <option value="">— Seleccionar —</option>
-                      ${selCat.map(c => `<option>${c}</option>`).join('')}
-                    </select>
-                  </div>
+                  <div class="select-wrap"><select id="bulkCategoria" onchange="BULK.onCategoriaChange()"><option value="">— Seleccionar —</option>${selCat.map(c=>`<option>${c}</option>`).join('')}</select></div>
                 </div>
                 <div class="form-group">
                   <label for="bulkComponente">Componente</label>
-                  <div class="select-wrap">
-                    <select id="bulkComponente">
-                      <option value="">— Seleccionar categoría —</option>
-                    </select>
-                  </div>
+                  <div class="select-wrap"><select id="bulkComponente"><option value="">— Seleccionar categoría —</option></select></div>
                 </div>
                 <div class="form-group col-2">
                   <label for="bulkDesc">Descripción de la Falla</label>
@@ -444,15 +471,25 @@ const BULK = (() => {
               </div>
             </div>
 
-            <!-- BOTONES ACCIÓN -->
+            <!-- SIN DVR -->
+            <div id="bulkSinDvrSection" style="margin-top:14px;display:none">
+              <div style="background:rgba(107,114,128,.08);border:1px solid rgba(107,114,128,.25);border-radius:10px;padding:12px 16px">
+                <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">📵 Sin Equipo DVR</div>
+                <div style="font-size:11px;color:var(--text3)">Esta unidad se registrará sin DVR en asignación. No se generará reporte de falla.</div>
+              </div>
+            </div>
+
+            <!-- PREVENTIVO (sin falla) -->
+            <div id="bulkPreventivoSection" style="margin-top:10px;display:none;padding:10px 14px;background:rgba(34,197,94,.05);border:1px solid rgba(34,197,94,.15);border-radius:10px">
+              <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:6px">✅ Preventivo — Fecha de realización</div>
+              <input type="datetime-local" id="bulkPrevFecha" value="${state.procesarTs||UI.nowISO()}" style="background:var(--bg2);border:1px solid rgba(34,197,94,.3);border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;max-width:280px;font-family:inherit"/>
+              <div style="font-size:10px;color:var(--text3);margin-top:4px">Podrás asignar una falla después desde Atención Técnica</div>
+            </div>
+
+            <!-- ACCIONES -->
             <div class="validacion-actions">
-              <button class="btn btn-ghost" onclick="BULK.prevUnit()" ${state.currentIdx === 0 ? 'disabled' : ''}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-                Anterior
-              </button>
-              <button class="btn btn-secondary" onclick="BULK.skipUnit()">
-                Omitir →
-              </button>
+              <button class="btn btn-ghost" onclick="BULK.prevUnit()" ${state.currentIdx===0?'disabled':''}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg> Anterior</button>
+              <button class="btn btn-secondary" onclick="BULK.skipUnit()">Omitir →</button>
               <div style="flex:1"></div>
               <button class="btn btn-primary btn-lg" onclick="BULK.enviarAlSistema()">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -468,183 +505,67 @@ const BULK = (() => {
   function _fmtFechaCorta(iso) {
     if (!iso) return '';
     try {
-      const d = new Date(iso);
-      const dd = String(d.getDate()).padStart(2,'0');
-      const mm = String(d.getMonth()+1).padStart(2,'0');
-      const yy = String(d.getFullYear()).slice(-2);
-      const hh = String(d.getHours()).padStart(2,'0');
-      const mi = String(d.getMinutes()).padStart(2,'0');
+      const d=new Date(iso),dd=String(d.getDate()).padStart(2,'0'),mm=String(d.getMonth()+1).padStart(2,'0'),yy=String(d.getFullYear()).slice(-2),hh=String(d.getHours()).padStart(2,'0'),mi=String(d.getMinutes()).padStart(2,'0');
       return dd+'-'+mm+'-'+yy+' / '+hh+':'+mi;
     } catch(e){ return iso; }
   }
 
   function _diasSinActualizar(iso) {
     if (!iso) return null;
-    try {
-      const now  = new Date();
-      const then = new Date(iso);
-      const diff = now - then; // ms
-      return Math.floor(diff / 86400000); // días completos
-    } catch(e){ return null; }
+    try { return Math.floor((new Date()-new Date(iso))/86400000); } catch(e){ return null; }
   }
 
   function _generarTextoBarrido() {
-    const emp   = DATA.state.currentEmpresa;
-    const now   = new Date();
-    const fecha = now.toLocaleDateString('es-MX', { day:'2-digit', month:'2-digit', year:'2-digit' });
-    const hora  = now.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', hour12: false });
+    const emp=DATA.state.currentEmpresa, now=new Date();
+    const fecha=now.toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'2-digit'});
+    const hora=now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',hour12:false});
+    const enLinea   = state.unidades.filter(u=>u.status==='barrido'&&!u.ultimaActualizacion&&!u.sinDvr);
+    const conUltAct = state.unidades.filter(u=>u.status==='barrido'&&!!u.ultimaActualizacion);
+    const sinDvr    = state.unidades.filter(u=>u.sinDvr);
+    const conFalla  = state.unidades.filter(u=>u.status==='done'&&u.folio);
 
-    // Separar unidades barrido: en línea vs con última actualización
-    const barridoUnidades = state.unidades.filter(u => u.status === 'barrido');
-    const enLinea = barridoUnidades.filter(u => !u.ultimaActualizacion);
-    const conUltAct = barridoUnidades.filter(u => !!u.ultimaActualizacion);
-
-    // Agrupar con-ult-act por cantidad de días
-    // Detectar si fue hoy mismo (sin transmisión en la mañana = mismo día)
-    const hoyStr = now.toDateString();
-    const sinTxHoy = conUltAct.filter(u => {
-      try { return new Date(u.ultimaActualizacion).toDateString() === hoyStr; } catch(e){ return false; }
-    });
-    const masDeUnDia = conUltAct.filter(u => {
-      const d = _diasSinActualizar(u.ultimaActualizacion);
-      return d !== null && d >= 1;
-    });
-
-    // Agrupar masDeUnDia por cantidad exacta de días
-    const porDias = {};
-    masDeUnDia.forEach(u => {
-      const d = _diasSinActualizar(u.ultimaActualizacion);
-      if (!porDias[d]) porDias[d] = [];
-      porDias[d].push(u);
-    });
-
-    const conFalla = state.unidades.filter(u => u.status === 'done' && u.folio);
-    const sinFalla = state.unidades.filter(u => u.status === 'done' && !u.folio);
-    const omitidas = state.unidades.filter(u => u.status === 'pending');
-
-    let txt = '';
-    txt += '📡 *ESTADO DE UNIDADES ' + emp + '*\n';
-    txt += '📅 Barrido ' + fecha + ' / ' + hora + '\n\n';
-
-    // ── En línea ──
-    if (enLinea.length > 0) {
-      txt += '✅ OPERATIVO — Cámaras / Antenas GPS-3G OK\n\n';
-      txt += 'En línea:\n';
-      enLinea.forEach(u => { txt += u.numero + ' (en línea)\n'; });
-      txt += '\n';
-    }
-
-    // ── Sin transmisión en la mañana (mismo día) ──
-    if (sinTxHoy.length > 0) {
-      txt += '☀️ Sin transmisión en la mañana\n';
-      sinTxHoy.forEach(u => {
-        txt += u.numero + ' en espera, ' + _fmtFechaCorta(u.ultimaActualizacion) + '\n';
-      });
-      txt += '\n';
-    }
-
-    // ── Última transmisión agrupada por días ──
-    const diasOrdenados = Object.keys(porDias).map(Number).sort((a,b) => a-b);
-    if (diasOrdenados.length > 0) {
-      txt += '⏱️ Última transmisión\n';
-      diasOrdenados.forEach(d => {
-        txt += '▪️ ' + d + (d === 1 ? ' día' : ' días') + '\n';
-        porDias[d].forEach(u => {
-          txt += u.numero + ' — ' + _fmtFechaCorta(u.ultimaActualizacion) + '\n';
-        });
-      });
-      txt += '\n';
-    }
-
-    // ── Con falla ──
-    if (conFalla.length > 0) {
-      txt += '🔴 Con falla:\n';
-      conFalla.forEach(u => {
-        const r    = (DATA.state.fallas || []).find(f => f.folio === u.folio);
-        const desc = r ? (r.componente || r.categoria || r.descripcion || 'falla') : 'falla';
-        let linea  = u.numero + ' — ' + desc;
-        if (u.ultimaActualizacion) {
-          const dias = _diasSinActualizar(u.ultimaActualizacion);
-          linea += '\n' + _fmtFechaCorta(u.ultimaActualizacion)
-                + (dias !== null ? ' - ' + dias + (dias === 1 ? ' día' : ' días') : '');
-        }
-        txt += linea + '\n';
-      });
-      txt += '\n';
-    }
-
-    // ── Sin falla ──
-    if (sinFalla.length > 0) {
-      txt += '🟢 Sin falla:\n';
-      sinFalla.forEach(u => {
-        let linea = u.numero;
-        if (u.ultimaActualizacion) {
-          const dias = _diasSinActualizar(u.ultimaActualizacion);
-          linea += ' — ' + _fmtFechaCorta(u.ultimaActualizacion)
-                + (dias !== null ? ' - ' + dias + (dias === 1 ? ' día' : ' días') : '');
-        }
-        txt += linea + '\n';
-      });
-      txt += '\n';
-    }
-
-    if (omitidas.length > 0) {
-      txt += '⏩ Omitidas: ' + omitidas.map(u => u.numero).join(', ') + '\n';
-    }
-
+    let txt=`📡 ESTADO DE UNIDADES ${emp}\n📅 Barrido ${fecha} / ${hora}\n`;
+    if (state.tecnicoQueReporta) txt+=`👤 ${state.tecnicoQueReporta}${state.dondeReporta?' · '+state.dondeReporta:''}\n`;
+    txt+='\n';
+    if (enLinea.length>0)   { txt+=`✅ OPERATIVO — Cámaras / Antenas GPS-3G OK\n`; enLinea.forEach(u=>{txt+=u.numero+'\n';}); txt+='\n'; }
+    if (conUltAct.length>0) { txt+=`📴 FUERA DE LÍNEA\n`; conUltAct.forEach(u=>{const d=_diasSinActualizar(u.ultimaActualizacion),f=_fmtFechaCorta(u.ultimaActualizacion);txt+=u.numero+(f?' — Últ. tx: '+f:'')+(d>0?' ('+d+'d sin tx)':'')+'\n';}); txt+='\n'; }
+    if (sinDvr.length>0)    { txt+=`📵 SIN DVR\n`; sinDvr.forEach(u=>{txt+=u.numero+'\n';}); txt+='\n'; }
+    if (conFalla.length>0)  { txt+=`🔴 CON FALLA\n`; conFalla.forEach(u=>{txt+=u.numero+(u.folio?' — Folio: '+u.folio:'')+(u.descripcionFalla?' — '+u.descripcionFalla:'')+'\n';}); txt+='\n'; }
     return txt.trim();
   }
 
   function copiarBarrido() {
-    const txt = _generarTextoBarrido();
-    navigator.clipboard.writeText(txt).then(() => {
-      UI.toast('✅ Barrido copiado al portapapeles');
-    }).catch(() => {
-      // Fallback
-      const ta = document.createElement('textarea');
-      ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
-      document.body.appendChild(ta); ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
+    const txt=_generarTextoBarrido();
+    navigator.clipboard.writeText(txt).then(()=>UI.toast('✅ Barrido copiado al portapapeles')).catch(()=>{
+      const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';
+      document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
       UI.toast('✅ Barrido copiado');
     });
   }
 
   function renderValidacionCompleta() {
-    const total     = state.unidades.length;
-    const done      = getDoneCount();
-    const barridos  = state.unidades.filter(u => u.status === 'barrido').length;
-    const conFalla  = state.unidades.filter(u => u.status === 'done' && u.folio).length;
-    const omitidas  = state.unidades.filter(u => u.status === 'pending').length;
-    const textoBarrido = _generarTextoBarrido();
-
+    const total=state.unidades.length, done=getDoneCount(), barridos=state.unidades.filter(u=>u.status==='barrido').length;
+    const sinDvr=state.unidades.filter(u=>u.sinDvr).length, conFalla=state.unidades.filter(u=>u.status==='done'&&u.folio).length;
+    const omitidas=state.unidades.filter(u=>u.status==='pending').length, textoBarrido=_generarTextoBarrido();
     return `
     <div id="mod-validacion-done" class="module active" style="padding:20px">
       <div class="validacion-completa-wrap" style="max-width:680px;margin:0 auto">
-        <div class="vc-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>
+        <div class="vc-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg></div>
         <h2 class="vc-title">¡Barrido completado!</h2>
-
         <div class="vc-stats" style="margin-bottom:20px">
           <div class="vc-stat"><div class="vc-stat-val" style="color:#4f8ef7">${barridos}</div><div class="vc-stat-lbl">En línea</div></div>
           <div class="vc-stat"><div class="vc-stat-val" style="color:var(--red)">${conFalla}</div><div class="vc-stat-lbl">Con falla</div></div>
-          <div class="vc-stat"><div class="vc-stat-val" style="color:var(--green)">${done - conFalla}</div><div class="vc-stat-lbl">Sin falla</div></div>
+          <div class="vc-stat"><div class="vc-stat-val" style="color:var(--green)">${done-conFalla}</div><div class="vc-stat-lbl">Sin falla</div></div>
+          <div class="vc-stat"><div class="vc-stat-val" style="color:#6b7280">${sinDvr}</div><div class="vc-stat-lbl">Sin DVR</div></div>
           <div class="vc-stat"><div class="vc-stat-val" style="color:var(--text3)">${omitidas}</div><div class="vc-stat-lbl">Omitidas</div></div>
         </div>
-
-        <!-- Resumen tipo WhatsApp -->
         <div style="background:#0d1117;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;text-align:left">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
             <span style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Resumen para compartir</span>
-            <button class="btn btn-primary btn-sm" onclick="BULK.copiarBarrido()" style="gap:6px;display:flex;align-items:center">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-              Copiar
-            </button>
+            <button class="btn btn-primary btn-sm" onclick="BULK.copiarBarrido()" style="gap:6px;display:flex;align-items:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copiar</button>
           </div>
           <pre id="barridoTexto" style="font-family:var(--mono);font-size:12px;color:var(--text1);white-space:pre-wrap;margin:0;line-height:1.6">${textoBarrido.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>
         </div>
-
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
           <button class="btn btn-ghost" onclick="APP.showModule('atencion')">Ver Atención Técnica</button>
           <button class="btn btn-primary" onclick="APP.showModule('registro')">Nuevo Registro</button>
@@ -653,490 +574,260 @@ const BULK = (() => {
     </div>`;
   }
 
-  // ─── Eventos UI ───────────────────────────────
   function onInputChange() {
-    const raw   = document.getElementById('bulkInput')?.value || '';
-    const units = parseUnidades(raw);
-    const count = units.length;
-
-    // Contar duplicados en el input original
-    const rawParts = raw
-      .replace(/,/g, ' ')
-      .replace(/[\r\n\t]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .split(' ')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
-    const dups = rawParts.length - count;
-
-    // Contar cuáles ya están registradas en el sistema (con guard por si fallas aún no cargó)
-    const fallas = DATA.state.fallas || [];
-    const registered = fallas.filter(f =>
-      f.empresa === DATA.state.currentEmpresa && units.includes(f.unidad)
-    ).map(f => f.unidad);
-    const existingSet = new Set(registered);
-    const existingCount = existingSet.size;
-
-    const detectedEl = document.getElementById('bulkDetectedCount');
-    if (detectedEl) {
-      detectedEl.textContent = `${count} unidades detectadas`;
-      detectedEl.style.color = count > 0 ? 'var(--green)' : 'var(--text3)';
-    }
-
-    const btn = document.getElementById('bulkProcesarBtn');
-    if (btn) btn.disabled = count === 0;
-
-    // Update summary cards
-    const bscTotal    = document.getElementById('bscTotal');
-    const bscDups     = document.getElementById('bscDups');
-    const bscExisting = document.getElementById('bscExisting');
-    const bscNew      = document.getElementById('bscNew');
-    const infoBox     = document.getElementById('bulkSummaryInfo');
-    const infoText    = document.getElementById('bulkSummaryInfoText');
-
-    if (bscTotal)    bscTotal.textContent    = count;
-    if (bscDups)     bscDups.textContent     = dups;
-    if (bscExisting) bscExisting.textContent = existingCount;
-    if (bscNew)      bscNew.textContent      = Math.max(0, count - existingCount);
-
-    if (infoBox && infoText && count > 0) {
-      infoBox.style.display = 'flex';
-      const newCount = Math.max(0, count - existingCount);
-      infoText.textContent = newCount > 0
-        ? `Se crearán ${newCount} registros temporales para su validación.`
-        : 'Todas las unidades ya están registradas. Puedes continuar para actualizarlas.';
-    } else if (infoBox) {
-      infoBox.style.display = 'none';
-    }
+    const raw=document.getElementById('bulkInput')?.value||'', units=parseUnidades(raw), count=units.length;
+    const rawParts=raw.replace(/,/g,' ').replace(/[\r\n\t]+/g,' ').replace(/\s+/g,' ').trim().split(' ').map(s=>s.trim()).filter(s=>s.length>0);
+    const dups=rawParts.length-count;
+    const fallas=DATA.state.fallas||[], emp=DATA.state.currentEmpresa;
+    const conPendiente=fallas.filter(f=>f.empresa===emp&&units.includes(f.unidad)&&/pendiente/i.test(f.estatus||''));
+    const existingCount=new Set(conPendiente.map(f=>f.unidad)).size;
+    const detectedEl=document.getElementById('bulkDetectedCount');
+    if (detectedEl){detectedEl.textContent=`${count} unidades detectadas`;detectedEl.style.color=count>0?'var(--green)':'var(--text3)';}
+    const btn=document.getElementById('bulkProcesarBtn');if(btn)btn.disabled=count===0;
+    const bT=document.getElementById('bscTotal'),bD=document.getElementById('bscDups'),bE=document.getElementById('bscExisting'),bN=document.getElementById('bscNew');
+    if(bT)bT.textContent=count;if(bD)bD.textContent=dups;if(bE)bE.textContent=existingCount;if(bN)bN.textContent=Math.max(0,count-existingCount);
+    const infoBox=document.getElementById('bulkSummaryInfo'),infoText=document.getElementById('bulkSummaryInfoText');
+    if(infoBox&&infoText&&count>0){
+      infoBox.style.display='flex';
+      infoText.textContent=existingCount>0?`⚠ ${existingCount} unidad(es) ya tienen reporte pendiente.`:Math.max(0,count-existingCount)>0?`Se crearán ${Math.max(0,count-existingCount)} registros.`:'Todas las unidades ya están registradas.';
+    }else if(infoBox){infoBox.style.display='none';}
+    const pendWrap=document.getElementById('bulkPendientesWrap');
+    if(pendWrap&&conPendiente.length>0){
+      pendWrap.style.display='';
+      pendWrap.innerHTML=`<div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:6px">⚠ Con reporte pendiente:</div>`
+        +conPendiente.map(f=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:6px;margin-bottom:4px;font-size:11px"><span style="font-weight:700">${f.unidad}</span><span style="color:var(--text2)">${f.base||''} · ${f.servicio||''}</span><span style="color:#f59e0b;font-family:var(--mono)">${f.folio||''}</span></div>`).join('');
+    }else if(pendWrap){pendWrap.style.display='none';}
   }
 
   function procesarLista() {
-    const raw   = document.getElementById('bulkInput')?.value || '';
-    const units = parseUnidades(raw);
-
-    if (units.length === 0) {
-      UI.toast('Ingresa al menos una unidad', 'err');
-      return;
-    }
-
-    // Inicializar estado
-    state.unidades = units.map(u => ({ id: DATA.uid(), numero: u, status: 'pending' }));
-    state.currentIdx = 0;
-    state.chipState  = { piso: '', tipo: '' };
-    state.prioSel    = 'Media';
-    state.active     = true;
-
-    // Renderizar pantalla de validación
+    const raw=document.getElementById('bulkInput')?.value||'', units=parseUnidades(raw);
+    if(units.length===0){UI.toast('Ingresa al menos una unidad','err');return;}
+    const base=document.getElementById('bulkDondeReporta')?.value||'';
+    if(!base){UI.toast('Selecciona Donde Reporta antes de continuar','warn');return;}
+    state.dondeReporta     =base;
+    state.tecnicoQueReporta=_getTecnicoReportaValue();
+    state.proveedorFuente  =document.getElementById('bulkProveedorFuente')?.value||'';
+    state.procesarTs       =UI.nowISO();
+    const fallas=DATA.state.fallas||[], emp=DATA.state.currentEmpresa;
+    state.unidades=units.map(u=>({
+      id:DATA.uid(), numero:u, status:'pending',
+      reportePendiente:fallas.find(f=>f.empresa===emp&&f.unidad===u&&/pendiente/i.test(f.estatus||''))||null,
+      flotaData:_getFlotaData(u),
+    }));
+    state.currentIdx=0; state.chipState={piso:'',tipo:''}; state.prioSel='Media'; state.active=true;
     renderCurrentValidacion();
   }
 
   function renderCurrentValidacion() {
-    let idx = state.currentIdx;
-
-    // Si la actual ya está terminada (done o barrido), buscar la siguiente pendiente
-    const cur = state.unidades[idx];
-    if (cur && (cur.status === 'done' || cur.status === 'barrido')) {
-      const nextPending = state.unidades.findIndex((u, i) => i >= idx && u.status === 'pending');
-      if (nextPending !== -1) {
-        state.currentIdx = nextPending;
-        idx = nextPending;
-      } else {
-        const anyPending = state.unidades.findIndex(u => u.status === 'pending');
-        if (anyPending !== -1) {
-          state.currentIdx = anyPending;
-          idx = anyPending;
-        } else {
-          const main = document.getElementById('mainContent');
-          if (main) main.innerHTML = renderValidacionCompleta();
-          UI.updateHeaderCounts();
-          return;
-        }
+    let idx=state.currentIdx;
+    const cur=state.unidades[idx];
+    if(cur&&(cur.status==='done'||cur.status==='barrido'||cur.sinDvr)){
+      const next=state.unidades.findIndex((u,i)=>i>=idx&&u.status==='pending'&&!u.sinDvr);
+      if(next!==-1){state.currentIdx=next;idx=next;}
+      else{
+        const any=state.unidades.findIndex(u=>u.status==='pending'&&!u.sinDvr);
+        if(any!==-1){state.currentIdx=any;idx=any;}
+        else{const main=document.getElementById('mainContent');if(main)main.innerHTML=renderValidacionCompleta();UI.updateHeaderCounts();return;}
       }
     }
-
-    const main = document.getElementById('mainContent');
-    if (main) {
-      main.innerHTML = renderValidacion();
-      resetFormFields();
-      scrollSidebarToActive();
-    }
+    const main=document.getElementById('mainContent');
+    if(main){main.innerHTML=renderValidacion();resetFormFields();scrollSidebarToActive();}
   }
 
   function resetFormFields() {
-    ['bulkBase','bulkServicio','bulkCategoria','bulkComponente','bulkProveedor'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.selectedIndex = 0;
-    });
-    const rc = document.getElementById('bulkComponente');
-    if (rc) rc.innerHTML = '<option value="">— Seleccionar categoría —</option>';
-    const fd = document.getElementById('bulkFecha');
-    if (fd) fd.value = UI.nowISO();
-    const bd = document.getElementById('bulkDesc');
-    if (bd) bd.value = '';
-
-    state.chipState = { piso: '', tipo: '' };
-    state.prioSel   = 'Media';
-
-    // Reset chip visuals
-    document.querySelectorAll('.chip-row .chip').forEach(c => c.classList.remove('active'));
-    // Re-set media as default prio
-    document.querySelectorAll('#bulkPrioChips .chip').forEach(c => {
-      if (c.textContent.trim() === 'Media') c.classList.add('active');
-    });
-
-    // Reset estado buttons
+    ['bulkCategoria','bulkComponente'].forEach(id=>{const el=document.getElementById(id);if(el)el.selectedIndex=0;});
+    const rc=document.getElementById('bulkComponente');if(rc)rc.innerHTML='<option value="">— Seleccionar categoría —</option>';
+    const fd=document.getElementById('bulkFecha');if(fd)fd.value=state.procesarTs||UI.nowISO();
+    const bd=document.getElementById('bulkDesc');if(bd)bd.value='';
+    state.chipState={piso:'',tipo:''}; state.prioSel='Media';
+    document.querySelectorAll('.chip-row .chip').forEach(c=>c.classList.remove('active'));
+    document.querySelectorAll('#bulkPrioChips .chip').forEach(c=>{if(c.textContent.trim()==='Media')c.classList.add('active');});
+    const baseEl=document.getElementById('bulkBase');
+    if(baseEl&&state.dondeReporta){const opt=[...baseEl.options].find(o=>o.value===state.dondeReporta);if(opt)opt.selected=true;}
     resetEstado();
-    const fallaSection = document.getElementById('bulkFallaSection');
-    if (fallaSection) fallaSection.style.display = 'none';
   }
 
   function resetEstado() {
-    const fb = document.getElementById('bulkEstadoFalla');
-    const sb = document.getElementById('bulkEstadoSinFalla');
-    const bb = document.getElementById('bulkEstadoBarrido');
-    [fb, sb, bb].forEach(b => { if (b) { b.classList.remove('active'); b.style.borderColor = ''; b.style.color = ''; } });
-    const uas  = document.getElementById('bulkUltActSection');
-    const wrap = document.getElementById('bulkUltActWrap');
-    const btn  = document.getElementById('bulkUltActBtn');
-    const inp  = document.getElementById('bulkUltActFecha');
-    const fs   = document.getElementById('bulkFallaSection');
-    if (uas)  uas.style.display  = 'none';
-    if (fs)   fs.style.display   = 'none';
-    if (wrap) wrap.style.display = 'none';
-    if (btn)  btn.textContent    = '+ Agregar fecha';
-    if (inp)  inp.value          = '';
-    state.chipState.estado = '';
+    ['bulkEstadoFalla','bulkEstadoSinFalla','bulkEstadoBarrido','bulkEstadoSinDvr'].forEach(id=>{
+      const b=document.getElementById(id);if(b){b.classList.remove('active');b.style.borderColor='';b.style.color='';}
+    });
+    ['bulkUltActSection','bulkFallaSection','bulkPreventivoSection','bulkSinDvrSection'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+    const wrap=document.getElementById('bulkUltActWrap'),btn=document.getElementById('bulkUltActBtn'),inp=document.getElementById('bulkUltActFecha');
+    if(wrap)wrap.style.display='none'; if(btn)btn.textContent='+ Agregar fecha'; if(inp)inp.value='';
+    state.chipState.estado='';
   }
 
   function selEstado(tipo) {
-    const fb  = document.getElementById('bulkEstadoFalla');
-    const sb  = document.getElementById('bulkEstadoSinFalla');
-    const bb  = document.getElementById('bulkEstadoBarrido');
-    const fallaSection  = document.getElementById('bulkFallaSection');
-    const ultActSection = document.getElementById('bulkUltActSection');
-
-    [fb, sb, bb].forEach(b => {
-      if (!b) return;
-      b.classList.remove('active');
-      b.style.borderColor = ''; b.style.color = '';
+    ['bulkEstadoFalla','bulkEstadoSinFalla','bulkEstadoBarrido','bulkEstadoSinDvr'].forEach(id=>{
+      const b=document.getElementById(id);if(b){b.classList.remove('active');b.style.borderColor='';b.style.color='';}
     });
-
-    if (tipo === 'falla') {
-      if (fb) fb.classList.add('active');
-      if (fallaSection)  fallaSection.style.display  = '';
-      if (ultActSection) ultActSection.style.display = '';
-    } else if (tipo === 'barrido') {
-      if (bb) { bb.classList.add('active'); bb.style.borderColor = '#4f8ef7'; bb.style.color = '#4f8ef7'; }
-      if (fallaSection)  fallaSection.style.display  = 'none';
-      if (ultActSection) ultActSection.style.display = '';
-    } else { // sinfalla
-      if (sb) sb.classList.add('active');
-      if (fallaSection)  fallaSection.style.display  = 'none';
-      if (ultActSection) ultActSection.style.display = '';
+    const fs=document.getElementById('bulkFallaSection'), ua=document.getElementById('bulkUltActSection');
+    const ps=document.getElementById('bulkPreventivoSection'), ds=document.getElementById('bulkSinDvrSection');
+    if(tipo==='falla'){
+      const b=document.getElementById('bulkEstadoFalla');if(b)b.classList.add('active');
+      if(fs)fs.style.display=''; if(ua)ua.style.display=''; if(ps)ps.style.display='none'; if(ds)ds.style.display='none';
+      _autoSelTipo('Correctivo');
+    }else if(tipo==='barrido'){
+      const b=document.getElementById('bulkEstadoBarrido');if(b){b.classList.add('active');b.style.borderColor='#4f8ef7';b.style.color='#4f8ef7';}
+      if(fs)fs.style.display='none'; if(ua)ua.style.display=''; if(ps)ps.style.display='none'; if(ds)ds.style.display='none';
+    }else if(tipo==='sindvr'){
+      const b=document.getElementById('bulkEstadoSinDvr');if(b){b.classList.add('active');b.style.borderColor='#6b7280';b.style.color='#9ca3af';}
+      if(fs)fs.style.display='none'; if(ua)ua.style.display='none'; if(ps)ps.style.display='none'; if(ds)ds.style.display='';
+    }else{
+      const b=document.getElementById('bulkEstadoSinFalla');if(b)b.classList.add('active');
+      if(fs)fs.style.display='none'; if(ua)ua.style.display=''; if(ps)ps.style.display=''; if(ds)ds.style.display='none';
+      _autoSelTipo('Preventivo');
     }
+    state.chipState.estado=tipo;
+  }
 
-    // Si cambia de estado pero ya había fecha, preguntar si mantenerla
-    state.chipState.estado = tipo;
+  function _autoSelTipo(tipo) {
+    state.chipState.tipo=tipo;
+    document.querySelectorAll('#bulkTipoChips .chip').forEach(c=>c.classList.toggle('active',c.textContent.trim()===tipo));
   }
 
   function toggleUltAct() {
-    const wrap = document.getElementById('bulkUltActWrap');
-    const btn  = document.getElementById('bulkUltActBtn');
-    const inp  = document.getElementById('bulkUltActFecha');
-    if (!wrap) return;
-    const visible = wrap.style.display !== 'none';
-    wrap.style.display = visible ? 'none' : '';
-    if (btn) btn.textContent = visible ? '+ Agregar fecha' : '✕ Quitar fecha';
-    if (!visible && inp && !inp.value) {
-      // Pre-fill: ayer a la hora actual
-      const d = new Date(); d.setDate(d.getDate() - 1);
-      inp.value = d.toISOString().slice(0,16);
-    }
-    if (visible && inp) inp.value = '';
+    const wrap=document.getElementById('bulkUltActWrap'),btn=document.getElementById('bulkUltActBtn'),inp=document.getElementById('bulkUltActFecha');
+    if(!wrap)return;
+    const visible=wrap.style.display!=='none';
+    wrap.style.display=visible?'none':'';
+    if(btn)btn.textContent=visible?'+ Agregar fecha':'✕ Quitar fecha';
+    if(!visible&&inp&&!inp.value){const d=new Date();d.setDate(d.getDate()-1);inp.value=d.toISOString().slice(0,16);}
+    if(visible&&inp)inp.value='';
   }
 
-  function selChip(key, val, el) {
-    state.chipState[key] = val;
-    const row = el.closest('.chip-row');
-    if (row) row.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c === el));
-  }
+  function selChip(key,val,el){state.chipState[key]=val;const row=el.closest('.chip-row');if(row)row.querySelectorAll('.chip').forEach(c=>c.classList.toggle('active',c===el));}
+  function selPrio(val,el){state.prioSel=val;document.querySelectorAll('#bulkPrioChips .chip').forEach(c=>c.classList.toggle('active',c.textContent.trim()===val));}
+  function onCategoriaChange(){const cat=document.getElementById('bulkCategoria'),comp=document.getElementById('bulkComponente');if(!cat||!comp)return;const opts=DATA.getComponentes(cat.value);comp.innerHTML='<option value="">— Seleccionar —</option>'+opts.map(o=>`<option>${o}</option>`).join('');}
+  function scrollSidebarToActive(){setTimeout(()=>{const a=document.getElementById(`vsb-item-${state.currentIdx}`);if(a)a.scrollIntoView({behavior:'smooth',block:'nearest'});},50);}
 
-  function selPrio(val, el) {
-    state.prioSel = val;
-    document.querySelectorAll('#bulkPrioChips .chip').forEach(c => {
-      c.classList.toggle('active', c.textContent.trim() === val);
-    });
-  }
-
-  function onCategoriaChange() {
-    const cat  = document.getElementById('bulkCategoria');
-    const comp = document.getElementById('bulkComponente');
-    if (!cat || !comp) return;
-    const opts = DATA.getComponentes(cat.value);
-    comp.innerHTML = '<option value="">— Seleccionar —</option>'
-      + opts.map(o => `<option>${o}</option>`).join('');
-  }
-
-  function scrollSidebarToActive() {
-    setTimeout(() => {
-      const active = document.getElementById(`vsb-item-${state.currentIdx}`);
-      if (active) active.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 50);
-  }
-
-  // ─── Navegación ───────────────────────────────
-  function goToUnit(idx) {
-    const u = state.unidades[idx];
-    const isFinished = u && (u.status === 'done' || u.status === 'barrido');
-
-    if (isFinished && idx !== state.currentIdx) {
-      // Primer click: seleccionar sin editar (solo highlight)
-      if (state._editConfirmIdx === idx) {
-        // Segundo click: entrar a edición
-        state._editConfirmIdx = null;
-        state.currentIdx = idx;
-        u.status = 'pending'; // desbloquear para editar
-        u.folio  = u._prevFolio || u.folio;
-        renderCurrentValidacion();
-        UI.toast(`✏️ Editando unidad ${u.numero} — guarda de nuevo al terminar`);
-      } else {
-        // Primer click: marcar para posible edición
-        state._editConfirmIdx = idx;
-        // Solo actualizar highlight en sidebar
-        document.querySelectorAll('.vsb-item').forEach((el, i) => {
-          el.classList.toggle('vsb-item-active', i === idx);
-        });
+  function goToUnit(idx){
+    const u=state.unidades[idx];
+    const isFinished=u&&(u.status==='done'||u.status==='barrido'||u.sinDvr);
+    if(isFinished&&idx!==state.currentIdx){
+      if(state._editConfirmIdx===idx){
+        state._editConfirmIdx=null; state.currentIdx=idx;
+        if(!u.sinDvr){u.status='pending';} renderCurrentValidacion(); UI.toast(`✏️ Editando unidad ${u.numero}`);
+      }else{
+        state._editConfirmIdx=idx;
+        document.querySelectorAll('.vsb-item').forEach((el,i)=>el.classList.toggle('vsb-item-active',i===idx));
         UI.toast(`Toca de nuevo para editar ${u.numero}`);
       }
-    } else {
-      state._editConfirmIdx = null;
-      state.currentIdx = idx;
-      renderCurrentValidacion();
-    }
+    }else{state._editConfirmIdx=null;state.currentIdx=idx;renderCurrentValidacion();}
   }
 
-  function prevUnit() {
-    if (state.currentIdx > 0) {
-      state.currentIdx--;
-      renderCurrentValidacion();
-    }
-  }
-
-  function nextUnit() {
-    if (state.currentIdx < state.unidades.length - 1) {
-      state.currentIdx++;
-      renderCurrentValidacion();
-    }
-  }
-
-  function skipUnit() {
-    // Find next pending after current
-    const next = state.unidades.findIndex((u, i) => i > state.currentIdx && u.status === 'pending');
-    if (next !== -1) {
-      state.currentIdx = next;
-    } else {
-      // Try from beginning
-      const fromStart = state.unidades.findIndex((u, i) => i !== state.currentIdx && u.status === 'pending');
-      if (fromStart !== -1) state.currentIdx = fromStart;
-    }
+  function prevUnit(){if(state.currentIdx>0){state.currentIdx--;renderCurrentValidacion();}}
+  function nextUnit(){if(state.currentIdx<state.unidades.length-1){state.currentIdx++;renderCurrentValidacion();}}
+  function skipUnit(){
+    const next=state.unidades.findIndex((u,i)=>i>state.currentIdx&&u.status==='pending'&&!u.sinDvr);
+    if(next!==-1)state.currentIdx=next;
+    else{const from=state.unidades.findIndex((u,i)=>i!==state.currentIdx&&u.status==='pending'&&!u.sinDvr);if(from!==-1)state.currentIdx=from;}
     renderCurrentValidacion();
   }
+  function refreshList(){renderCurrentValidacion();}
 
-  function refreshList() {
-    renderCurrentValidacion();
+  function editarReportePendiente(){
+    const current=getCurrentUnidad();if(!current?.reportePendiente)return;
+    const reporteId=current.reportePendiente.id;
+    APP.showModule('atencion');
+    setTimeout(()=>{if(typeof MODS!=='undefined'&&MODS.selAtencion)MODS.selAtencion(reporteId);},150);
+  }
+  function ignorarPendienteYContinuar(){const current=getCurrentUnidad();if(current)current.reportePendiente=null;renderCurrentValidacion();}
+
+  function onTecnicoAdicionalChange(){
+    const sel=document.getElementById('bulkTecnicoAdicional'),inp=document.getElementById('bulkTecnicoAdicionalOtro');
+    if(!sel||!inp)return; inp.style.display=sel.value==='__otro__'?'':'none';
   }
 
-  // ─── Guardar y continuar ─────────────────────
+  function _getTecnicoAdicionalValue(){
+    const sel=document.getElementById('bulkTecnicoAdicional'),inp=document.getElementById('bulkTecnicoAdicionalOtro');
+    if(!sel)return''; if(sel.value==='__otro__')return inp?inp.value.trim():''; return sel.value===''?'':sel.value;
+  }
+
+  function onBaseChange(){
+    const base=document.getElementById('bulkBase')?.value||'';
+    const tecAd=document.getElementById('bulkTecnicoAdicional');if(!tecAd)return;
+    const tecnicos=DATA.getTecnicosPorBase(DATA.state.currentEmpresa,base);
+    let opts='<option value="">— Ninguno —</option>';
+    opts+=tecnicos.map(t=>`<option value="${t.nombre}">${t.nombre}${t.base?' ('+t.base+')':''}</option>`).join('');
+    opts+='<option value="__otro__">Otro (escribir manualmente)</option>';
+    tecAd.innerHTML=opts;
+  }
+
   async function enviarAlSistema() {
-    const current = getCurrentUnidad();
-    if (!current) return;
+    const current=getCurrentUnidad();if(!current)return;
+    const estado=state.chipState.estado;
 
-    const estado  = state.chipState.estado;
-
-    // Si es barrido: avanzar directo sin validar campos — solo marcar en línea
-    if (estado === 'barrido') {
-      state.unidades[state.currentIdx].status  = 'barrido';
-      state.unidades[state.currentIdx].enLinea = true;
-      // Guardar fecha de última actualización si fue ingresada
-      const ultActFechaEl = document.getElementById('bulkUltActFecha');
-      const ultActWrap    = document.getElementById('bulkUltActWrap');
-      const ultActVal     = (ultActWrap && ultActWrap.style.display !== 'none' && ultActFechaEl?.value)
-                            ? ultActFechaEl.value : null;
-      state.unidades[state.currentIdx].ultimaActualizacion = ultActVal || null;
-      if (ultActVal) {
-        UI.toast(`📴 Unidad ${current.numero} — fuera de línea`);
-      } else {
-        UI.toast(`📶 Unidad ${current.numero} — en línea`);
-      }
-      UI.updateHeaderCounts();
-      const nextPend = state.unidades.findIndex((u, i) => i > state.currentIdx && u.status === 'pending');
-      if (nextPend !== -1) { state.currentIdx = nextPend; renderCurrentValidacion(); }
-      else {
-        const anyPend = state.unidades.findIndex(u => u.status === 'pending');
-        if (anyPend !== -1) { state.currentIdx = anyPend; renderCurrentValidacion(); }
-        else { const main = document.getElementById('mainContent'); if (main) main.innerHTML = renderValidacionCompleta(); UI.updateHeaderCounts(); }
-      }
-      return;
+    if(estado==='sindvr'){
+      state.unidades[state.currentIdx].sinDvr=true; state.unidades[state.currentIdx].status='barrido';
+      UI.toast(`📵 Unidad ${current.numero} — Sin DVR registrado`);
+      UI.updateHeaderCounts(); _avanzarSiguientePendiente(); return;
     }
 
-    const base    = document.getElementById('bulkBase')?.value;
-    const svc     = document.getElementById('bulkServicio')?.value;
-    const fecha   = document.getElementById('bulkFecha')?.value;
-
-    // Validaciones mínimas (solo para con falla / sin falla)
-    const errors = [];
-    if (!base)  errors.push('Base Operativa');
-    if (!svc)   errors.push('Tipo de Servicio');
-    if (!fecha) errors.push('Fecha y Hora');
-
-    // Si hay falla, requerir categoría
-    const hasFalla = estado === 'falla';
-    const cat      = document.getElementById('bulkCategoria')?.value || '';
-
-    if (hasFalla && !cat) {
-      errors.push('Categoría (requerida con falla)');
+    if(estado==='barrido'){
+      state.unidades[state.currentIdx].status='barrido'; state.unidades[state.currentIdx].enLinea=true;
+      const ultActFechaEl=document.getElementById('bulkUltActFecha'),ultActWrap=document.getElementById('bulkUltActWrap');
+      const ultActVal=(ultActWrap&&ultActWrap.style.display!=='none'&&ultActFechaEl?.value)?ultActFechaEl.value:null;
+      state.unidades[state.currentIdx].ultimaActualizacion=ultActVal||null;
+      UI.toast(ultActVal?`📴 Unidad ${current.numero} — fuera de línea`:`📶 Unidad ${current.numero} — en línea`);
+      UI.updateHeaderCounts(); _avanzarSiguientePendiente(); return;
     }
 
-    if (errors.length) {
-      UI.toast('Campos requeridos: ' + errors.join(', '), 'err');
-      return;
-    }
+    const base=document.getElementById('bulkBase')?.value;
+    const svcHidden=document.querySelector('input[type=hidden]#bulkServicio');
+    const svc=(svcHidden?svcHidden.value:null)||document.getElementById('bulkServicio')?.value||'';
+    const fecha=document.getElementById('bulkFecha')?.value;
+    const errors=[];
+    if(!base)errors.push('Donde Reporta');if(!svc)errors.push('Tipo de Servicio');if(!fecha)errors.push('Fecha y Hora');
+    const hasFalla=estado==='falla', cat=document.getElementById('bulkCategoria')?.value||'';
+    if(hasFalla&&!cat)errors.push('Categoría (requerida con falla)');
+    if(errors.length){UI.toast('Campos requeridos: '+errors.join(', '),'err');return;}
 
-    // Crear reporte en Supabase (Con falla / Sin falla)
-    const session = AUTH.checkSession();
+    const session=AUTH.checkSession(), tecAdicional=_getTecnicoAdicionalValue();
+    const prevFechaEl=document.getElementById('bulkPrevFecha');
+    const prevFecha=(!hasFalla&&prevFechaEl?.value)?prevFechaEl.value:fecha;
+
     let nuevo;
     try {
-      nuevo = await DATA.crearReporte({
-      unidad:      current.numero,
-      empresa:     DATA.state.currentEmpresa,
-      base,
-      servicio:    svc,
-      fecha,
-      piso:        state.chipState.piso || '',
-      tipo:        state.chipState.tipo || '',
-      categoria:   cat,
-      componente:  document.getElementById('bulkComponente')?.value || '',
-      proveedor:   document.getElementById('bulkProveedor')?.value || '',
-      descripcion: document.getElementById('bulkDesc')?.value?.trim() || '',
-      prioridad:   state.prioSel || 'Media',
-      tecnico:     getBulkTecnicoValue(),
-      tecnicoUsername: session ? session.username : '',
+      nuevo=await DATA.crearReporte({
+        unidad:current.numero, empresa:DATA.state.currentEmpresa, base, servicio:svc,
+        fecha:prevFecha||fecha, piso:state.chipState.piso||'', tipo:state.chipState.tipo||'',
+        categoria:cat, componente:document.getElementById('bulkComponente')?.value||'',
+        proveedor:state.proveedorFuente||'',
+        descripcion:document.getElementById('bulkDesc')?.value?.trim()||'',
+        prioridad:state.prioSel||'Media', tecnico:state.tecnicoQueReporta||'',
+        tecnicoUsername:session?session.username:'', tecnicoAdicional:tecAdicional||'',
+        cromatica:current.flotaData?.cromatica||'',
       });
-    } catch (error) {
-      UI.toast(error.message || 'No se pudo crear el reporte', 'err');
-      return;
-    }
+    }catch(error){UI.toast(error.message||'No se pudo crear el reporte','err');return;}
 
-    // Marcar como completada — también guardar ultima actualización si la llenaron
-    const _ultWrap = document.getElementById('bulkUltActWrap');
-    const _ultInp  = document.getElementById('bulkUltActFecha');
-    const _ultVal  = (_ultWrap && _ultWrap.style.display !== 'none' && _ultInp?.value) ? _ultInp.value : null;
-    state.unidades[state.currentIdx].status              = 'done';
-    state.unidades[state.currentIdx].folio               = nuevo.folio;
-    state.unidades[state.currentIdx].ultimaActualizacion = _ultVal || null;
+    const _ultWrap=document.getElementById('bulkUltActWrap'),_ultInp=document.getElementById('bulkUltActFecha');
+    const _ultVal=(_ultWrap&&_ultWrap.style.display!=='none'&&_ultInp?.value)?_ultInp.value:null;
+    state.unidades[state.currentIdx].status='done';
+    state.unidades[state.currentIdx].folio=nuevo.folio;
+    state.unidades[state.currentIdx].ultimaActualizacion=_ultVal||null;
+    state.unidades[state.currentIdx].descripcionFalla=document.getElementById('bulkDesc')?.value?.trim()||'';
 
     UI.toast(`✓ Unidad ${current.numero} — Folio: ${nuevo.folio}`);
+    UI.updateHeaderCounts(); _avanzarSiguientePendiente();
+  }
+
+  function _avanzarSiguientePendiente(){
+    const next=state.unidades.findIndex((u,i)=>i>state.currentIdx&&u.status==='pending'&&!u.sinDvr);
+    if(next!==-1){state.currentIdx=next;renderCurrentValidacion();return;}
+    const any=state.unidades.findIndex(u=>u.status==='pending'&&!u.sinDvr);
+    if(any!==-1){state.currentIdx=any;renderCurrentValidacion();return;}
+    const main=document.getElementById('mainContent');if(main)main.innerHTML=renderValidacionCompleta();
     UI.updateHeaderCounts();
-
-    // Avanzar automáticamente a la siguiente pendiente
-    const nextPending = state.unidades.findIndex((u, i) => i > state.currentIdx && u.status === 'pending');
-    if (nextPending !== -1) {
-      state.currentIdx = nextPending;
-      renderCurrentValidacion();
-    } else {
-      // Buscar desde el inicio
-      const anyPending = state.unidades.findIndex(u => u.status === 'pending');
-      if (anyPending !== -1) {
-        state.currentIdx = anyPending;
-        renderCurrentValidacion();
-      } else {
-        // ¡Todas completas!
-        const main = document.getElementById('mainContent');
-        if (main) main.innerHTML = renderValidacionCompleta();
-        UI.updateHeaderCounts();
-      }
-    }
   }
 
-  function volverALista() {
-    state.active = false;
-    APP.showModule('registro');
-  }
-
-  // ─── API pública ──────────────────────────────
-  // ─── Técnico por base (desde usuarios reales) ───
-  function onBaseChange() {
-    const base   = document.getElementById('bulkBase')?.value;
-    const emp    = DATA.state.currentEmpresa;
-    const tecSel = document.getElementById('bulkTecnico');
-    const hint   = document.getElementById('bulkTecnicoHint');
-    if (!tecSel) return;
-
-    const tecnicos = DATA.getTecnicosPorBase(emp, base);
-
-    let opts = '<option value="">— Seleccionar técnico —</option>';
-    if (tecnicos.length > 0) {
-      opts += tecnicos.map(t => {
-        const label = t.base ? `${t.nombre} (${t.base})` : t.nombre;
-        return `<option value="${t.nombre}">${label}</option>`;
-      }).join('');
-    }
-    opts += '<option value="__otro__">Otro (escribir manualmente)</option>';
-    tecSel.innerHTML = opts;
-
-    if (hint) {
-      if (!base) {
-        hint.textContent = 'Selecciona una base para ver técnicos disponibles';
-        hint.style.color = '#3d4f6b';
-      } else if (tecnicos.length === 0) {
-        hint.textContent = `Sin técnicos en ${base} / ${emp}. Usa "Otro" o crea usuarios técnicos.`;
-        hint.style.color = '#f59e0b';
-      } else {
-        hint.textContent = `${tecnicos.length} técnico(s) disponible(s) en ${base}`;
-        hint.style.color = '#3d4f6b';
-      }
-    }
-
-    const otroInp = document.getElementById('bulkTecnicoOtro');
-    if (otroInp) otroInp.style.display = 'none';
-  }
-
-  function onTecnicoChange() {
-    const sel = document.getElementById('bulkTecnico');
-    const inp = document.getElementById('bulkTecnicoOtro');
-    if (!sel || !inp) return;
-    inp.style.display = sel.value === '__otro__' ? '' : 'none';
-  }
-
-  function getBulkTecnicoValue() {
-    const sel = document.getElementById('bulkTecnico');
-    const inp = document.getElementById('bulkTecnicoOtro');
-    if (!sel) return '';
-    if (sel.value === '__otro__') return inp ? inp.value.trim() : '';
-    if (!sel.value) return '';
-    return sel.value; // already the nombre
-  }
+  function volverALista(){state.active=false;APP.showModule('registro');}
 
   return {
-    renderCargaMasiva,
-    onInputChange,
-    procesarLista,
-    selChip,
-    selPrio,
-    selEstado,
-    onCategoriaChange,
-    goToUnit,
-    prevUnit,
-    nextUnit,
-    skipUnit,
-    refreshList,
-    enviarAlSistema,
-    volverALista,
-    copiarBarrido,
-    toggleUltAct,
-    state,
-    onBaseChange,
-    onTecnicoChange,
+    renderCargaMasiva, onInputChange, procesarLista, selChip, selPrio, selEstado,
+    onCategoriaChange, goToUnit, prevUnit, nextUnit, skipUnit, refreshList,
+    enviarAlSistema, volverALista, copiarBarrido, toggleUltAct, state,
+    onBaseChange, onDondeReportaChange, onTecnicoReportaChange, onTecnicoAdicionalChange,
+    editarReportePendiente, ignorarPendienteYContinuar, _actualizarResumenTag,
   };
 })();
