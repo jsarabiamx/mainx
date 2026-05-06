@@ -379,12 +379,12 @@ const APP = (() => {
       case 'bulk':
         if (typeof BULK !== 'undefined') {
           if (BULK.state.active && BULK.state.unidades.length > 0) {
-            // Estaba en validación — restaurar
-            BULK.renderCurrentValidacion();
+            // En validación — limpiar main primero con loading, luego renderizar
+            main.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:300px;color:var(--text3)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></div>';
+            requestAnimationFrame(() => BULK.renderCurrentValidacion());
           } else {
             // Pantalla 1 — renderizar con state previo
             main.innerHTML = BULK.renderCargaMasiva(session);
-            // Restaurar textarea y trigger técnicos si había base seleccionada
             requestAnimationFrame(() => {
               const ta = document.getElementById('bulkInput');
               if (ta && BULK.state._lastInput) ta.value = BULK.state._lastInput;
