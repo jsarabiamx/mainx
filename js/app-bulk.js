@@ -787,13 +787,17 @@ const BULK = (() => {
     try {
       // Asegurar que tenemos unidades válidas
       if (!state.unidades || state.unidades.length === 0) return null;
-      // Encontrar una unidad pendiente válida
-      const pendingIdx = state.unidades.findIndex(u => u.status === 'pending' && !u.sinDvr);
-      if (pendingIdx !== -1) state.currentIdx = pendingIdx;
+      // Asegurar currentIdx válido
+      if (state.currentIdx >= state.unidades.length) state.currentIdx = 0;
       const html = renderValidacion();
-      return html || null;
+      // Verificar que retornó HTML real (no vacío ni undefined)
+      if (!html || html.trim().length < 100) {
+        console.error('[BULK renderValidacionDirect] HTML vacío o muy corto:', html?.length);
+        return null;
+      }
+      return html;
     } catch(e) {
-      console.error('[BULK renderValidacionDirect]', e);
+      console.error('[BULK renderValidacionDirect]', e.message, e.stack);
       return null;
     }
   }
@@ -1045,7 +1049,7 @@ const BULK = (() => {
   }
 
   return {
-    renderCargaMasiva, onInputChange, procesarLista, selChip, selPrio, selEstado,
+    renderCargaMasiva, renderValidacion, onInputChange, procesarLista, selChip, selPrio, selEstado,
     onCategoriaChange, goToUnit, prevUnit, nextUnit, skipUnit, refreshList,
     enviarAlSistema, volverALista, copiarBarrido, toggleUltAct, state,
     onBaseChange, onDondeReportaChange, onTecnicoReportaChange, onTecnicoAdicionalChange,
