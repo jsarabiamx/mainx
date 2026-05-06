@@ -824,40 +824,26 @@ const BULK = (() => {
 
     // Deshabilitar botón mientras consulta
     const btn=document.getElementById('bulkProcesarBtn');
-    const btnOrigText='Procesar Lista';
     if(btn){btn.disabled=true;btn.textContent='Buscando en asignación...';}
 
-    let flotaMap={};
-    try {
-      // Pre-fetch datos de flota para autocompletar cromática/servicio/base/pisos
-      flotaMap = await _prefetchFlotaData(units);
-    } catch(fetchErr) {
-      console.warn('[BULK procesarLista] prefetch falló, continuando sin datos de flota:', fetchErr);
-      flotaMap = {};
-    }
+    // Pre-fetch datos de flota para autocompletar cromática/servicio/base/pisos
+    const flotaMap = await _prefetchFlotaData(units);
 
-    try {
-      state.unidades=units.map(u=>{
-        const fd=flotaMap[u]||_getFlotaData(u)||null;
-        const pendiente=fallas.find(f=>f.empresa===emp&&f.unidad===u&&/pendiente/i.test(f.estatus||''))||null;
-        const yaSinDvr=fd?.sin_dvr===true;
-        return {
-          id:DATA.uid(), numero:u,
-          // Si ya está marcada sin DVR en asignación, arrancar como barrido/sinDvr
-          status: yaSinDvr ? 'barrido' : 'pending',
-          sinDvr: yaSinDvr,
-          reportePendiente: pendiente,
-          flotaData: fd,
-        };
-      });
-      state.currentIdx=0; state.chipState={piso:'',tipo:''}; state.prioSel='Media'; state.active=true;
-      renderCurrentValidacion();
-    } catch(e) {
-      console.error('[BULK procesarLista] error construyendo unidades:', e);
-      UI.toast('Error al procesar lista: '+( e.message||'Error inesperado'),'err');
-      // Restaurar botón para que el usuario pueda reintentar
-      if(btn){btn.disabled=false;btn.textContent=btnOrigText;}
-    }
+    state.unidades=units.map(u=>{
+      const fd=flotaMap[u]||_getFlotaData(u)||null;
+      const pendiente=fallas.find(f=>f.empresa===emp&&f.unidad===u&&/pendiente/i.test(f.estatus||''))||null;
+      const yaSinDvr=fd?.sin_dvr===true;
+      return {
+        id:DATA.uid(), numero:u,
+        // Si ya está marcada sin DVR en asignación, arrancar como barrido/sinDvr
+        status: yaSinDvr ? 'barrido' : 'pending',
+        sinDvr: yaSinDvr,
+        reportePendiente: pendiente,
+        flotaData: fd,
+      };
+    });
+    state.currentIdx=0; state.chipState={piso:'',tipo:''}; state.prioSel='Media'; state.active=true;
+    renderCurrentValidacion();
   }
 
   // Versión safe de render para restauración — retorna HTML o null si falla
@@ -887,8 +873,6 @@ const BULK = (() => {
   }
 
   function renderCurrentValidacion() {
-    const main=document.getElementById('mainContent');
-    if(!main){console.error('[BULK] mainContent not found');return;}
     try {
       let idx=state.currentIdx;
       const cur=state.unidades[idx];
@@ -898,25 +882,12 @@ const BULK = (() => {
         else{
           const any=state.unidades.findIndex(u=>u.status==='pending'&&!u.sinDvr);
           if(any!==-1){state.currentIdx=any;idx=any;}
-          else{main.innerHTML=renderValidacionCompleta();UI.updateHeaderCounts();return;}
+          else{const m=document.getElementById('mainContent');if(m)m.innerHTML=renderValidacionCompleta();UI.updateHeaderCounts();return;}
         }
       }
-      let html;
-      try {
-        html=renderValidacion();
-      } catch(renderErr) {
-        console.error('[BULK] renderValidacion threw:', renderErr);
-        // Mostrar pantalla de error recuperable dentro del módulo, no volver a llamar renderValidacion
-        main.innerHTML=`<div class="module active" style="padding:40px;text-align:center">
-          <div style="color:var(--red);font-size:14px;font-weight:700;margin-bottom:12px">⚠ Error al renderizar la validación</div>
-          <div style="color:var(--text2);font-size:12px;margin-bottom:20px">${renderErr.message||'Error inesperado'}</div>
-          <div style="display:flex;gap:10px;justify-content:center">
-            <button class="btn btn-ghost" onclick="BULK.volverALista()">← Volver a la lista</button>
-            <button class="btn btn-primary" onclick="BULK.renderCurrentValidacion()">Reintentar</button>
-          </div>
-        </div>`;
-        return;
-      }
+      const main=document.getElementById('mainContent');
+      if(!main){console.error('[BULK] mainContent not found');return;}
+      const html=renderValidacion();
       if(!html){console.error('[BULK] renderValidacion returned empty');return;}
       main.innerHTML=html;
       // resetFormFields necesita que el DOM esté pintado
@@ -926,11 +897,9 @@ const BULK = (() => {
       });
     } catch(e) {
       console.error('[BULK] renderCurrentValidacion error:', e);
-      main.innerHTML=`<div class="module active" style="padding:40px;text-align:center">
-        <div style="color:var(--red);font-size:13px;font-weight:700;margin-bottom:12px">Error en carga masiva</div>
-        <div style="color:var(--text2);font-size:12px;margin-bottom:20px">${e.message||'Error inesperado'}</div>
-        <button class="btn btn-ghost" onclick="BULK.volverALista()">← Volver a la lista</button>
-      </div>`;
+      // Fallback: mostrar estado de recuperación
+      const main=document.getElementById('mainContent');
+      if(main) main.innerHTML=renderValidacion();
     }
   }
 
