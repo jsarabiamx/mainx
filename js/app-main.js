@@ -302,7 +302,12 @@ const APP = (() => {
 
   /* ─── MODULE ROUTING ─────────────────────────── */
   async function showModule(mod) {
-    const session = await AUTH.checkSessionAsync();
+    // Usar sesion cacheada primero para evitar 6 llamadas Supabase en cada navegacion.
+    // Solo si no hay sesion cacheada hacemos la validacion asincrona completa.
+    let session = AUTH.checkSession();
+    if (!session) {
+      session = await AUTH.checkSessionAsync().catch(() => null);
+    }
     if (!session) { window.location.href = 'index.html'; return; }
 
     const perms = {
@@ -384,13 +389,20 @@ const APP = (() => {
             }
           } else {
             // Pantalla 1 — renderizar con state previo
-            main.innerHTML = BULK.renderCargaMasiva(session);
-            requestAnimationFrame(() => {
-              const ta = document.getElementById('bulkInput');
-              if (ta && BULK.state._lastInput) ta.value = BULK.state._lastInput;
-              if (BULK.state.dondeReporta) BULK.onDondeReportaChange();
-              if (BULK.state._lastInput) BULK.onInputChange();
-            });
+            try {
+              main.innerHTML = BULK.renderCargaMasiva(session);
+              requestAnimationFrame(() => {
+                try {
+                  const ta = document.getElementById('bulkInput');
+                  if (ta && BULK.state._lastInput) ta.value = BULK.state._lastInput;
+                  if (BULK.state.dondeReporta) BULK.onDondeReportaChange();
+                  if (BULK.state._lastInput) BULK.onInputChange();
+                } catch(e) { console.warn('[APP bulk restore]', e); }
+              });
+            } catch(e) {
+              console.error('[APP bulk renderCargaMasiva]', e);
+              main.innerHTML = '<div class="module active" style="padding:40px;text-align:center"><div style="color:var(--red);font-size:13px;font-weight:700;margin-bottom:12px">Error al cargar Carga Masiva</div><div style="color:var(--text2);font-size:12px;margin-bottom:20px">' + (e.message||'Error inesperado') + '</div><button class="btn btn-primary" onclick="APP.showModule('bulk')">Reintentar</button></div>';
+            }
           }
         }
         break;
