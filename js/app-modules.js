@@ -2895,22 +2895,9 @@ const MODS = (() => {
     if (!main) return;
 
     if (mode === 'bulk') {
-      // Limpiar estado anterior para empezar sesión nueva de carga masiva
-      if (typeof BULK !== 'undefined') {
-        BULK.state.active   = false;
-        BULK.state.unidades = [];
-      }
+      // Usar showModule para que currentModule quede como 'bulk' y se preserve al navegar
       APP.showModule('bulk');
     } else {
-      // Al ir a manual, limpiar estado bulk completamente
-      if (typeof BULK !== 'undefined') {
-        BULK.state.active            = false;
-        BULK.state.unidades          = [];
-        BULK.state._lastInput        = '';
-        BULK.state.dondeReporta      = '';
-        BULK.state.tecnicoQueReporta = '';
-        BULK.state.proveedorFuente   = '';
-      }
       APP.showModule('registro');
     }
   }
