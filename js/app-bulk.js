@@ -782,6 +782,28 @@ const BULK = (() => {
     renderCurrentValidacion();
   }
 
+  // Versión safe de render para restauración — retorna HTML o null si falla
+  function renderValidacionDirect() {
+    try {
+      // Asegurar que tenemos unidades válidas
+      if (!state.unidades || state.unidades.length === 0) return null;
+      // Encontrar una unidad pendiente válida
+      const pendingIdx = state.unidades.findIndex(u => u.status === 'pending' && !u.sinDvr);
+      if (pendingIdx !== -1) state.currentIdx = pendingIdx;
+      const html = renderValidacion();
+      return html || null;
+    } catch(e) {
+      console.error('[BULK renderValidacionDirect]', e);
+      return null;
+    }
+  }
+
+  // Post-render: resetear campos y scroll (corre después del paint)
+  function postRenderValidacion() {
+    try { resetFormFields(); } catch(e) {}
+    try { scrollSidebarToActive(); } catch(e) {}
+  }
+
   function renderCurrentValidacion() {
     try {
       let idx=state.currentIdx;
@@ -1027,6 +1049,6 @@ const BULK = (() => {
     onCategoriaChange, goToUnit, prevUnit, nextUnit, skipUnit, refreshList,
     enviarAlSistema, volverALista, copiarBarrido, toggleUltAct, state,
     onBaseChange, onDondeReportaChange, onTecnicoReportaChange, onTecnicoAdicionalChange,
-    editarReportePendiente, ignorarPendienteYContinuar, _actualizarResumenTag, salirDeBulk,
+    editarReportePendiente, ignorarPendienteYContinuar, _actualizarResumenTag, salirDeBulk, renderValidacionDirect, postRenderValidacion,
   };
 })();
