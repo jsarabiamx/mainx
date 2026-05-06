@@ -378,37 +378,31 @@ const APP = (() => {
         break;
       case 'bulk':
         if (typeof BULK !== 'undefined') {
-          try {
-            if (BULK.state.active && BULK.state.unidades.length > 0) {
-              // En validación — renderizar directamente (sin spinner que puede quedarse congelado)
-              const validHtml = BULK.renderValidacionDirect();
-              if (validHtml) {
-                main.innerHTML = validHtml;
-                requestAnimationFrame(() => {
-                  try { BULK.postRenderValidacion(); } catch(e) {}
-                });
-              } else {
-                // Si falla, ir a pantalla 1
-                BULK.state.active = false;
-                main.innerHTML = BULK.renderCargaMasiva(session);
-              }
-            } else {
-              // Pantalla 1 — renderizar con state previo
+          if (BULK.state.active && BULK.state.unidades.length > 0) {
+            // En validación — asignar HTML directo al main
+            // Si falla, el error se verá en consola y el usuario puede refrescar
+            try {
+              main.innerHTML = BULK.renderValidacion();
+              requestAnimationFrame(() => {
+                try { BULK.postRenderValidacion(); } catch(e) { console.warn('[BULK post]', e); }
+              });
+            } catch(e) {
+              console.error('[APP bulk validacion]', e);
+              // Último recurso: pantalla 1 pero manteniendo active=true para reintentar
               main.innerHTML = BULK.renderCargaMasiva(session);
               requestAnimationFrame(() => {
-                const ta = document.getElementById('bulkInput');
-                if (ta && BULK.state._lastInput) ta.value = BULK.state._lastInput;
                 if (BULK.state.dondeReporta) BULK.onDondeReportaChange();
-                if (BULK.state._lastInput) BULK.onInputChange();
               });
             }
-          } catch(e) {
-            console.error('[APP bulk restore]', e);
-            // Fallback seguro: ir a pantalla 1
-            if (typeof BULK !== 'undefined') {
-              BULK.state.active = false;
-              main.innerHTML = BULK.renderCargaMasiva(session);
-            }
+          } else {
+            // Pantalla 1 — renderizar con state previo
+            main.innerHTML = BULK.renderCargaMasiva(session);
+            requestAnimationFrame(() => {
+              const ta = document.getElementById('bulkInput');
+              if (ta && BULK.state._lastInput) ta.value = BULK.state._lastInput;
+              if (BULK.state.dondeReporta) BULK.onDondeReportaChange();
+              if (BULK.state._lastInput) BULK.onInputChange();
+            });
           }
         }
         break;
