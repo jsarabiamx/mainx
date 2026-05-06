@@ -2900,7 +2900,19 @@ const MODS = (() => {
         BULK.state.active   = false;
         BULK.state.unidades = [];
       }
-      APP.showModule('bulk');
+      try {
+        await APP.showModule('bulk');
+      } catch(e) {
+        console.error('[setRegistroMode bulk] showModule falló:', e);
+        // Fallback directo sin pasar por checkSessionAsync
+        try {
+          const session = AUTH.checkSession();
+          main.innerHTML = BULK.renderCargaMasiva(session);
+        } catch(e2) {
+          console.error('[setRegistroMode bulk] Fallback falló:', e2);
+        }
+      }
+      return;
     } else {
       // Al ir a manual, limpiar estado bulk completamente
       if (typeof BULK !== 'undefined') {
@@ -2911,7 +2923,11 @@ const MODS = (() => {
         BULK.state.tecnicoQueReporta = '';
         BULK.state.proveedorFuente   = '';
       }
-      APP.showModule('registro');
+      try {
+        await APP.showModule('registro');
+      } catch(e) {
+        console.error('[setRegistroMode registro] showModule falló:', e);
+      }
     }
   }
 
