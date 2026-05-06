@@ -401,7 +401,7 @@ const APP = (() => {
               });
             } catch(e) {
               console.error('[APP bulk renderCargaMasiva]', e);
-              main.innerHTML = '<div class="module active" style="padding:40px;text-align:center"><div style="color:var(--red);font-size:13px;font-weight:700;margin-bottom:12px">Error al cargar Carga Masiva</div><div style="color:var(--text2);font-size:12px;margin-bottom:20px">' + (e.message||'Error inesperado') + '</div><button class="btn btn-primary" onclick="APP.showModule('bulk')">Reintentar</button></div>';
+              main.innerHTML = '<div class="module active" style="padding:40px;text-align:center"><div style="color:var(--red);font-size:13px;font-weight:700;margin-bottom:12px">Error al cargar Carga Masiva</div><div style="color:var(--text2);font-size:12px;margin-bottom:20px">' + (e.message||'Error inesperado') + '</div><button class="btn btn-primary" onclick="APP.showModule(&quot;bulk&quot;)">Reintentar</button></div>';
             }
           }
         }
