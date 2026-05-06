@@ -516,7 +516,7 @@ const BULK = (() => {
               <!-- FECHA Y HORA -->
               <div class="form-group">
                 <label class="required" for="bulkFecha">Fecha y Hora</label>
-                <input type="datetime-local" id="bulkFecha" value="${state.procesarTs||UI.nowISO()}">
+                <input type="datetime-local" id="bulkFecha" value="${state.procesarTs||_isoMX()}">
               </div>
               <!-- PRIORIDAD -->
               <div class="form-group">
@@ -602,7 +602,7 @@ const BULK = (() => {
             <!-- PREVENTIVO (sin falla) -->
             <div id="bulkPreventivoSection" style="margin-top:10px;display:none;padding:10px 14px;background:rgba(34,197,94,.05);border:1px solid rgba(34,197,94,.15);border-radius:10px">
               <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:6px">✅ Preventivo — Fecha de realización</div>
-              <input type="datetime-local" id="bulkPrevFecha" value="${state.procesarTs||UI.nowISO()}" style="background:var(--bg2);border:1px solid rgba(34,197,94,.3);border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;max-width:280px;font-family:inherit"/>
+              <input type="datetime-local" id="bulkPrevFecha" value="${state.procesarTs||_isoMX()}" style="background:var(--bg2);border:1px solid rgba(34,197,94,.3);border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;max-width:280px;font-family:inherit"/>
               <div style="font-size:10px;color:var(--text3);margin-top:4px">Podrás asignar una falla después desde Atención Técnica</div>
             </div>
 
@@ -622,37 +622,100 @@ const BULK = (() => {
     </div>`;
   }
 
+
+  // Zona horaria México Centro (UTC-6)
+  const _TZ_OFFSET_MS = 6 * 60 * 60 * 1000;
+  function _nowMX() { return new Date(Date.now() - _TZ_OFFSET_MS); }
+  function _isoMX() {
+    const d=_nowMX(), pad=n=>String(n).padStart(2,'0');
+    return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate())+'T'+pad(d.getUTCHours())+':'+pad(d.getUTCMinutes());
+  }
+
   function _fmtFechaCorta(iso) {
     if (!iso) return '';
     try {
-      const d=new Date(iso),dd=String(d.getDate()).padStart(2,'0'),mm=String(d.getMonth()+1).padStart(2,'0'),yy=String(d.getFullYear()).slice(-2),hh=String(d.getHours()).padStart(2,'0'),mi=String(d.getMinutes()).padStart(2,'0');
+      const pad=n=>String(n).padStart(2,'0');
+      let dd,mm,yy,hh,mi;
+      if (iso.includes('T') && iso.length<=16) {
+        // datetime-local string — ya está en hora local, no convertir
+        const [dp,tp]=iso.split('T'), [y,mo,dy]=dp.split('-'), [h,mn]=tp.split(':');
+        dd=dy; mm=mo; yy=String(y).slice(-2); hh=h; mi=mn;
+      } else {
+        // ISO con Z — ajustar a México UTC-6
+        const dt=new Date(new Date(iso).getTime()-_TZ_OFFSET_MS);
+        dd=pad(dt.getUTCDate()); mm=pad(dt.getUTCMonth()+1); yy=String(dt.getUTCFullYear()).slice(-2);
+        hh=pad(dt.getUTCHours()); mi=pad(dt.getUTCMinutes());
+      }
       return dd+'-'+mm+'-'+yy+' / '+hh+':'+mi;
     } catch(e){ return iso; }
   }
 
   function _diasSinActualizar(iso) {
     if (!iso) return null;
-    try { return Math.floor((new Date()-new Date(iso))/86400000); } catch(e){ return null; }
+    try { return Math.floor((Date.now()-new Date(iso).getTime())/86400000); } catch(e){ return null; }
   }
 
   function _generarTextoBarrido() {
-    const emp=DATA.state.currentEmpresa, now=new Date();
-    const fecha=now.toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'2-digit'});
-    const hora=now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',hour12:false});
+    const emp=DATA.state.currentEmpresa, now=_nowMX(), pad=n=>String(n).padStart(2,'0');
+    const fecha=pad(now.getUTCDate())+'/'+pad(now.getUTCMonth()+1)+'/'+String(now.getUTCFullYear()).slice(-2);
+    const hora=pad(now.getUTCHours())+':'+pad(now.getUTCMinutes());
     const enLinea   = state.unidades.filter(u=>u.status==='barrido'&&!u.ultimaActualizacion&&!u.sinDvr);
-    const conUltAct = state.unidades.filter(u=>u.status==='barrido'&&!!u.ultimaActualizacion);
-    const sinDvr    = state.unidades.filter(u=>u.sinDvr);
-    const conFalla  = state.unidades.filter(u=>u.status==='done'&&u.folio);
+    const conUltAct = state.unidades.filter(u=>u.status==='barrido'&&!!u.ultimaActualizacion)
+                        .sort((a,b)=>_diasSinActualizar(a.ultimaActualizacion)-_diasSinActualizar(b.ultimaActualizacion));
+    const sinDvr  = state.unidades.filter(u=>u.sinDvr);
+    const conFalla= state.unidades.filter(u=>u.status==='done'&&u.folio);
 
-    let txt=`📡 ESTADO DE UNIDADES ${emp}\n📅 Barrido ${fecha} / ${hora}\n`;
-    if (state.tecnicoQueReporta) txt+=`👤 ${state.tecnicoQueReporta}${state.dondeReporta?' · '+state.dondeReporta:''}\n`;
-    txt+='\n';
-    if (enLinea.length>0)   { txt+=`✅ OPERATIVO — Cámaras / Antenas GPS-3G OK\n`; enLinea.forEach(u=>{txt+=u.numero+'\n';}); txt+='\n'; }
-    if (conUltAct.length>0) { txt+=`📴 FUERA DE LÍNEA\n`; conUltAct.forEach(u=>{const d=_diasSinActualizar(u.ultimaActualizacion),f=_fmtFechaCorta(u.ultimaActualizacion);txt+=u.numero+(f?' — Últ. tx: '+f:'')+(d>0?' ('+d+'d sin tx)':'')+'\n';}); txt+='\n'; }
-    if (sinDvr.length>0)    { txt+=`📵 SIN DVR\n`; sinDvr.forEach(u=>{txt+=u.numero+'\n';}); txt+='\n'; }
-    if (conFalla.length>0)  { txt+=`🔴 CON FALLA\n`; conFalla.forEach(u=>{txt+=u.numero+(u.folio?' — Folio: '+u.folio:'')+(u.descripcionFalla?' — '+u.descripcionFalla:'')+'\n';}); txt+='\n'; }
+    let txt=`📡 ESTADO DE UNIDADES ${emp}
+📅 Barrido ${fecha} / ${hora}
+`;
+    if (state.tecnicoQueReporta) txt+=`👤 ${state.tecnicoQueReporta}${state.dondeReporta?' · '+state.dondeReporta:''}
+`;
+    txt+='
+';
+
+    if (enLinea.length>0) {
+      txt+='En línea:
+';
+      enLinea.forEach(u=>{txt+=`${u.numero} (en línea)
+`;});
+      txt+='
+';
+    }
+
+    if (conUltAct.length>0) {
+      txt+='⏱️ Última transmisión
+';
+      let lastDias=-1;
+      conUltAct.forEach(u=>{
+        const d=_diasSinActualizar(u.ultimaActualizacion), f=_fmtFechaCorta(u.ultimaActualizacion);
+        if (d!==lastDias) { txt+=`▪️ ${d!==null?d+(d===1?' día':' días'):'sin datos'}
+`; lastDias=d; }
+        txt+=`${u.numero} — ${f}
+`;
+      });
+      txt+='
+';
+    }
+
+    if (sinDvr.length>0)  { txt+='📵 SIN DVR
+'; sinDvr.forEach(u=>{txt+=u.numero+'
+';}); txt+='
+'; }
+
+    if (conFalla.length>0) {
+      txt+='🔴 CON FALLA
+';
+      conFalla.forEach(u=>{
+        const desc=u.descripcionFalla||'';
+        txt+=`${u.numero}${desc?' — '+desc:''}
+`;
+      });
+      txt+='
+';
+    }
     return txt.trim();
   }
+
 
   function copiarBarrido() {
     const txt=_generarTextoBarrido();
@@ -755,7 +818,7 @@ const BULK = (() => {
     state.dondeReporta     =base;
     state.tecnicoQueReporta=_getTecnicoReportaValue();
     state.proveedorFuente  =document.getElementById('bulkProveedorFuente')?.value||'';
-    state.procesarTs       =UI.nowISO();
+    state.procesarTs       =_isoMX(); // hora México UTC-6
     const fallas=DATA.state.fallas||[], emp=DATA.state.currentEmpresa;
 
     // Deshabilitar botón mientras consulta
@@ -842,7 +905,7 @@ const BULK = (() => {
   function resetFormFields() {
     ['bulkCategoria','bulkComponente'].forEach(id=>{const el=document.getElementById(id);if(el)el.selectedIndex=0;});
     const rc=document.getElementById('bulkComponente');if(rc)rc.innerHTML='<option value="">— Seleccionar categoría —</option>';
-    const fd=document.getElementById('bulkFecha');if(fd)fd.value=state.procesarTs||UI.nowISO();
+    const fd=document.getElementById('bulkFecha');if(fd)fd.value=state.procesarTs||_isoMX();
     const bd=document.getElementById('bulkDesc');if(bd)bd.value='';
     state.chipState={piso:'',tipo:''}; state.prioSel='Media';
     document.querySelectorAll('.chip-row .chip').forEach(c=>c.classList.remove('active'));
