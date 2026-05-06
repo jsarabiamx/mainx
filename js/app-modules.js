@@ -2895,7 +2895,13 @@ const MODS = (() => {
     if (!main) return;
 
     if (mode === 'bulk') {
-      // Usar showModule para que currentModule quede como 'bulk' y se preserve al navegar
+      // Limpiar estado anterior para empezar sesión nueva de carga masiva
+      if (typeof BULK !== 'undefined') {
+        BULK.state.active   = false;
+        BULK.state.unidades = [];
+        // Preservar dondeReporta, tecnicoQueReporta, proveedorFuente y _lastInput
+        // para comodidad del usuario (no tienen que volver a seleccionar)
+      }
       APP.showModule('bulk');
     } else {
       APP.showModule('registro');
