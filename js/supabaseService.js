@@ -174,12 +174,14 @@
   function normalizeNotificacion(row) {
     if (!row) return null;
     const payload = extractPayload(row);
+    const isActive = row.is_active !== false && payload.is_active !== false;
     return {
       ...payload,
       id: row.id || payload.id,
       reporteId: row.reporte_id || payload.reporteId || payload.reporte_id || null,
       destino: row.destino || payload.destino || '',
       leida: row.leida === true || payload.leida === true,
+      is_active: isActive,
       fecha: row.fecha || payload.fecha || row.created_at || nowISO()
     };
   }
@@ -1135,12 +1137,14 @@
   function toNotificacionRow(data) {
     const normalized = cloneJson(data, {});
     const fecha = normalized.fecha || normalized.created_at || nowISO();
+    const isActive = normalized.is_active !== false;
     return {
       id: normalized.id || uid(),
       reporte_id: normalized.reporteId || normalized.reporte_id || null,
       destino: normalized.destino || '',
       leida: normalized.leida === true,
       fecha,
+      is_active: isActive,
       created_at: normalized.created_at || fecha,
       updated_at: normalized.updated_at || normalized.updatedAt || null,
       payload: {
@@ -1148,6 +1152,7 @@
         id: normalized.id || undefined,
         reporteId: normalized.reporteId || normalized.reporte_id || null,
         leida: normalized.leida === true,
+        is_active: isActive,
         fecha
       }
     };
