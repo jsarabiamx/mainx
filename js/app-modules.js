@@ -2899,11 +2899,18 @@ const MODS = (() => {
       if (typeof BULK !== 'undefined') {
         BULK.state.active   = false;
         BULK.state.unidades = [];
-        // Preservar dondeReporta, tecnicoQueReporta, proveedorFuente y _lastInput
-        // para comodidad del usuario (no tienen que volver a seleccionar)
       }
       APP.showModule('bulk');
     } else {
+      // Al ir a manual, limpiar estado bulk completamente
+      if (typeof BULK !== 'undefined') {
+        BULK.state.active            = false;
+        BULK.state.unidades          = [];
+        BULK.state._lastInput        = '';
+        BULK.state.dondeReporta      = '';
+        BULK.state.tecnicoQueReporta = '';
+        BULK.state.proveedorFuente   = '';
+      }
       APP.showModule('registro');
     }
   }
