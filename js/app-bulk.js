@@ -7,6 +7,14 @@
 
 const BULK = (() => {
 
+  // ── Zona horaria México Centro (UTC-6) — declarar PRIMERO (no tienen hoisting) ──
+  const _TZ_OFFSET_MS = 6 * 60 * 60 * 1000;
+  function _nowMX()  { return new Date(Date.now() - _TZ_OFFSET_MS); }
+  function _isoMX()  {
+    const d=_nowMX(), pad=n=>String(n).padStart(2,'0');
+    return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate())+'T'+pad(d.getUTCHours())+':'+pad(d.getUTCMinutes());
+  }
+
   const state = {
     unidades: [],
     currentIdx: 0,
@@ -623,13 +631,6 @@ const BULK = (() => {
   }
 
 
-  // Zona horaria México Centro (UTC-6)
-  const _TZ_OFFSET_MS = 6 * 60 * 60 * 1000;
-  function _nowMX() { return new Date(Date.now() - _TZ_OFFSET_MS); }
-  function _isoMX() {
-    const d=_nowMX(), pad=n=>String(n).padStart(2,'0');
-    return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate())+'T'+pad(d.getUTCHours())+':'+pad(d.getUTCMinutes());
-  }
 
   function _fmtFechaCorta(iso) {
     if (!iso) return '';
