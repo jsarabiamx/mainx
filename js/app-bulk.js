@@ -783,19 +783,34 @@ const BULK = (() => {
   }
 
   function renderCurrentValidacion() {
-    let idx=state.currentIdx;
-    const cur=state.unidades[idx];
-    if(cur&&(cur.status==='done'||cur.status==='barrido'||cur.sinDvr)){
-      const next=state.unidades.findIndex((u,i)=>i>=idx&&u.status==='pending'&&!u.sinDvr);
-      if(next!==-1){state.currentIdx=next;idx=next;}
-      else{
-        const any=state.unidades.findIndex(u=>u.status==='pending'&&!u.sinDvr);
-        if(any!==-1){state.currentIdx=any;idx=any;}
-        else{const main=document.getElementById('mainContent');if(main)main.innerHTML=renderValidacionCompleta();UI.updateHeaderCounts();return;}
+    try {
+      let idx=state.currentIdx;
+      const cur=state.unidades[idx];
+      if(cur&&(cur.status==='done'||cur.status==='barrido'||cur.sinDvr)){
+        const next=state.unidades.findIndex((u,i)=>i>=idx&&u.status==='pending'&&!u.sinDvr);
+        if(next!==-1){state.currentIdx=next;idx=next;}
+        else{
+          const any=state.unidades.findIndex(u=>u.status==='pending'&&!u.sinDvr);
+          if(any!==-1){state.currentIdx=any;idx=any;}
+          else{const m=document.getElementById('mainContent');if(m)m.innerHTML=renderValidacionCompleta();UI.updateHeaderCounts();return;}
+        }
       }
+      const main=document.getElementById('mainContent');
+      if(!main){console.error('[BULK] mainContent not found');return;}
+      const html=renderValidacion();
+      if(!html){console.error('[BULK] renderValidacion returned empty');return;}
+      main.innerHTML=html;
+      // resetFormFields necesita que el DOM esté pintado
+      requestAnimationFrame(()=>{
+        try{resetFormFields();}catch(e){console.warn('[BULK] resetFormFields error:',e);}
+        scrollSidebarToActive();
+      });
+    } catch(e) {
+      console.error('[BULK] renderCurrentValidacion error:', e);
+      // Fallback: mostrar estado de recuperación
+      const main=document.getElementById('mainContent');
+      if(main) main.innerHTML=renderValidacion();
     }
-    const main=document.getElementById('mainContent');
-    if(main){main.innerHTML=renderValidacion();resetFormFields();scrollSidebarToActive();}
   }
 
   function resetFormFields() {
