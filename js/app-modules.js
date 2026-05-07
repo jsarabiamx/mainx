@@ -2890,27 +2890,40 @@ const MODS = (() => {
     if (tl) tl.innerHTML = renderAuditItems(filtered);
   }
 
-  async function setRegistroMode(mode) {
+  function setRegistroMode(mode) {
     const main = document.getElementById('mainContent');
-    if (!main) return;
+    if (!main) { console.error('[setRegistroMode] mainContent no encontrado'); return; }
 
     if (mode === 'bulk') {
-      // Limpiar estado anterior para empezar sesión nueva de carga masiva
-      if (typeof BULK !== 'undefined') {
-        BULK.state.active   = false;
-        BULK.state.unidades = [];
+      // Render DIRECTO - el usuario ya está autenticado, no necesitamos async ni Supabase
+      if (typeof BULK === 'undefined') {
+        console.error('[setRegistroMode] BULK no definido - app-bulk.js no cargó');
+        main.innerHTML = '<div class="module active" style="padding:40px;text-align:center"><div style="color:var(--red);font-size:13px;font-weight:700">Error: Módulo de Carga Masiva no disponible</div><div style="color:var(--text2);font-size:12px;margin-top:8px">Recarga la página (F5) e intenta de nuevo</div></div>';
+        return;
       }
+      // Limpiar estado anterior
+      BULK.state.active   = false;
+      BULK.state.unidades = [];
+
+      // Actualizar nav highlight (sin esperar async)
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      const navRegistro = document.getElementById('nav-registro');
+      if (navRegistro) navRegistro.classList.add('active');
+
+      // Render SINCRONO - sin auth checks
       try {
-        await APP.showModule('bulk');
+        const session = AUTH.checkSession();
+        main.innerHTML = BULK.renderCargaMasiva(session);
+        requestAnimationFrame(() => {
+          try {
+            const ta = document.getElementById('bulkInput');
+            if (ta && BULK.state._lastInput) { ta.value = BULK.state._lastInput; BULK.onInputChange(); }
+            if (BULK.state.dondeReporta) BULK.onDondeReportaChange();
+          } catch(e) { console.warn('[setRegistroMode bulk restore]', e); }
+        });
       } catch(e) {
-        console.error('[setRegistroMode bulk] showModule falló:', e);
-        // Fallback directo sin pasar por checkSessionAsync
-        try {
-          const session = AUTH.checkSession();
-          main.innerHTML = BULK.renderCargaMasiva(session);
-        } catch(e2) {
-          console.error('[setRegistroMode bulk] Fallback falló:', e2);
-        }
+        console.error('[setRegistroMode bulk render]', e);
+        main.innerHTML = '<div class="module active" style="padding:40px;text-align:center"><div style="color:var(--red);font-size:13px;font-weight:700">Error al cargar Carga Masiva</div><div style="color:var(--text2);font-size:12px;margin-top:8px">' + (e.message||'Error desconocido') + '</div><button class="btn btn-primary" style="margin-top:16px" onclick="MODS.setRegistroMode(&quot;bulk&quot;)">Reintentar</button></div>';
       }
       return;
     } else {
@@ -2923,10 +2936,14 @@ const MODS = (() => {
         BULK.state.tecnicoQueReporta = '';
         BULK.state.proveedorFuente   = '';
       }
+      // Render manual directo
       try {
-        await APP.showModule('registro');
+        const session = AUTH.checkSession();
+        main.innerHTML = renderRegistro(session);
       } catch(e) {
-        console.error('[setRegistroMode registro] showModule falló:', e);
+        console.error('[setRegistroMode registro render]', e);
+        // Fallback via showModule async
+        APP.showModule('registro').catch(err => console.error('[setRegistroMode registro fallback]', err));
       }
     }
   }
