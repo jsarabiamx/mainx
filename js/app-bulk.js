@@ -671,21 +671,17 @@ const BULK = (() => {
 `;
     if (state.tecnicoQueReporta) txt+=`👤 ${state.tecnicoQueReporta}${state.dondeReporta?' · '+state.dondeReporta:''}
 `;
-    txt+='
-';
+    txt+='\n';
 
     if (enLinea.length>0) {
-      txt+='En línea:
-';
+      txt+='En línea:\n';
       enLinea.forEach(u=>{txt+=`${u.numero} (en línea)
 `;});
-      txt+='
-';
+      txt+='\n';
     }
 
     if (conUltAct.length>0) {
-      txt+='⏱️ Última transmisión
-';
+      txt+='⏱️ Última transmisión\n';
       let lastDias=-1;
       conUltAct.forEach(u=>{
         const d=_diasSinActualizar(u.ultimaActualizacion), f=_fmtFechaCorta(u.ultimaActualizacion);
@@ -694,25 +690,19 @@ const BULK = (() => {
         txt+=`${u.numero} — ${f}
 `;
       });
-      txt+='
-';
+      txt+='\n';
     }
 
-    if (sinDvr.length>0)  { txt+='📵 SIN DVR
-'; sinDvr.forEach(u=>{txt+=u.numero+'
-';}); txt+='
-'; }
+    if (sinDvr.length>0)  { txt+='📵 SIN DVR\n'; sinDvr.forEach(u=>{txt+=u.numero+'\n';}); txt+='\n'; }
 
     if (conFalla.length>0) {
-      txt+='🔴 CON FALLA
-';
+      txt+='🔴 CON FALLA\n';
       conFalla.forEach(u=>{
         const desc=u.descripcionFalla||'';
         txt+=`${u.numero}${desc?' — '+desc:''}
 `;
       });
-      txt+='
-';
+      txt+='\n';
     }
     return txt.trim();
   }
