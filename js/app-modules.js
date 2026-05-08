@@ -112,7 +112,7 @@ const MODS = (() => {
           </div>
           <div class="form-group">
             <label class="${canEdit ? 'required' : ''}" for="rFecha">Fecha y Hora</label>
-            <input type="datetime-local" id="rFecha" value="${UI.nowISO()}" ${!canEdit ? 'disabled' : ''}>
+            <input type="datetime-local" id="rFecha" lang="es-MX" value="${UI.nowISO()}" ${!canEdit ? 'disabled' : ''}>
           </div>
           <div class="form-group">
             <label for="rTecnico">Técnico Asignado</label>
