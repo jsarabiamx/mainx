@@ -40,6 +40,33 @@ const MODS = (() => {
   // ══════════════════════════════════════════
   //  MÓDULO 1 — REGISTRO
   // ══════════════════════════════════════════
+
+  // ── Fecha DD/MM/YYYY helper ───────────────────────────────────────────────
+  function _fmtFechaDisplay(isoVal) {
+    if (!isoVal) return '';
+    try {
+      const [datePart, timePart] = isoVal.split('T');
+      const [yyyy, mm, dd] = datePart.split('-');
+      const [hh, min] = timePart.split(':');
+      const h = parseInt(hh, 10);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const h12 = h % 12 || 12;
+      return `${dd}/${mm}/${yyyy}, ${String(h12).padStart(2,'0')}:${min} ${ampm}`;
+    } catch(e) { return isoVal; }
+  }
+  function _renderFechaInputR(id, value, disabled) {
+    const displayVal = _fmtFechaDisplay(value);
+    const disabledStyle = disabled ? 'opacity:.5;cursor:default' : 'cursor:pointer';
+    return `<div style="position:relative;width:100%">
+      <div id="${id}_display" onclick="${disabled?'':"document.getElementById('"+id+"').showPicker?document.getElementById('"+id+"').showPicker():document.getElementById('"+id+"').focus()"}" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text1);font-size:12px;padding:8px 12px;width:100%;font-family:inherit;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;${disabledStyle}">
+        <span id="${id}_txt">${displayVal}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.5;flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </div>
+      <input type="datetime-local" id="${id}" value="${value}" ${disabled?'disabled':''} oninput="MODS._onRFechaChange('${id}')" onchange="MODS._onRFechaChange('${id}')"
+        style="position:absolute;opacity:0;width:100%;height:100%;top:0;left:0;${disabled?'':'cursor:pointer;'}font-size:16px" tabindex="-1">
+    </div>`;
+  }
+
   function renderRegistro(session) {
     const canEdit = AUTH.can('addReports');
     const emp     = DATA.state.currentEmpresa;
@@ -112,7 +139,7 @@ const MODS = (() => {
           </div>
           <div class="form-group">
             <label class="${canEdit ? 'required' : ''}" for="rFecha">Fecha y Hora</label>
-            <input type="datetime-local" id="rFecha" lang="es-MX" value="${UI.nowISO()}" ${!canEdit ? 'disabled' : ''}>
+            ${_renderFechaInputR("rFecha", UI.nowISO(), !canEdit)}
           </div>
           <div class="form-group">
             <label for="rTecnico">Técnico Asignado</label>
@@ -277,7 +304,7 @@ const MODS = (() => {
     });
     const rc = document.getElementById('rComponente');
     if (rc) rc.innerHTML = '<option value="">— Seleccionar categoría —</option>';
-    document.getElementById('rFecha').value = UI.nowISO();
+    const _rfEl=document.getElementById('rFecha');if(_rfEl){_rfEl.value=UI.nowISO();_onRFechaChange('rFecha');}
     chipState = { piso: '', tipo: '', resultado: '' };
     prioSel = 'Media';
     document.querySelectorAll('.chip-row .chip').forEach(c => c.classList.remove('active'));
@@ -2948,6 +2975,25 @@ const MODS = (() => {
     }
   }
 
+
+  function _onRFechaChange(id) {
+    const inp = document.getElementById(id);
+    const txt = document.getElementById(id + '_txt');
+    if (inp && txt) {
+      const val = inp.value;
+      if (!val) return;
+      try {
+        const [datePart, timePart] = val.split('T');
+        const [yyyy, mm, dd] = datePart.split('-');
+        const [hh, min] = timePart.split(':');
+        const h = parseInt(hh, 10);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 || 12;
+        txt.textContent = `${dd}/${mm}/${yyyy}, ${String(h12).padStart(2,'0')}:${min} ${ampm}`;
+      } catch(e) {}
+    }
+  }
+
   return {
     renderRegistro, renderAtencion, renderDashboard, renderAtendidos, renderConfig, renderHistorial,
     setTechMode, setTechBase,
@@ -2962,6 +3008,6 @@ const MODS = (() => {
     addConfigItem, delConfigItem, editConfigItem, clearModuleItems,
     addComponente, delComponente, addEmpresa, renameEmpresa, delEmpresa,
     clearEmpresaData, clearAllData, resetSystem,
-    filterAudit, setRegistroMode
+    filterAudit, setRegistroMode, _onRFechaChange
   };
 })();
