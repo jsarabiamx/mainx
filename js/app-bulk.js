@@ -15,6 +15,41 @@ const BULK = (() => {
     return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate())+'T'+pad(d.getUTCHours())+':'+pad(d.getUTCMinutes());
   }
 
+  // Convierte ISO (YYYY-MM-DDTHH:MM) a display México: DD/MM/YYYY, HH:MM AM/PM
+  function _isoToDisplayMX(iso) {
+    if (!iso) return '';
+    const [datePart, timePart] = iso.split('T');
+    if (!datePart || !timePart) return iso;
+    const [y,m,d] = datePart.split('-');
+    let [h,mi] = timePart.split(':');
+    h = parseInt(h, 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return `${d}/${m}/${y}, ${String(h12).padStart(2,'0')}:${mi} ${ampm}`;
+  }
+
+  // Genera HTML de un campo fecha en formato MX (DD/MM/YYYY, HH:MM AM/PM)
+  // inputId: id del hidden input ISO, displayId: id del texto visible
+  function _fechaMXHtml(inputId, isoVal, style='') {
+    const display = _isoToDisplayMX(isoVal);
+    return `<div class="fecha-mx-wrap" style="position:relative;${style}">
+      <input type="datetime-local" id="${inputId}" value="${isoVal}"
+        style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;z-index:2"
+        oninput="document.getElementById('${inputId}_disp').textContent=window._bulk_fmtDisp?window._bulk_fmtDisp(this.value):this.value">
+      <div id="${inputId}_disp" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+        color:var(--text1);font-size:12px;padding:8px 12px;font-family:var(--mono);display:flex;
+        align-items:center;gap:8px;pointer-events:none">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        ${display}
+      </div>
+    </div>`;
+  }
+
+  window._bulk_fmtDisp = (iso) => { try { return _isoToDisplayMX(iso); } catch(e){ return iso; } };
+
   const state = {
     unidades: [],
     currentIdx: 0,
@@ -524,7 +559,7 @@ const BULK = (() => {
               <!-- FECHA Y HORA -->
               <div class="form-group">
                 <label class="required" for="bulkFecha">Fecha y Hora</label>
-                <input type="datetime-local" id="bulkFecha" value="${state.procesarTs||_isoMX()}">
+                ${_fechaMXHtml("bulkFecha", state.procesarTs||_isoMX())}
               </div>
               <!-- PRIORIDAD -->
               <div class="form-group">
@@ -572,7 +607,7 @@ const BULK = (() => {
               </div>
               <div id="bulkUltActWrap" style="display:none;margin-top:8px">
                 <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Fecha de última transmisión</label>
-                <input type="datetime-local" id="bulkUltActFecha" style="background:var(--bg2);border:1px solid rgba(79,142,247,.3);border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;width:100%;max-width:280px;font-family:inherit"/>
+                ${_fechaMXHtml("bulkUltActFecha", '', "max-width:280px")}
                 <div style="font-size:10px;color:var(--text3);margin-top:4px">Sin fecha = unidad en línea</div>
               </div>
             </div>
@@ -610,7 +645,7 @@ const BULK = (() => {
             <!-- PREVENTIVO (sin falla) -->
             <div id="bulkPreventivoSection" style="margin-top:10px;display:none;padding:10px 14px;background:rgba(34,197,94,.05);border:1px solid rgba(34,197,94,.15);border-radius:10px">
               <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:6px">✅ Preventivo — Fecha de realización</div>
-              <input type="datetime-local" id="bulkPrevFecha" value="${state.procesarTs||_isoMX()}" style="background:var(--bg2);border:1px solid rgba(34,197,94,.3);border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;max-width:280px;font-family:inherit"/>
+              ${_fechaMXHtml("bulkPrevFecha", state.procesarTs||_isoMX(), "max-width:280px")}
               <div style="font-size:10px;color:var(--text3);margin-top:4px">Podrás asignar una falla después desde Atención Técnica</div>
             </div>
 
@@ -671,17 +706,21 @@ const BULK = (() => {
 `;
     if (state.tecnicoQueReporta) txt+=`👤 ${state.tecnicoQueReporta}${state.dondeReporta?' · '+state.dondeReporta:''}
 `;
-    txt+='\n';
+    txt+='
+';
 
     if (enLinea.length>0) {
-      txt+='En línea:\n';
+      txt+='En línea:
+';
       enLinea.forEach(u=>{txt+=`${u.numero} (en línea)
 `;});
-      txt+='\n';
+      txt+='
+';
     }
 
     if (conUltAct.length>0) {
-      txt+='⏱️ Última transmisión\n';
+      txt+='⏱️ Última transmisión
+';
       let lastDias=-1;
       conUltAct.forEach(u=>{
         const d=_diasSinActualizar(u.ultimaActualizacion), f=_fmtFechaCorta(u.ultimaActualizacion);
@@ -690,19 +729,25 @@ const BULK = (() => {
         txt+=`${u.numero} — ${f}
 `;
       });
-      txt+='\n';
+      txt+='
+';
     }
 
-    if (sinDvr.length>0)  { txt+='📵 SIN DVR\n'; sinDvr.forEach(u=>{txt+=u.numero+'\n';}); txt+='\n'; }
+    if (sinDvr.length>0)  { txt+='📵 SIN DVR
+'; sinDvr.forEach(u=>{txt+=u.numero+'
+';}); txt+='
+'; }
 
     if (conFalla.length>0) {
-      txt+='🔴 CON FALLA\n';
+      txt+='🔴 CON FALLA
+';
       conFalla.forEach(u=>{
         const desc=u.descripcionFalla||'';
         txt+=`${u.numero}${desc?' — '+desc:''}
 `;
       });
-      txt+='\n';
+      txt+='
+';
     }
     return txt.trim();
   }
@@ -814,40 +859,26 @@ const BULK = (() => {
 
     // Deshabilitar botón mientras consulta
     const btn=document.getElementById('bulkProcesarBtn');
-    const btnOrigText='Procesar Lista';
     if(btn){btn.disabled=true;btn.textContent='Buscando en asignación...';}
 
-    let flotaMap={};
-    try {
-      // Pre-fetch datos de flota para autocompletar cromática/servicio/base/pisos
-      flotaMap = await _prefetchFlotaData(units);
-    } catch(fetchErr) {
-      console.warn('[BULK procesarLista] prefetch falló, continuando sin datos de flota:', fetchErr);
-      flotaMap = {};
-    }
+    // Pre-fetch datos de flota para autocompletar cromática/servicio/base/pisos
+    const flotaMap = await _prefetchFlotaData(units);
 
-    try {
-      state.unidades=units.map(u=>{
-        const fd=flotaMap[u]||_getFlotaData(u)||null;
-        const pendiente=fallas.find(f=>f.empresa===emp&&f.unidad===u&&/pendiente/i.test(f.estatus||''))||null;
-        const yaSinDvr=fd?.sin_dvr===true;
-        return {
-          id:DATA.uid(), numero:u,
-          // Si ya está marcada sin DVR en asignación, arrancar como barrido/sinDvr
-          status: yaSinDvr ? 'barrido' : 'pending',
-          sinDvr: yaSinDvr,
-          reportePendiente: pendiente,
-          flotaData: fd,
-        };
-      });
-      state.currentIdx=0; state.chipState={piso:'',tipo:''}; state.prioSel='Media'; state.active=true;
-      renderCurrentValidacion();
-    } catch(e) {
-      console.error('[BULK procesarLista] error construyendo unidades:', e);
-      UI.toast('Error al procesar lista: '+( e.message||'Error inesperado'),'err');
-      // Restaurar botón para que el usuario pueda reintentar
-      if(btn){btn.disabled=false;btn.textContent=btnOrigText;}
-    }
+    state.unidades=units.map(u=>{
+      const fd=flotaMap[u]||_getFlotaData(u)||null;
+      const pendiente=fallas.find(f=>f.empresa===emp&&f.unidad===u&&/pendiente/i.test(f.estatus||''))||null;
+      const yaSinDvr=fd?.sin_dvr===true;
+      return {
+        id:DATA.uid(), numero:u,
+        // Si ya está marcada sin DVR en asignación, arrancar como barrido/sinDvr
+        status: yaSinDvr ? 'barrido' : 'pending',
+        sinDvr: yaSinDvr,
+        reportePendiente: pendiente,
+        flotaData: fd,
+      };
+    });
+    state.currentIdx=0; state.chipState={piso:'',tipo:''}; state.prioSel='Media'; state.active=true;
+    renderCurrentValidacion();
   }
 
   // Versión safe de render para restauración — retorna HTML o null si falla
@@ -877,8 +908,6 @@ const BULK = (() => {
   }
 
   function renderCurrentValidacion() {
-    const main=document.getElementById('mainContent');
-    if(!main){console.error('[BULK] mainContent not found');return;}
     try {
       let idx=state.currentIdx;
       const cur=state.unidades[idx];
@@ -888,25 +917,12 @@ const BULK = (() => {
         else{
           const any=state.unidades.findIndex(u=>u.status==='pending'&&!u.sinDvr);
           if(any!==-1){state.currentIdx=any;idx=any;}
-          else{main.innerHTML=renderValidacionCompleta();UI.updateHeaderCounts();return;}
+          else{const m=document.getElementById('mainContent');if(m)m.innerHTML=renderValidacionCompleta();UI.updateHeaderCounts();return;}
         }
       }
-      let html;
-      try {
-        html=renderValidacion();
-      } catch(renderErr) {
-        console.error('[BULK] renderValidacion threw:', renderErr);
-        // Mostrar pantalla de error recuperable dentro del módulo, no volver a llamar renderValidacion
-        main.innerHTML=`<div class="module active" style="padding:40px;text-align:center">
-          <div style="color:var(--red);font-size:14px;font-weight:700;margin-bottom:12px">⚠ Error al renderizar la validación</div>
-          <div style="color:var(--text2);font-size:12px;margin-bottom:20px">${renderErr.message||'Error inesperado'}</div>
-          <div style="display:flex;gap:10px;justify-content:center">
-            <button class="btn btn-ghost" onclick="BULK.volverALista()">← Volver a la lista</button>
-            <button class="btn btn-primary" onclick="BULK.renderCurrentValidacion()">Reintentar</button>
-          </div>
-        </div>`;
-        return;
-      }
+      const main=document.getElementById('mainContent');
+      if(!main){console.error('[BULK] mainContent not found');return;}
+      const html=renderValidacion();
       if(!html){console.error('[BULK] renderValidacion returned empty');return;}
       main.innerHTML=html;
       // resetFormFields necesita que el DOM esté pintado
@@ -916,18 +932,17 @@ const BULK = (() => {
       });
     } catch(e) {
       console.error('[BULK] renderCurrentValidacion error:', e);
-      main.innerHTML=`<div class="module active" style="padding:40px;text-align:center">
-        <div style="color:var(--red);font-size:13px;font-weight:700;margin-bottom:12px">Error en carga masiva</div>
-        <div style="color:var(--text2);font-size:12px;margin-bottom:20px">${e.message||'Error inesperado'}</div>
-        <button class="btn btn-ghost" onclick="BULK.volverALista()">← Volver a la lista</button>
-      </div>`;
+      // Fallback: mostrar estado de recuperación
+      const main=document.getElementById('mainContent');
+      if(main) main.innerHTML=renderValidacion();
     }
   }
 
   function resetFormFields() {
     ['bulkCategoria','bulkComponente'].forEach(id=>{const el=document.getElementById(id);if(el)el.selectedIndex=0;});
     const rc=document.getElementById('bulkComponente');if(rc)rc.innerHTML='<option value="">— Seleccionar categoría —</option>';
-    const fd=document.getElementById('bulkFecha');if(fd)fd.value=state.procesarTs||_isoMX();
+    const fd=document.getElementById('bulkFecha');
+    if(fd){fd.value=state.procesarTs||_isoMX();const disp=document.getElementById('bulkFecha_disp');if(disp)disp.textContent=_isoToDisplayMX(fd.value);}
     const bd=document.getElementById('bulkDesc');if(bd)bd.value='';
     state.chipState={piso:'',tipo:''}; state.prioSel='Media';
     document.querySelectorAll('.chip-row .chip').forEach(c=>c.classList.remove('active'));
@@ -982,7 +997,12 @@ const BULK = (() => {
     const visible=wrap.style.display!=='none';
     wrap.style.display=visible?'none':'';
     if(btn)btn.textContent=visible?'+ Agregar fecha':'✕ Quitar fecha';
-    if(!visible&&inp&&!inp.value){const d=new Date();d.setDate(d.getDate()-1);inp.value=d.toISOString().slice(0,16);}
+    if(!visible&&inp&&!inp.value){
+      const ayer=new Date(Date.now()-_TZ_OFFSET_MS-86400000);
+      const pad=n=>String(n).padStart(2,'0');
+      inp.value=ayer.getUTCFullYear()+'-'+pad(ayer.getUTCMonth()+1)+'-'+pad(ayer.getUTCDate())+'T'+pad(ayer.getUTCHours())+':'+pad(ayer.getUTCMinutes());
+      const disp=document.getElementById('bulkUltActFecha_disp');if(disp)disp.textContent=_isoToDisplayMX(inp.value);
+    }
     if(visible&&inp)inp.value='';
   }
 
