@@ -524,7 +524,7 @@ const BULK = (() => {
               <!-- FECHA Y HORA -->
               <div class="form-group">
                 <label class="required" for="bulkFecha">Fecha y Hora</label>
-                <input type="datetime-local" id="bulkFecha" value="${state.procesarTs||_isoMX()}">
+                <input type="datetime-local" id="bulkFecha" lang="es-MX" value="${state.procesarTs||_isoMX()}">
               </div>
               <!-- PRIORIDAD -->
               <div class="form-group">
@@ -572,7 +572,7 @@ const BULK = (() => {
               </div>
               <div id="bulkUltActWrap" style="display:none;margin-top:8px">
                 <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Fecha de última transmisión</label>
-                <input type="datetime-local" id="bulkUltActFecha" style="background:var(--bg2);border:1px solid rgba(79,142,247,.3);border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;width:100%;max-width:280px;font-family:inherit"/>
+                <input type="datetime-local" id="bulkUltActFecha" lang="es-MX" style="background:var(--bg2);border:1px solid rgba(79,142,247,.3);border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;width:100%;max-width:280px;font-family:inherit"/>
                 <div style="font-size:10px;color:var(--text3);margin-top:4px">Sin fecha = unidad en línea</div>
               </div>
             </div>
@@ -610,7 +610,7 @@ const BULK = (() => {
             <!-- PREVENTIVO (sin falla) -->
             <div id="bulkPreventivoSection" style="margin-top:10px;display:none;padding:10px 14px;background:rgba(34,197,94,.05);border:1px solid rgba(34,197,94,.15);border-radius:10px">
               <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:6px">✅ Preventivo — Fecha de realización</div>
-              <input type="datetime-local" id="bulkPrevFecha" value="${state.procesarTs||_isoMX()}" style="background:var(--bg2);border:1px solid rgba(34,197,94,.3);border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;max-width:280px;font-family:inherit"/>
+              <input type="datetime-local" id="bulkPrevFecha" lang="es-MX" value="${state.procesarTs||_isoMX()}" style="background:var(--bg2);border:1px solid rgba(34,197,94,.3);border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;max-width:280px;font-family:inherit"/>
               <div style="font-size:10px;color:var(--text3);margin-top:4px">Podrás asignar una falla después desde Atención Técnica</div>
             </div>
 
@@ -982,7 +982,7 @@ const BULK = (() => {
     const visible=wrap.style.display!=='none';
     wrap.style.display=visible?'none':'';
     if(btn)btn.textContent=visible?'+ Agregar fecha':'✕ Quitar fecha';
-    if(!visible&&inp&&!inp.value){const d=new Date();d.setDate(d.getDate()-1);inp.value=d.toISOString().slice(0,16);}
+    if(!visible&&inp&&!inp.value){inp.value=_isoMX();}
     if(visible&&inp)inp.value='';
   }
 
