@@ -963,17 +963,78 @@ const BULK = (() => {
   }
 
   function resetFormFields() {
+    const pf = state._pendingFields || null;
+    state._pendingFields = null; // consumir de inmediato
+
     ['bulkCategoria','bulkComponente'].forEach(id=>{const el=document.getElementById(id);if(el)el.selectedIndex=0;});
     const rc=document.getElementById('bulkComponente');if(rc)rc.innerHTML='<option value="">— Seleccionar categoría —</option>';
     const fd=document.getElementById('bulkFecha');if(fd){fd.value=state.procesarTs||_isoMX();_onFechaChange('bulkFecha');}
-    const bd=document.getElementById('bulkDesc');
-    if(bd){bd.value=state._pendingDesc||''; state._pendingDesc=null;}
-    state.chipState={piso:'',tipo:''}; state.prioSel='Media';
-    document.querySelectorAll('.chip-row .chip').forEach(c=>c.classList.remove('active'));
-    document.querySelectorAll('#bulkPrioChips .chip').forEach(c=>{if(c.textContent.trim()==='Media')c.classList.add('active');});
-    const baseEl=document.getElementById('bulkBase');
-    if(baseEl&&state.dondeReporta){const opt=[...baseEl.options].find(o=>o.value===state.dondeReporta);if(opt)opt.selected=true;}
-    resetEstado();
+
+    if(pf){
+      // Modo edición: pre-llenar con datos del reporte existente
+      state.chipState = {piso: pf.piso||'', tipo: pf.tipo||''};
+      state.prioSel   = pf.prioridad || 'Media';
+
+      // Base / Donde reporta
+      const baseEl=document.getElementById('bulkBase');
+      if(baseEl&&pf.base){const opt=[...baseEl.options].find(o=>o.value===pf.base);if(opt)opt.selected=true;}
+
+      // Tipo de Servicio (campo de texto readonly o select)
+      const svcEl=document.getElementById('bulkServicio');
+      if(svcEl&&pf.servicio) svcEl.value=pf.servicio;
+
+      // Prioridad chips
+      document.querySelectorAll('.chip-row .chip').forEach(c=>c.classList.remove('active'));
+      document.querySelectorAll('#bulkPrioChips .chip').forEach(c=>{
+        if(c.textContent.trim()===state.prioSel) c.classList.add('active');
+      });
+
+      // Piso chip
+      if(pf.piso){
+        document.querySelectorAll('.chip-row .chip').forEach(c=>{
+          if(c.dataset&&c.dataset.piso===pf.piso) c.classList.add('active');
+        });
+      }
+
+      // Tipo chip (Preventivo/Correctivo)
+      if(pf.tipo){
+        document.querySelectorAll('.chip-row .chip').forEach(c=>{
+          if(c.dataset&&c.dataset.tipo===pf.tipo) c.classList.add('active');
+        });
+      }
+
+      // Categoría y componente
+      const catEl=document.getElementById('bulkCategoria');
+      if(catEl&&pf.categoria){
+        const catOpt=[...catEl.options].find(o=>o.value===pf.categoria);
+        if(catOpt){catOpt.selected=true; onCategoriaChange();}
+        // Componente después de poblar el select
+        requestAnimationFrame(()=>{
+          const compEl=document.getElementById('bulkComponente');
+          if(compEl&&pf.componente){const cOpt=[...compEl.options].find(o=>o.value===pf.componente);if(cOpt)cOpt.selected=true;}
+        });
+      }
+
+      // Descripción / falla
+      const bd=document.getElementById('bulkDesc');
+      if(bd) bd.value=pf.descripcion||'';
+
+      // Si tenía falla, activar sección falla automáticamente
+      if(pf.falla){
+        selEstado('falla');
+      } else {
+        resetEstado();
+      }
+    } else {
+      // Modo normal: limpiar todo
+      const bd=document.getElementById('bulkDesc');if(bd)bd.value='';
+      state.chipState={piso:'',tipo:''}; state.prioSel='Media';
+      document.querySelectorAll('.chip-row .chip').forEach(c=>c.classList.remove('active'));
+      document.querySelectorAll('#bulkPrioChips .chip').forEach(c=>{if(c.textContent.trim()==='Media')c.classList.add('active');});
+      const baseEl=document.getElementById('bulkBase');
+      if(baseEl&&state.dondeReporta){const opt=[...baseEl.options].find(o=>o.value===state.dondeReporta);if(opt)opt.selected=true;}
+      resetEstado();
+    }
   }
 
   function resetEstado() {
@@ -1060,20 +1121,23 @@ const BULK = (() => {
   function editarReportePendiente(){
     const current=getCurrentUnidad();if(!current?.reportePendiente)return;
     const rp=current.reportePendiente;
-    // Editar INLINE: pre-llenar los campos del formulario con datos del reporte existente
-    // y quitar el banner de pendiente para que el usuario edite directamente aquí
-    current._editandoReporteId=rp.id; // guardar id para actualizar en lugar de crear nuevo
-    current.reportePendiente=null;    // ocultar el banner
-    // Pre-cargar campos desde el reporte pendiente
-    if(rp.base){const b=document.getElementById('bulkBase');if(b)b.value=rp.base;}
-    if(rp.servicio){const s=document.getElementById('bulkServicio');if(s)s.value=rp.servicio;}
-    if(rp.piso){state.chipState.piso=rp.piso;}
-    if(rp.tipo){state.chipState.tipo=rp.tipo;}
-    if(rp.prioridad){state.prioSel=rp.prioridad;}
-    if(rp.descripcionFalla){state._pendingDesc=rp.descripcionFalla;}
-    // Re-renderizar para mostrar formulario limpio con datos pre-cargados
+    current._editandoReporteId=rp.id;
+    current.reportePendiente=null;
+    // Guardar TODOS los campos en state._pendingFields para aplicarlos DESPUÉS del render
+    // (no podemos setear DOM aquí porque renderCurrentValidacion() destruye y recrea el HTML)
+    state._pendingFields={
+      base:        rp.base        || '',
+      servicio:    rp.servicio    || '',
+      piso:        rp.piso        || '',
+      tipo:        rp.tipo        || '',
+      prioridad:   rp.prioridad   || 'Media',
+      categoria:   rp.categoria   || '',
+      componente:  rp.componente  || '',
+      descripcion: rp.descripcionFalla || rp.descripcion || '',
+      falla:       !!(rp.descripcionFalla || rp.descripcion), // si tenía falla, abrir sección falla
+    };
     renderCurrentValidacion();
-    UI.toast(`✏️ Editando reporte ${rp.folio||'existente'} — guarda para actualizar`,'info');
+    UI.toast(`✏️ Editando reporte ${rp.folio||'existente'} — modifica y guarda`,'info');
   }
   function ignorarPendienteYContinuar(){const current=getCurrentUnidad();if(current)current.reportePendiente=null;renderCurrentValidacion();}
 
