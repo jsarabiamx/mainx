@@ -1,4 +1,4 @@
-/* ═══════════════════════════════════════════════
+   /* ═══════════════════════════════════════════════
    CCTV Fleet Control — Bulk Registration Module v2.0
    Cambios PDF: Donde reporta, técnico que reporta,
    autocomplete desde flota ETN, SIN DVR, validación
@@ -1185,6 +1185,12 @@ const BULK = (() => {
         return;
       }
       current._confirmadoBarrido=false;
+      // Si era sinDvr y ahora está en línea (barrido), liberar el flag en Supabase
+      if(current._forzandoEdicion || current.sinDvr){
+        _updateFlotaSinDvr(current.numero, false).catch(e=>console.warn('[BULK sinDvr liberar barrido]',e));
+      }
+      state.unidades[state.currentIdx].sinDvr=false;
+      state.unidades[state.currentIdx]._forzandoEdicion=false;
       state.unidades[state.currentIdx].status='barrido'; state.unidades[state.currentIdx].enLinea=true;
       const ultActFechaEl=document.getElementById('bulkUltActFecha'),ultActWrap=document.getElementById('bulkUltActWrap');
       const ultActVal=(ultActWrap&&ultActWrap.style.display!=='none'&&ultActFechaEl?.value)?ultActFechaEl.value:null;
@@ -1239,11 +1245,18 @@ const BULK = (() => {
 
     const _ultWrap=document.getElementById('bulkUltActWrap'),_ultInp=document.getElementById('bulkUltActFecha');
     const _ultVal=(_ultWrap&&_ultWrap.style.display!=='none'&&_ultInp?.value)?_ultInp.value:null;
+    const _eraForzado = state.unidades[state.currentIdx]._forzandoEdicion === true;
     state.unidades[state.currentIdx].status='done';
+    state.unidades[state.currentIdx].sinDvr=false; // asegurar que ya no es sinDvr
     state.unidades[state.currentIdx].folio=nuevo.folio;
     state.unidades[state.currentIdx]._forzandoEdicion=false;
     state.unidades[state.currentIdx].ultimaActualizacion=_ultVal||null;
     state.unidades[state.currentIdx].descripcionFalla=document.getElementById('bulkDesc')?.value?.trim()||'';
+
+    // Si la unidad era Sin DVR y fue liberada, actualizar flota_asignacion en Supabase
+    if (_eraForzado) {
+      _updateFlotaSinDvr(current.numero, false).catch(e=>console.warn('[BULK sinDvr liberar]',e));
+    }
 
     UI.toast(`✓ Unidad ${current.numero} — Folio: ${nuevo.folio}`);
     UI.updateHeaderCounts(); _avanzarSiguientePendiente();
