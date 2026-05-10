@@ -1,4 +1,4 @@
-   /* ═══════════════════════════════════════════════
+/* ═══════════════════════════════════════════════
    CCTV Fleet Control — Bulk Registration Module v2.0
    Cambios PDF: Donde reporta, técnico que reporta,
    autocomplete desde flota ETN, SIN DVR, validación
@@ -495,6 +495,15 @@ const BULK = (() => {
             </div>
           </div>`:''}
 
+          ${erasinDvr?`
+          <div style="background:rgba(107,114,128,.08);border:1px solid rgba(107,114,128,.3);border-radius:10px;padding:12px 16px;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px">
+            <span style="font-size:18px">📵</span>
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:700;color:#9ca3af;margin-bottom:4px">Esta unidad estaba registrada Sin DVR en asignación</div>
+              <div style="font-size:11px;color:var(--text2)">Si ya instalaron el DVR, selecciona el estado correcto y guarda. Si sigue sin DVR, selecciona "Sin DVR".</div>
+            </div>
+          </div>`:''}
+
           <!-- FORMULARIO -->
           <div class="card">
             <div class="form-grid">
@@ -780,7 +789,7 @@ const BULK = (() => {
         </div>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
           <button class="btn btn-ghost" onclick="APP.showModule('atencion')">Ver Atención Técnica</button>
-          <button class="btn btn-primary" onclick="APP.showModule('registro')">Nuevo Registro</button>
+          <button class="btn btn-primary" onclick="BULK.nuevaSesionBulk()">Nuevo Registro</button>
         </div>
       </div>
     </div>`;
@@ -1273,6 +1282,36 @@ const BULK = (() => {
 
   function volverALista(){state.active=false;APP.showModule('bulk');}
 
+  function nuevaSesionBulk(){
+    // Limpiar estado para nueva lista, pero preservar datos del técnico que reporta
+    const dondeReporta     = state.dondeReporta;
+    const tecnicoQueReporta= state.tecnicoQueReporta;
+    const proveedorFuente  = state.proveedorFuente;
+    state.active   = false;
+    state.unidades = [];
+    state._lastInput= '';
+    state.currentIdx= 0;
+    state.chipState = {piso:'',tipo:''};
+    state.prioSel   = 'Media';
+    // Mantener técnico/base para no tener que re-seleccionar
+    state.dondeReporta      = dondeReporta;
+    state.tecnicoQueReporta = tecnicoQueReporta;
+    state.proveedorFuente   = proveedorFuente;
+    // Render pantalla 1 limpia
+    const main = document.getElementById('mainContent');
+    if (main) {
+      try {
+        const session = AUTH.checkSession();
+        main.innerHTML = renderCargaMasiva(session);
+        requestAnimationFrame(() => {
+          try {
+            if (state.dondeReporta) onDondeReportaChange();
+          } catch(e) {}
+        });
+      } catch(e) { console.error('[BULK nuevaSesionBulk]', e); }
+    }
+  }
+
   // Salir completamente de carga masiva (desde pantalla 1) — limpia el estado
   function salirDeBulk(){
     state.active=false;
@@ -1287,7 +1326,7 @@ const BULK = (() => {
   return {
     renderCargaMasiva, renderValidacion, onInputChange, procesarLista, selChip, selPrio, selEstado,
     onCategoriaChange, goToUnit, prevUnit, nextUnit, skipUnit, refreshList,
-    enviarAlSistema, volverALista, copiarBarrido, toggleUltAct, state,
+    enviarAlSistema, volverALista, nuevaSesionBulk, copiarBarrido, toggleUltAct, state,
     onBaseChange, onDondeReportaChange, onTecnicoReportaChange, onTecnicoAdicionalChange, _onFechaChange,
     editarReportePendiente, ignorarPendienteYContinuar, _actualizarResumenTag, salirDeBulk, renderValidacionDirect, postRenderValidacion,
   };
