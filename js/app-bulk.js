@@ -439,7 +439,7 @@ const BULK = (() => {
             ${state.unidades.map((u,i)=>{
               const isDone=u.status==='done', isBarrido=u.status==='barrido', isSinDvr=u.sinDvr;
               const badgeClass=isSinDvr?'vsb-badge-barrido':isBarrido?'vsb-badge-barrido':isDone?'vsb-badge-done':u.reportePendiente?'vsb-badge-barrido':'vsb-badge-pending';
-              const badgeTxt=isSinDvr?'📵 Sin DVR':isBarrido?'📡 Barrido':isDone?'✓ Listo':u.reportePendiente?('⚠ '+( u.reportePendiente.folio||'Pendiente')):'• Pendiente';
+              const badgeTxt=u._forzandoEdicion?'✏️ Editando':isSinDvr?'📵 Sin DVR':isBarrido?'📡 Barrido':isDone?'✓ Listo':u.reportePendiente?('⚠ '+(u.reportePendiente.folio||'Pendiente')):'• Pendiente';
               const itemClass=['vsb-item',i===state.currentIdx?'vsb-item-active':'',isBarrido?'vsb-item-barrido':isDone?'vsb-item-done':''].filter(Boolean).join(' ');
               return `<div class="${itemClass}" onclick="BULK.goToUnit(${i})" id="vsb-item-${i}">
                 <span class="vsb-item-num">${i+1}</span>
@@ -966,7 +966,8 @@ const BULK = (() => {
     ['bulkCategoria','bulkComponente'].forEach(id=>{const el=document.getElementById(id);if(el)el.selectedIndex=0;});
     const rc=document.getElementById('bulkComponente');if(rc)rc.innerHTML='<option value="">— Seleccionar categoría —</option>';
     const fd=document.getElementById('bulkFecha');if(fd){fd.value=state.procesarTs||_isoMX();_onFechaChange('bulkFecha');}
-    const bd=document.getElementById('bulkDesc');if(bd)bd.value='';
+    const bd=document.getElementById('bulkDesc');
+    if(bd){bd.value=state._pendingDesc||''; state._pendingDesc=null;}
     state.chipState={piso:'',tipo:''}; state.prioSel='Media';
     document.querySelectorAll('.chip-row .chip').forEach(c=>c.classList.remove('active'));
     document.querySelectorAll('#bulkPrioChips .chip').forEach(c=>{if(c.textContent.trim()==='Media')c.classList.add('active');});
@@ -1035,11 +1036,13 @@ const BULK = (() => {
     if(isFinished&&idx!==state.currentIdx){
       if(state._editConfirmIdx===idx){
         state._editConfirmIdx=null; state.currentIdx=idx;
-        if(!u.sinDvr){u.status='pending';} renderCurrentValidacion(); UI.toast(`✏️ Editando unidad ${u.numero}`);
+        // Liberar sinDvr para permitir edición completa del formulario
+        u.status='pending'; u.sinDvr=false; u._forzandoEdicion=true;
+        renderCurrentValidacion(); UI.toast(`✏️ Editando unidad ${u.numero}`);
       }else{
         state._editConfirmIdx=idx;
         document.querySelectorAll('.vsb-item').forEach((el,i)=>el.classList.toggle('vsb-item-active',i===idx));
-        UI.toast(`Toca de nuevo para editar ${u.numero}`);
+        UI.toast(u.sinDvr ? `Toca de nuevo para liberar Sin DVR y editar ${u.numero}` : `Toca de nuevo para editar ${u.numero}`);
       }
     }else{state._editConfirmIdx=null;state.currentIdx=idx;renderCurrentValidacion();}
   }
@@ -1056,9 +1059,21 @@ const BULK = (() => {
 
   function editarReportePendiente(){
     const current=getCurrentUnidad();if(!current?.reportePendiente)return;
-    const reporteId=current.reportePendiente.id;
-    APP.showModule('atencion');
-    setTimeout(()=>{if(typeof MODS!=='undefined'&&MODS.selAtencion)MODS.selAtencion(reporteId);},150);
+    const rp=current.reportePendiente;
+    // Editar INLINE: pre-llenar los campos del formulario con datos del reporte existente
+    // y quitar el banner de pendiente para que el usuario edite directamente aquí
+    current._editandoReporteId=rp.id; // guardar id para actualizar en lugar de crear nuevo
+    current.reportePendiente=null;    // ocultar el banner
+    // Pre-cargar campos desde el reporte pendiente
+    if(rp.base){const b=document.getElementById('bulkBase');if(b)b.value=rp.base;}
+    if(rp.servicio){const s=document.getElementById('bulkServicio');if(s)s.value=rp.servicio;}
+    if(rp.piso){state.chipState.piso=rp.piso;}
+    if(rp.tipo){state.chipState.tipo=rp.tipo;}
+    if(rp.prioridad){state.prioSel=rp.prioridad;}
+    if(rp.descripcionFalla){state._pendingDesc=rp.descripcionFalla;}
+    // Re-renderizar para mostrar formulario limpio con datos pre-cargados
+    renderCurrentValidacion();
+    UI.toast(`✏️ Editando reporte ${rp.folio||'existente'} — guarda para actualizar`,'info');
   }
   function ignorarPendienteYContinuar(){const current=getCurrentUnidad();if(current)current.reportePendiente=null;renderCurrentValidacion();}
 
@@ -1088,6 +1103,7 @@ const BULK = (() => {
 
     if(estado==='sindvr'){
       state.unidades[state.currentIdx].sinDvr=true; state.unidades[state.currentIdx].status='barrido';
+      state.unidades[state.currentIdx]._forzandoEdicion=false;
       // Guardar sin_dvr=true en flota_asignacion via REST
       _updateFlotaSinDvr(current.numero, true).catch(e=>console.warn('[BULK sinDvr update]',e));
       UI.toast(`📵 Unidad ${current.numero} — Sin DVR registrado`);
@@ -1126,22 +1142,39 @@ const BULK = (() => {
 
     let nuevo;
     try {
-      nuevo=await DATA.crearReporte({
-        unidad:current.numero, empresa:DATA.state.currentEmpresa, base, servicio:svc,
-        fecha:prevFecha||fecha, piso:state.chipState.piso||'', tipo:state.chipState.tipo||'',
-        categoria:cat, componente:document.getElementById('bulkComponente')?.value||'',
-        proveedor:state.proveedorFuente||'',
-        descripcion:document.getElementById('bulkDesc')?.value?.trim()||'',
-        prioridad:state.prioSel||'Media', tecnico:state.tecnicoQueReporta||'',
-        tecnicoUsername:session?session.username:'', tecnicoAdicional:tecAdicional||'',
-        cromatica:current.flotaData?.cromatica||'',
-      });
-    }catch(error){UI.toast(error.message||'No se pudo crear el reporte','err');return;}
+      const _editId = current._editandoReporteId || null;
+      if (_editId) {
+        // Actualizar reporte existente en lugar de crear uno nuevo
+        nuevo = await DATA.actualizarReporte(_editId, {
+          base, servicio:svc, fecha:prevFecha||fecha,
+          piso:state.chipState.piso||'', tipo:state.chipState.tipo||'',
+          categoria:cat, componente:document.getElementById('bulkComponente')?.value||'',
+          proveedor:state.proveedorFuente||'',
+          descripcion:document.getElementById('bulkDesc')?.value?.trim()||'',
+          prioridad:state.prioSel||'Media', tecnico:state.tecnicoQueReporta||'',
+          tecnicoAdicional:tecAdicional||'',
+        });
+        current._editandoReporteId = null;
+        if (!nuevo) nuevo = { folio: _editId };
+      } else {
+        nuevo=await DATA.crearReporte({
+          unidad:current.numero, empresa:DATA.state.currentEmpresa, base, servicio:svc,
+          fecha:prevFecha||fecha, piso:state.chipState.piso||'', tipo:state.chipState.tipo||'',
+          categoria:cat, componente:document.getElementById('bulkComponente')?.value||'',
+          proveedor:state.proveedorFuente||'',
+          descripcion:document.getElementById('bulkDesc')?.value?.trim()||'',
+          prioridad:state.prioSel||'Media', tecnico:state.tecnicoQueReporta||'',
+          tecnicoUsername:session?session.username:'', tecnicoAdicional:tecAdicional||'',
+          cromatica:current.flotaData?.cromatica||'',
+        });
+      }
+    }catch(error){UI.toast(error.message||'No se pudo guardar el reporte','err');return;}
 
     const _ultWrap=document.getElementById('bulkUltActWrap'),_ultInp=document.getElementById('bulkUltActFecha');
     const _ultVal=(_ultWrap&&_ultWrap.style.display!=='none'&&_ultInp?.value)?_ultInp.value:null;
     state.unidades[state.currentIdx].status='done';
     state.unidades[state.currentIdx].folio=nuevo.folio;
+    state.unidades[state.currentIdx]._forzandoEdicion=false;
     state.unidades[state.currentIdx].ultimaActualizacion=_ultVal||null;
     state.unidades[state.currentIdx].descripcionFalla=document.getElementById('bulkDesc')?.value?.trim()||'';
 
