@@ -407,6 +407,7 @@ const BULK = (() => {
     const autoPisos     = fd?.pisos||'';
     const selSvc        = DATA.getSel('servicio', emp);
     const tienePendiente = current.reportePendiente;
+    const erasinDvr = current._eraSinDvr === true;
 
     return `
     <div id="mod-validacion" class="module active">
