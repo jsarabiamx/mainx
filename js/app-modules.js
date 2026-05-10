@@ -2928,7 +2928,17 @@ const MODS = (() => {
         main.innerHTML = '<div class="module active" style="padding:40px;text-align:center"><div style="color:var(--red);font-size:13px;font-weight:700">Error: Módulo de Carga Masiva no disponible</div><div style="color:var(--text2);font-size:12px;margin-top:8px">Recarga la página (F5) e intenta de nuevo</div></div>';
         return;
       }
-      // Limpiar estado anterior
+      // Si hay una sesión de validación activa, restaurarla en lugar de resetear
+      if (BULK.state.active && BULK.state.unidades.length > 0) {
+        try {
+          main.innerHTML = BULK.renderValidacion ? BULK.renderValidacion() : BULK.renderCargaMasiva(AUTH.checkSession());
+          requestAnimationFrame(() => { try { if(BULK.postRenderValidacion) BULK.postRenderValidacion(); } catch(e){} });
+        } catch(e) {
+          console.error('[setRegistroMode bulk restore]', e);
+        }
+        return;
+      }
+      // Nueva sesión: limpiar estado anterior
       BULK.state.active   = false;
       BULK.state.unidades = [];
 
