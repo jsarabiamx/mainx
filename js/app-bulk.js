@@ -1125,6 +1125,8 @@ const BULK = (() => {
     current.reportePendiente=null;
     // Guardar TODOS los campos en state._pendingFields para aplicarlos DESPUÉS del render
     // (no podemos setear DOM aquí porque renderCurrentValidacion() destruye y recrea el HTML)
+    // Los campos del reporte usan: descripcion, categoria, componente, servicio, base, piso, tipo
+    const _desc = rp.descripcion || rp.descripcionFalla || '';
     state._pendingFields={
       base:        rp.base        || '',
       servicio:    rp.servicio    || '',
@@ -1133,8 +1135,9 @@ const BULK = (() => {
       prioridad:   rp.prioridad   || 'Media',
       categoria:   rp.categoria   || '',
       componente:  rp.componente  || '',
-      descripcion: rp.descripcionFalla || rp.descripcion || '',
-      falla:       !!(rp.descripcionFalla || rp.descripcion), // si tenía falla, abrir sección falla
+      descripcion: _desc,
+      // Activar sección "Con falla" si el reporte tenía descripción O categoría
+      falla:       !!(_desc || rp.categoria),
     };
     renderCurrentValidacion();
     UI.toast(`✏️ Editando reporte ${rp.folio||'existente'} — modifica y guarda`,'info');
