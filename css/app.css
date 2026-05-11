@@ -1340,6 +1340,8 @@ textarea { resize: vertical; min-height: 80px; }
 .vsb-item-done:hover { opacity: 0.9; }
 .vsb-item-barrido { opacity: 0.55; }
 .vsb-item-barrido:hover { opacity: 0.9; }
+.vsb-item-grey { opacity: 0.6; }
+.vsb-item-grey:hover { opacity: 0.95; }
 
 .vsb-badge-barrido {
   background: rgba(79,142,247,0.12);
@@ -1383,6 +1385,12 @@ textarea { resize: vertical; min-height: 80px; }
   background: rgba(34,197,94,0.1);
   color: var(--green);
   border: 1px solid rgba(34,197,94,0.2);
+}
+
+.vsb-badge-grey {
+  background: rgba(107,114,128,0.1);
+  color: #9ca3af;
+  border: 1px solid rgba(107,114,128,0.2);
 }
 
 /* ─── Validación Main ─────────────────────────── */
