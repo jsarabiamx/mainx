@@ -371,9 +371,13 @@ const APP = (() => {
         break;
       case 'bulk':
         if (typeof BULK !== 'undefined') {
-          if (BULK.state.active && BULK.state.unidades.length > 0) {
+          if (BULK.state.completado) {
+            // Barrido completado — mostrar pantalla final hasta que el usuario salga explícitamente
+            try {
+              main.innerHTML = BULK.renderValidacionCompleta();
+            } catch(e) { console.error('[APP bulk completado]', e); }
+          } else if (BULK.state.active && BULK.state.unidades.length > 0) {
             // En validación — asignar HTML directo al main
-            // Si falla, el error se verá en consola y el usuario puede refrescar
             try {
               main.innerHTML = BULK.renderValidacion();
               requestAnimationFrame(() => {
@@ -381,7 +385,6 @@ const APP = (() => {
               });
             } catch(e) {
               console.error('[APP bulk validacion]', e);
-              // Último recurso: pantalla 1 pero manteniendo active=true para reintentar
               main.innerHTML = BULK.renderCargaMasiva(session);
               requestAnimationFrame(() => {
                 if (BULK.state.dondeReporta) BULK.onDondeReportaChange();
