@@ -608,6 +608,7 @@ const BULK = (() => {
                   <div class="bulk-estado-btn bulk-estado-sinfalla" id="bulkEstadoSinFalla" onclick="BULK.selEstado('sinfalla')"><div class="bulk-estado-dot" style="background:var(--green)"></div>Sin falla</div>
                   <div class="bulk-estado-btn" id="bulkEstadoBarrido" onclick="BULK.selEstado('barrido')" style="border:1px solid var(--border);border-radius:8px;padding:8px 16px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text2);background:var(--bg3)"><div class="bulk-estado-dot" style="background:#4f8ef7"></div>Barrido</div>
                   <div class="bulk-estado-btn" id="bulkEstadoSinDvr" onclick="BULK.selEstado('sindvr')" style="border:1px solid var(--border);border-radius:8px;padding:8px 16px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text2);background:var(--bg3)"><div class="bulk-estado-dot" style="background:#6b7280"></div>Sin DVR</div>
+                  <div id="bulkLiberarDvrBtn" onclick="BULK.confirmarLiberarDvr()" style="display:none;border:1px solid rgba(239,68,68,.4);border-radius:8px;padding:8px 16px;cursor:pointer;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#ef4444;background:rgba(239,68,68,.08)"><div class="bulk-estado-dot" style="background:#ef4444"></div>🔓 Tiene DVR — Liberar</div>
                 </div>
               </div>
             </div>
@@ -1045,7 +1046,13 @@ const BULK = (() => {
       document.querySelectorAll('#bulkPrioChips .chip').forEach(c=>{if(c.textContent.trim()==='Media')c.classList.add('active');});
       const baseEl=document.getElementById('bulkBase');
       if(baseEl&&state.dondeReporta){const opt=[...baseEl.options].find(o=>o.value===state.dondeReporta);if(opt)opt.selected=true;}
-      resetEstado();
+      // Si la unidad era Sin DVR, pre-seleccionar el chip y mostrar botón de liberar
+      const cur = state.unidades[state.currentIdx];
+      if(cur && cur._eraSinDvr) {
+        _activarSinDvrChip();
+      } else {
+        resetEstado();
+      }
     }
   }
 
@@ -1057,6 +1064,81 @@ const BULK = (() => {
     const wrap=document.getElementById('bulkUltActWrap'),btn=document.getElementById('bulkUltActBtn'),inp=document.getElementById('bulkUltActFecha');
     if(wrap)wrap.style.display='none'; if(btn)btn.textContent='+ Agregar fecha'; if(inp)inp.value='';
     state.chipState.estado='';
+  }
+
+  function _activarSinDvrChip() {
+    // Muestra el chip Sin DVR en ROJO (unidad registrada como Sin DVR)
+    // y muestra botón "Tiene DVR - Liberar"
+    ['bulkEstadoFalla','bulkEstadoSinFalla','bulkEstadoBarrido','bulkEstadoSinDvr'].forEach(id=>{
+      const b=document.getElementById(id);if(b){b.classList.remove('active');b.style.borderColor='';b.style.color='';}
+    });
+    ['bulkUltActSection','bulkFallaSection','bulkPreventivoSection','bulkSinDvrSection'].forEach(id=>{
+      const el=document.getElementById(id);if(el)el.style.display='none';
+    });
+    // Chip Sin DVR en rojo (bloqueado - solo se puede liberar con confirmación)
+    const sinDvrBtn = document.getElementById('bulkEstadoSinDvr');
+    if(sinDvrBtn){
+      sinDvrBtn.classList.add('active');
+      sinDvrBtn.style.borderColor='#ef4444';
+      sinDvrBtn.style.color='#ef4444';
+      sinDvrBtn.style.background='rgba(239,68,68,.08)';
+      sinDvrBtn.style.pointerEvents='none'; // no clickeable directamente
+    }
+    // Mostrar sección Sin DVR
+    const ds = document.getElementById('bulkSinDvrSection');
+    if(ds) ds.style.display='';
+    // Mostrar botón de liberar
+    const liberarBtn = document.getElementById('bulkLiberarDvrBtn');
+    if(liberarBtn) liberarBtn.style.display='flex';
+    state.chipState.estado='sindvr';
+  }
+
+  function confirmarLiberarDvr() {
+    const cur = state.unidades[state.currentIdx];
+    if(!cur) return;
+    // Mostrar confirmación inline (sin usar window.confirm para mejor UX)
+    const liberarBtn = document.getElementById('bulkLiberarDvrBtn');
+    if(!liberarBtn) return;
+    if(liberarBtn.dataset.confirmando === '1') {
+      // Segunda pulsación - confirmar liberación
+      liberarBtn.dataset.confirmando = '0';
+      liberarBtn.textContent = '🔓 Tiene DVR — Liberar';
+      liberarBtn.style.borderColor='rgba(239,68,68,.4)';
+      // Liberar: limpiar sinDvr flags
+      cur._eraSinDvr = false;
+      cur.sinDvr     = false;
+      cur._forzandoEdicion = false;
+      // Desbloquear el chip Sin DVR y quitarlo de seleccionado
+      const sinDvrChip = document.getElementById('bulkEstadoSinDvr');
+      if(sinDvrChip){
+        sinDvrChip.classList.remove('active');
+        sinDvrChip.style.borderColor='';
+        sinDvrChip.style.color='';
+        sinDvrChip.style.background='';
+        sinDvrChip.style.pointerEvents='';
+      }
+      liberarBtn.style.display='none';
+      // Limpiar sección sinDvr y resetear estado para que técnico elija
+      const ds=document.getElementById('bulkSinDvrSection');if(ds)ds.style.display='none';
+      state.chipState.estado='';
+      // Sincronizar con Supabase (quitar sinDvr)
+      _updateFlotaSinDvr(cur.numero, false).catch(e=>console.warn('[BULK liberar DVR]',e));
+      UI.toast(`✅ Unidad ${cur.numero} liberada — selecciona el estado correcto`,'info');
+    } else {
+      // Primera pulsación - pedir confirmación
+      liberarBtn.dataset.confirmando = '1';
+      liberarBtn.innerHTML = '<div class="bulk-estado-dot" style="background:#ef4444"></div>¿Confirmar? Toca de nuevo';
+      liberarBtn.style.borderColor='#ef4444';
+      liberarBtn.style.background='rgba(239,68,68,.15)';
+      setTimeout(()=>{
+        if(liberarBtn.dataset.confirmando==='1'){
+          liberarBtn.dataset.confirmando='0';
+          liberarBtn.innerHTML='<div class="bulk-estado-dot" style="background:#ef4444"></div>🔓 Tiene DVR — Liberar';
+          liberarBtn.style.borderColor='rgba(239,68,68,.4)';
+          liberarBtn.style.background='rgba(239,68,68,.08)';
+        }
+      }, 3000);
+    }
   }
 
   function selEstado(tipo) {
@@ -1327,7 +1409,7 @@ const BULK = (() => {
   }
 
   return {
-    renderCargaMasiva, renderValidacion, onInputChange, procesarLista, selChip, selPrio, selEstado,
+    renderCargaMasiva, renderValidacion, onInputChange, procesarLista, selChip, selPrio, selEstado, confirmarLiberarDvr,
     onCategoriaChange, goToUnit, prevUnit, nextUnit, skipUnit, refreshList,
     enviarAlSistema, volverALista, nuevaSesionBulk, copiarBarrido, toggleUltAct, state,
     onBaseChange, onDondeReportaChange, onTecnicoReportaChange, onTecnicoAdicionalChange, _onFechaChange,
