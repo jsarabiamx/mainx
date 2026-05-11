@@ -881,9 +881,11 @@ const BULK = (() => {
         const yaSinDvr=fd?.sin_dvr===true;
         return {
           id:DATA.uid(), numero:u,
-          // Si ya está marcada sin DVR en asignación, arrancar como barrido/sinDvr
-          status: yaSinDvr ? 'barrido' : 'pending',
-          sinDvr: yaSinDvr,
+          // SIEMPRE pending: el técnico decide el estado en el formulario
+          // Aunque esté marcada sinDvr en asignación, puede que ya instalaron DVR
+          status: 'pending',
+          sinDvr: false,
+          _eraSinDvr: yaSinDvr,  // referencia para mostrar aviso en formulario
           reportePendiente: pendiente,
           flotaData: fd,
         };
