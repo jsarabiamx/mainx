@@ -939,7 +939,7 @@ const BULK = (() => {
         else{
           const any=state.unidades.findIndex(u=>u.status==='pending'&&!u.sinDvr);
           if(any!==-1){state.currentIdx=any;idx=any;}
-          else{main.innerHTML=renderValidacionCompleta();UI.updateHeaderCounts();return;}
+          else{state.completado=true;main.innerHTML=renderValidacionCompleta();UI.updateHeaderCounts();return;}
         }
       }
       let html;
@@ -1361,18 +1361,19 @@ const BULK = (() => {
     if(next!==-1){state.currentIdx=next;renderCurrentValidacion();return;}
     const any=state.unidades.findIndex(u=>u.status==='pending'&&!u.sinDvr);
     if(any!==-1){state.currentIdx=any;renderCurrentValidacion();return;}
-    const main=document.getElementById('mainContent');if(main)main.innerHTML=renderValidacionCompleta();
+    const main=document.getElementById('mainContent');if(main){state.completado=true;main.innerHTML=renderValidacionCompleta();}
     UI.updateHeaderCounts();
   }
 
-  function volverALista(){state.active=false;APP.showModule('bulk');}
+  function volverALista(){state.active=false;state.completado=false;APP.showModule('bulk');}
 
   function nuevaSesionBulk(){
     // Limpiar estado para nueva lista, pero preservar datos del técnico que reporta
     const dondeReporta     = state.dondeReporta;
     const tecnicoQueReporta= state.tecnicoQueReporta;
     const proveedorFuente  = state.proveedorFuente;
-    state.active   = false;
+    state.active     = false;
+    state.completado  = false;
     state.unidades = [];
     state._lastInput= '';
     state.currentIdx= 0;
@@ -1409,7 +1410,7 @@ const BULK = (() => {
   }
 
   return {
-    renderCargaMasiva, renderValidacion, onInputChange, procesarLista, selChip, selPrio, selEstado, confirmarLiberarDvr,
+    renderCargaMasiva, renderValidacion, renderValidacionCompleta, onInputChange, procesarLista, selChip, selPrio, selEstado, confirmarLiberarDvr,
     onCategoriaChange, goToUnit, prevUnit, nextUnit, skipUnit, refreshList,
     enviarAlSistema, volverALista, nuevaSesionBulk, copiarBarrido, toggleUltAct, state,
     onBaseChange, onDondeReportaChange, onTecnicoReportaChange, onTecnicoAdicionalChange, _onFechaChange,
