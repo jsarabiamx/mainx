@@ -73,7 +73,11 @@ const BULK = (() => {
   }
 
   function getCurrentUnidad() { return state.unidades[state.currentIdx]||null; }
-  function getPendingCount()  { return state.unidades.filter(u=>u.status==='pending'&&!u.sinDvr).length; }
+  // "Verdaderamente pendiente" = sin reporte previo y sin sinDvr → requiere atención manual
+  function _isTrulyPendiente(u) {
+    return u.status==='pending' && !u.sinDvr && !u._eraSinDvr && !u.reportePendiente && !u._editandoReporteId;
+  }
+  function getPendingCount()  { return state.unidades.filter(_isTrulyPendiente).length; }
   function getDoneCount()     { return state.unidades.filter(u=>u.status==='done').length; }
 
   // Actualiza sin_dvr en flota_asignacion para una unidad
@@ -711,7 +715,8 @@ const BULK = (() => {
     const emp=DATA.state.currentEmpresa, now=_nowMX(), pad=n=>String(n).padStart(2,'0');
     const fecha=pad(now.getUTCDate())+'/'+pad(now.getUTCMonth()+1)+'/'+String(now.getUTCFullYear()).slice(-2);
     const hora=pad(now.getUTCHours())+':'+pad(now.getUTCMinutes());
-    const enLinea   = state.unidades.filter(u=>u.status==='barrido'&&!u.ultimaActualizacion&&!u.sinDvr);
+    const enLinea   = state.unidades.filter(u=>u.status==='barrido'&&!u.ultimaActualizacion&&!u.sinDvr&&!u._autoResuelto);
+    const conReportePrevio = state.unidades.filter(u=>u._autoResuelto); // tenían ticket, no editados
     const conUltAct = state.unidades.filter(u=>u.status==='barrido'&&!!u.ultimaActualizacion)
                         .sort((a,b)=>_diasSinActualizar(a.ultimaActualizacion)-_diasSinActualizar(b.ultimaActualizacion));
     const sinDvr  = state.unidades.filter(u=>u.sinDvr);
@@ -745,6 +750,7 @@ const BULK = (() => {
     }
 
     if (sinDvr.length>0)  { txt+='📵 SIN DVR\n'; sinDvr.forEach(u=>{txt+=u.numero+'\n';}); txt+='\n'; }
+    if (conReportePrevio.length>0) { txt+='📋 CON REPORTE (sin cambios)\n'; conReportePrevio.forEach(u=>{txt+=u.numero+(u.reportePendiente?.folio?' ('+u.reportePendiente.folio+')':u._reportePendienteOriginal?.folio?' ('+u._reportePendienteOriginal.folio+')':'')+'\n';}); txt+='\n'; }
 
     if (conFalla.length>0) {
       txt+='🔴 CON FALLA\n';
@@ -769,7 +775,7 @@ const BULK = (() => {
   }
 
   function renderValidacionCompleta() {
-    const total=state.unidades.length, done=getDoneCount(), barridos=state.unidades.filter(u=>u.status==='barrido').length;
+    const total=state.unidades.length, done=getDoneCount(), barridos=state.unidades.filter(u=>u.status==='barrido'&&!u._autoResuelto).length, autoResueltos=state.unidades.filter(u=>u._autoResuelto).length;
     const sinDvr=state.unidades.filter(u=>u.sinDvr).length, conFalla=state.unidades.filter(u=>u.status==='done'&&u.folio).length;
     const omitidas=state.unidades.filter(u=>u.status==='pending').length, textoBarrido=_generarTextoBarrido();
     return `
@@ -892,8 +898,16 @@ const BULK = (() => {
           flotaData: fd,
         };
       });
-      state.currentIdx=0; state.chipState={piso:'',tipo:''}; state.prioSel='Media'; state.active=true;
-      renderCurrentValidacion();
+      // Empezar en la primera unidad verdaderamente pendiente (sin reporte previo, sin sinDvr)
+      const _firstTrue = state.unidades.findIndex(_isTrulyPendiente);
+      state.currentIdx = _firstTrue !== -1 ? _firstTrue : 0;
+      state.chipState={piso:'',tipo:''}; state.prioSel='Media'; state.active=true;
+      // Si NO hay ninguna verdaderamente pendiente, resolver automáticamente todas
+      if (_firstTrue === -1) {
+        _autoResolverTodas();
+      } else {
+        renderCurrentValidacion();
+      }
     } catch(e) {
       console.error('[BULK procesarLista] error construyendo unidades:', e);
       UI.toast('Error al procesar lista: '+( e.message||'Error inesperado'),'err');
@@ -935,12 +949,12 @@ const BULK = (() => {
       let idx=state.currentIdx;
       const cur=state.unidades[idx];
       if(cur&&(cur.status==='done'||cur.status==='barrido'||cur.sinDvr)){
-        const next=state.unidades.findIndex((u,i)=>i>=idx&&u.status==='pending'&&!u.sinDvr);
+        const next=state.unidades.findIndex((u,i)=>i>=idx && _isTrulyPendiente(u));
         if(next!==-1){state.currentIdx=next;idx=next;}
         else{
-          const any=state.unidades.findIndex(u=>u.status==='pending'&&!u.sinDvr);
+          const any=state.unidades.findIndex(u => _isTrulyPendiente(u));
           if(any!==-1){state.currentIdx=any;idx=any;}
-          else{state.completado=true;main.innerHTML=renderValidacionCompleta();UI.updateHeaderCounts();return;}
+          else{ _autoResolverTodas(); return; }
         }
       }
       let html;
@@ -1188,7 +1202,7 @@ const BULK = (() => {
 
   function goToUnit(idx){
     const u=state.unidades[idx];
-    const isFinished=u&&(u.status==='done'||u.status==='barrido'||u.sinDvr);
+    const isFinished=u&&(u.status==='done'||u.status==='barrido'||u.sinDvr||(!_isTrulyPendiente(u)&&u.status==='pending'));
     if(isFinished&&idx!==state.currentIdx){
       if(state._editConfirmIdx===idx){
         state._editConfirmIdx=null; state.currentIdx=idx;
@@ -1437,12 +1451,40 @@ const BULK = (() => {
   }
 
   function _avanzarSiguientePendiente(){
-    const next=state.unidades.findIndex((u,i)=>i>state.currentIdx&&u.status==='pending'&&!u.sinDvr);
-    if(next!==-1){state.currentIdx=next;renderCurrentValidacion();return;}
-    const any=state.unidades.findIndex(u=>u.status==='pending'&&!u.sinDvr);
-    if(any!==-1){state.currentIdx=any;renderCurrentValidacion();return;}
-    const main=document.getElementById('mainContent');if(main){state.completado=true;main.innerHTML=renderValidacionCompleta();}
+    // Buscar siguiente VERDADERAMENTE pendiente (sin reporte previo, sin sinDvr)
+    const next = state.unidades.findIndex((u,i)=>i>state.currentIdx && _isTrulyPendiente(u));
+    if(next !== -1){ state.currentIdx=next; renderCurrentValidacion(); return; }
+    const any = state.unidades.findIndex(u => _isTrulyPendiente(u));
+    if(any !== -1){ state.currentIdx=any; renderCurrentValidacion(); return; }
+    // Ya no hay verdaderamente pendientes → auto-resolver las que quedan (reporte previo / sinDvr)
+    _autoResolverTodas();
+  }
+
+  async function _autoResolverTodas() {
+    // Unidades con reporte existente que no fueron editadas → marcar como barrido (no crear ticket)
+    // Unidades sinDvr que no fueron liberadas → registrar como sinDvr
+    const pendientes = state.unidades.filter(u => u.status === 'pending');
+    for (const u of pendientes) {
+      const idx = state.unidades.indexOf(u);
+      if (u._eraSinDvr && !u._forzandoEdicion) {
+        // Sigue siendo sinDvr → registrar como sinDvr en asignación
+        state.unidades[idx].sinDvr = true;
+        state.unidades[idx].status = 'barrido';
+        _updateFlotaSinDvr(u.numero, true).catch(e=>console.warn('[auto sinDvr]',e));
+      } else if (u.reportePendiente || u._reportePendienteOriginal) {
+        // Tiene reporte existente que no se editó → solo marcar barrido, NO crear ticket
+        state.unidades[idx].status = 'barrido';
+        state.unidades[idx].enLinea = false; // fuera de línea (tiene reporte pendiente)
+        state.unidades[idx]._autoResuelto = true;
+      } else {
+        // Verdaderamente pendiente sin resolver → marcar como omitida
+        state.unidades[idx].status = 'barrido';
+        state.unidades[idx]._omitida = true;
+      }
+    }
     UI.updateHeaderCounts();
+    const main=document.getElementById('mainContent');
+    if(main){ state.completado=true; main.innerHTML=renderValidacionCompleta(); }
   }
 
   function volverALista(){state.active=false;state.completado=false;APP.showModule('bulk');}
@@ -1490,7 +1532,7 @@ const BULK = (() => {
   }
 
   return {
-    renderCargaMasiva, renderValidacion, renderValidacionCompleta, onInputChange, procesarLista, selChip, selPrio, selEstado, confirmarLiberarDvr, _decidirReporte,
+    renderCargaMasiva, renderValidacion, renderValidacionCompleta, onInputChange, procesarLista, selChip, selPrio, selEstado, confirmarLiberarDvr, _decidirReporte, _autoResolverTodas,
     onCategoriaChange, goToUnit, prevUnit, nextUnit, skipUnit, refreshList,
     enviarAlSistema, volverALista, nuevaSesionBulk, copiarBarrido, toggleUltAct, state,
     onBaseChange, onDondeReportaChange, onTecnicoReportaChange, onTecnicoAdicionalChange, _onFechaChange,
