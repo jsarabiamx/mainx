@@ -439,9 +439,11 @@ const BULK = (() => {
           <div class="vsb-list" id="validacionSidebarList">
             ${state.unidades.map((u,i)=>{
               const isDone=u.status==='done', isBarrido=u.status==='barrido', isSinDvr=u.sinDvr;
-              const badgeClass=isSinDvr?'vsb-badge-barrido':isBarrido?'vsb-badge-barrido':isDone?'vsb-badge-done':u.reportePendiente?'vsb-badge-barrido':'vsb-badge-pending';
-              const badgeTxt=u._forzandoEdicion?'✏️ Editando':isSinDvr?'📵 Sin DVR':isBarrido?'📡 Barrido':isDone?'✓ Listo':u.reportePendiente?('⚠ '+(u.reportePendiente.folio||'Pendiente')):'• Pendiente';
-              const itemClass=['vsb-item',i===state.currentIdx?'vsb-item-active':'',isBarrido?'vsb-item-barrido':isDone?'vsb-item-done':''].filter(Boolean).join(' ');
+              const tieneReporte=!!(u.reportePendiente && !u._editandoReporteId);
+              // Colores: done=verde, barrido=azul, sinDvr=gris, conReporte=gris, pending=amarillo
+              const badgeClass=isDone?'vsb-badge-done':isBarrido?'vsb-badge-barrido':(isSinDvr||tieneReporte)?'vsb-badge-grey':'vsb-badge-pending';
+              const badgeTxt=u._forzandoEdicion?'✏️ Editando':u._editandoReporteId?'✏️ Editando':isDone?'✓ Listo':isBarrido?'📡 Barrido':isSinDvr?'📵 Sin DVR':tieneReporte?'● Con reporte':'• Pendiente';
+              const itemClass=['vsb-item',i===state.currentIdx?'vsb-item-active':'',isBarrido?'vsb-item-barrido':isDone?'vsb-item-done':(isSinDvr||tieneReporte)?'vsb-item-grey':''].filter(Boolean).join(' ');
               return `<div class="${itemClass}" onclick="BULK.goToUnit(${i})" id="vsb-item-${i}">
                 <span class="vsb-item-num">${i+1}</span>
                 <span class="vsb-item-unidad">${u.numero}</span>
@@ -882,12 +884,11 @@ const BULK = (() => {
         const yaSinDvr=fd?.sin_dvr===true;
         return {
           id:DATA.uid(), numero:u,
-          // SIEMPRE pending: el técnico decide el estado en el formulario
-          // Aunque esté marcada sinDvr en asignación, puede que ya instalaron DVR
           status: 'pending',
           sinDvr: false,
-          _eraSinDvr: yaSinDvr,  // referencia para mostrar aviso en formulario
+          _eraSinDvr: yaSinDvr,
           reportePendiente: pendiente,
+          _reportePendienteOriginal: pendiente, // copia para saber si SIEMPRE hubo reporte
           flotaData: fd,
         };
       });
@@ -1216,6 +1217,7 @@ const BULK = (() => {
     const current=getCurrentUnidad();if(!current?.reportePendiente)return;
     const rp=current.reportePendiente;
     current._editandoReporteId=rp.id;
+    current._reportePendienteOriginal = current._reportePendienteOriginal || rp;
     current.reportePendiente=null;
     // Guardar TODOS los campos en state._pendingFields para aplicarlos DESPUÉS del render
     // (no podemos setear DOM aquí porque renderCurrentValidacion() destruye y recrea el HTML)
@@ -1256,6 +1258,55 @@ const BULK = (() => {
     opts+=tecnicos.map(t=>`<option value="${t.nombre}">${t.nombre}${t.base?' ('+t.base+')':''}</option>`).join('');
     opts+='<option value="__otro__">Otro (escribir manualmente)</option>';
     tecAd.innerHTML=opts;
+  }
+
+
+  function _mostrarDialogoDecisionReporte(current, rp) {
+    // Mostrar diálogo inline en el área del formulario
+    const formArea = document.querySelector('.bulk-form-area') || document.getElementById('mainContent');
+    if (!formArea) return;
+    
+    // Crear overlay de decisión dentro del formulario
+    const existingDialog = document.getElementById('bulkDecisionDialog');
+    if (existingDialog) existingDialog.remove();
+
+    const folioTxt = rp.folio || rp.id || '—';
+    const descTxt  = rp.descripcion || rp.descripcionFalla || '';
+    const catTxt   = rp.categoria   || '';
+
+    const dialog = document.createElement('div');
+    dialog.id = 'bulkDecisionDialog';
+    dialog.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+    dialog.innerHTML = `
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:28px 32px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+        <div style="font-size:16px;font-weight:700;color:var(--text1);margin-bottom:6px">¿Qué hacer con el reporte existente?</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:18px">Folio: <strong style="color:var(--accent)">${folioTxt}</strong>${catTxt?' · '+catTxt:''}${descTxt?'<br><span style="color:var(--text3)">'+descTxt+'</span>':''}</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button onclick="BULK._decidirReporte('sobrescribir')" style="background:rgba(79,142,247,.12);border:1px solid rgba(79,142,247,.3);border-radius:10px;padding:12px 16px;cursor:pointer;text-align:left;font-family:inherit">
+            <div style="font-size:13px;font-weight:700;color:#4f8ef7;margin-bottom:3px">✏️ Sobrescribir / Reemplazar falla</div>
+            <div style="font-size:11px;color:var(--text2)">Actualiza el ticket existente con los nuevos datos</div>
+          </button>
+          <button onclick="BULK._decidirReporte('nueva')" style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:10px;padding:12px 16px;cursor:pointer;text-align:left;font-family:inherit">
+            <div style="font-size:13px;font-weight:700;color:#22c55e;margin-bottom:3px">➕ Generar nueva falla</div>
+            <div style="font-size:11px;color:var(--text2)">Crea un ticket nuevo manteniendo el anterior</div>
+          </button>
+          <button onclick="BULK._decidirReporte('cancelar')" style="background:transparent;border:1px solid var(--border);border-radius:10px;padding:10px 16px;cursor:pointer;font-family:inherit;color:var(--text2);font-size:12px">
+            Cancelar — seguir editando
+          </button>
+        </div>
+      </div>`;
+    document.body.appendChild(dialog);
+  }
+
+  function _decidirReporte(decision) {
+    const dialog = document.getElementById('bulkDecisionDialog');
+    if (dialog) dialog.remove();
+    if (decision === 'cancelar') return;
+    const current = getCurrentUnidad();
+    if (!current) return;
+    current._decisionReporte = decision;
+    // Re-intentar guardar con la decisión tomada
+    enviarAlSistema();
   }
 
   async function enviarAlSistema() {
@@ -1307,12 +1358,27 @@ const BULK = (() => {
     const prevFechaEl=document.getElementById('bulkPrevFecha');
     const prevFecha=(!hasFalla&&prevFechaEl?.value)?prevFechaEl.value:fecha;
 
+    // ── Si hay reporte pendiente Y el usuario NO activó edición ──────────────
+    // Preguntar qué hacer antes de guardar (solo para falla/sinfalla, no para barrido)
+    const _editId = current._editandoReporteId || null;
+    const _rpOriginal = current._reportePendienteOriginal || current.reportePendiente;
+    if (!_editId && _rpOriginal && (estado === 'falla' || estado === 'sinfalla' || !estado)) {
+      // Mostrar diálogo de elección inline si no hay respuesta previa
+      if (!current._decisionReporte) {
+        _mostrarDialogoDecisionReporte(current, _rpOriginal);
+        return; // esperar decisión del usuario
+      }
+    }
+    const _decision = current._decisionReporte || null;
+    // Limpiar decisión para próxima vez
+    current._decisionReporte = null;
+
     let nuevo;
     try {
-      const _editId = current._editandoReporteId || null;
-      if (_editId) {
-        // Actualizar reporte existente en lugar de crear uno nuevo
-        nuevo = await DATA.actualizarReporte(_editId, {
+      if (_editId || _decision === 'sobrescribir') {
+        const targetId = _editId || (_rpOriginal && _rpOriginal.id);
+        // Sobrescribir / actualizar reporte existente
+        nuevo = await DATA.actualizarReporte(targetId, {
           base, servicio:svc, fecha:prevFecha||fecha,
           piso:state.chipState.piso||'', tipo:state.chipState.tipo||'',
           categoria:cat, componente:document.getElementById('bulkComponente')?.value||'',
@@ -1322,7 +1388,21 @@ const BULK = (() => {
           tecnicoAdicional:tecAdicional||'',
         });
         current._editandoReporteId = null;
-        if (!nuevo) nuevo = { folio: _editId };
+        current._reportePendienteOriginal = null;
+        if (!nuevo) nuevo = { folio: targetId };
+      } else if (_decision === 'nueva') {
+        // Crear ticket nuevo (además del existente)
+        nuevo=await DATA.crearReporte({
+          unidad:current.numero, empresa:DATA.state.currentEmpresa, base, servicio:svc,
+          fecha:prevFecha||fecha, piso:state.chipState.piso||'', tipo:state.chipState.tipo||'',
+          categoria:cat, componente:document.getElementById('bulkComponente')?.value||'',
+          proveedor:state.proveedorFuente||'',
+          descripcion:document.getElementById('bulkDesc')?.value?.trim()||'',
+          prioridad:state.prioSel||'Media', tecnico:state.tecnicoQueReporta||'',
+          tecnicoUsername:session?session.username:'', tecnicoAdicional:tecAdicional||'',
+          cromatica:current.flotaData?.cromatica||'',
+        });
+        current._reportePendienteOriginal = null;
       } else {
         nuevo=await DATA.crearReporte({
           unidad:current.numero, empresa:DATA.state.currentEmpresa, base, servicio:svc,
@@ -1410,7 +1490,7 @@ const BULK = (() => {
   }
 
   return {
-    renderCargaMasiva, renderValidacion, renderValidacionCompleta, onInputChange, procesarLista, selChip, selPrio, selEstado, confirmarLiberarDvr,
+    renderCargaMasiva, renderValidacion, renderValidacionCompleta, onInputChange, procesarLista, selChip, selPrio, selEstado, confirmarLiberarDvr, _decidirReporte,
     onCategoriaChange, goToUnit, prevUnit, nextUnit, skipUnit, refreshList,
     enviarAlSistema, volverALista, nuevaSesionBulk, copiarBarrido, toggleUltAct, state,
     onBaseChange, onDondeReportaChange, onTecnicoReportaChange, onTecnicoAdicionalChange, _onFechaChange,
