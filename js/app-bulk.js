@@ -750,14 +750,28 @@ const BULK = (() => {
     }
 
     if (sinDvr.length>0)  { txt+='📵 SIN DVR\n'; sinDvr.forEach(u=>{txt+=u.numero+'\n';}); txt+='\n'; }
-    if (conReportePrevio.length>0) { txt+='📋 CON REPORTE (sin cambios)\n'; conReportePrevio.forEach(u=>{txt+=u.numero+(u.reportePendiente?.folio?' ('+u.reportePendiente.folio+')':u._reportePendienteOriginal?.folio?' ('+u._reportePendienteOriginal.folio+')':'')+'\n';}); txt+='\n'; }
+    if (conReportePrevio.length>0) {
+      txt+='📋 CON REPORTE (sin cambios)\n';
+      conReportePrevio.forEach(u=>{
+        const rp = u._reportePendienteOriginal || u.reportePendiente;
+        const folio = rp?.folio || '';
+        const cat   = rp?.categoria  || '';
+        const comp  = rp?.componente || '';
+        const desc  = rp?.descripcion|| rp?.descripcionFalla || '';
+        const falla = [cat,comp].filter(Boolean).join('/') || desc || '—';
+        txt += u.numero + ' — ' + falla + (folio?' ('+folio+')':'') + '\n';
+      });
+      txt+='\n';
+    }
 
     if (conFalla.length>0) {
       txt+='🔴 CON FALLA\n';
       conFalla.forEach(u=>{
-        const desc=u.descripcionFalla||'';
-        txt+=`${u.numero}${desc?' — '+desc:''}
-`;
+        const rp=u._reportePendienteOriginal;
+        const cat=rp?.categoria||'', comp=rp?.componente||'';
+        const desc=u.descripcionFalla||rp?.descripcion||rp?.descripcionFalla||'';
+        const falla=[cat,comp].filter(Boolean).join('/')||desc||'';
+        txt+=u.numero+(falla?' — '+falla:'')+(u.folio?' — Folio: '+u.folio:'')+'\n';
       });
       txt+='\n';
     }
@@ -898,7 +912,11 @@ const BULK = (() => {
           flotaData: fd,
         };
       });
-      // Empezar en la primera unidad verdaderamente pendiente (sin reporte previo, sin sinDvr)
+      // Ordenar: verdaderamente pendientes → con reporte → sinDvr
+      state.unidades.sort((a, b) => {
+        const rank = u => _isTrulyPendiente(u) ? 0 : (u._eraSinDvr ? 2 : 1);
+        return rank(a) - rank(b);
+      });
       const _firstTrue = state.unidades.findIndex(_isTrulyPendiente);
       state.currentIdx = _firstTrue !== -1 ? _firstTrue : 0;
       state.chipState={piso:'',tipo:''}; state.prioSel='Media'; state.active=true;
@@ -1206,8 +1224,12 @@ const BULK = (() => {
     if(isFinished&&idx!==state.currentIdx){
       if(state._editConfirmIdx===idx){
         state._editConfirmIdx=null; state.currentIdx=idx;
-        // Liberar sinDvr para permitir edición completa del formulario
-        u.status='pending'; u.sinDvr=false; u._forzandoEdicion=true;
+        // Para sinDvr: liberar el flag y marcar forzando edición
+        // Para con-reporte: solo abrir, NO marcar forzandoEdicion (mantiene badge "Con reporte")
+        if(u._eraSinDvr || u.sinDvr) {
+          u.sinDvr=false; u._forzandoEdicion=true;
+        }
+        u.status='pending';
         renderCurrentValidacion(); UI.toast(`✏️ Editando unidad ${u.numero}`);
       }else{
         state._editConfirmIdx=idx;
