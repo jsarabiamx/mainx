@@ -442,12 +442,14 @@ const BULK = (() => {
           </div>
           <div class="vsb-list" id="validacionSidebarList">
             ${state.unidades.map((u,i)=>{
-              const isDone=u.status==='done', isBarrido=u.status==='barrido', isSinDvr=u.sinDvr;
+              const isDone=u.status==='done', isBarrido=u.status==='barrido';
+              const isSinDvr=u.sinDvr || (u._eraSinDvr && !u._forzandoEdicion); // sinDvr real o era sinDvr
               const tieneReporte=!!(u.reportePendiente && !u._editandoReporteId);
-              // Colores: done=verde, barrido=azul, sinDvr=gris, conReporte=gris, pending=amarillo
-              const badgeClass=isDone?'vsb-badge-done':isBarrido?'vsb-badge-barrido':(isSinDvr||tieneReporte)?'vsb-badge-grey':'vsb-badge-pending';
+              // Colores: done=verde, barrido=azul, sinDvr/conReporte=gris, pending=amarillo
+              const isGrey = isSinDvr || tieneReporte;
+              const badgeClass=isDone?'vsb-badge-done':isBarrido?'vsb-badge-barrido':isGrey?'vsb-badge-grey':'vsb-badge-pending';
               const badgeTxt=u._forzandoEdicion?'✏️ Editando':u._editandoReporteId?'✏️ Editando':isDone?'✓ Listo':isBarrido?'📡 Barrido':isSinDvr?'📵 Sin DVR':tieneReporte?'● Con reporte':'• Pendiente';
-              const itemClass=['vsb-item',i===state.currentIdx?'vsb-item-active':'',isBarrido?'vsb-item-barrido':isDone?'vsb-item-done':(isSinDvr||tieneReporte)?'vsb-item-grey':''].filter(Boolean).join(' ');
+              const itemClass=['vsb-item',i===state.currentIdx?'vsb-item-active':'',isBarrido?'vsb-item-barrido':isDone?'vsb-item-done':isGrey?'vsb-item-grey':''].filter(Boolean).join(' ');
               return `<div class="${itemClass}" onclick="BULK.goToUnit(${i})" id="vsb-item-${i}">
                 <span class="vsb-item-num">${i+1}</span>
                 <span class="vsb-item-unidad">${u.numero}</span>
@@ -966,7 +968,7 @@ const BULK = (() => {
     try {
       let idx=state.currentIdx;
       const cur=state.unidades[idx];
-      if(cur&&(cur.status==='done'||cur.status==='barrido'||cur.sinDvr)){
+      if(cur&&(cur.status==='done'||cur.status==='barrido'||cur.sinDvr||(cur._eraSinDvr&&!cur._forzandoEdicion))){
         const next=state.unidades.findIndex((u,i)=>i>=idx && _isTrulyPendiente(u));
         if(next!==-1){state.currentIdx=next;idx=next;}
         else{
@@ -1220,7 +1222,7 @@ const BULK = (() => {
 
   function goToUnit(idx){
     const u=state.unidades[idx];
-    const isFinished=u&&(u.status==='done'||u.status==='barrido'||u.sinDvr||(!_isTrulyPendiente(u)&&u.status==='pending'));
+    const isFinished=u&&(u.status==='done'||u.status==='barrido'||u.sinDvr||u._eraSinDvr||(!_isTrulyPendiente(u)&&u.status==='pending'));
     if(isFinished&&idx!==state.currentIdx){
       if(state._editConfirmIdx===idx){
         state._editConfirmIdx=null; state.currentIdx=idx;
