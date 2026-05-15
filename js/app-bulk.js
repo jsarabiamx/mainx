@@ -30,26 +30,26 @@ const BULK = (() => {
     } catch(e) { return isoVal; }
   }
 
-  // Renderiza un campo fecha con display DD/MM/YYYY + input nativo oculto
+  // Renderiza un campo fecha — input nativo datetime-local con label DD/MM/YYYY encima
+  // El input real es visible y clickeable directamente (no usa showPicker)
   function _renderFechaInput(id, value, extraStyle) {
-    const displayVal = _fmtDisplay(value || _isoMX());
-    const baseStyle = 'background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text1);font-size:12px;padding:8px 12px;width:100%;font-family:inherit;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none';
-    const style = extraStyle ? baseStyle + ';' + extraStyle : baseStyle;
-    return `<div style="position:relative;width:100%">
-      <div id="${id}_display" onclick="document.getElementById('${id}').showPicker?document.getElementById('${id}').showPicker():document.getElementById('${id}').focus()" style="${style}">
-        <span id="${id}_txt">${displayVal}</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.5;flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      </div>
-      <input type="datetime-local" id="${id}" value="${value || _isoMX()}" oninput="BULK._onFechaChange('${id}')" onchange="BULK._onFechaChange('${id}')"
-        style="position:absolute;opacity:0.01;width:100%;height:100%;top:0;left:0;cursor:pointer;font-size:0;color:transparent;background:transparent;border:none" tabindex="0">
+    const v = value || _isoMX();
+    const displayVal = _fmtDisplay(v);
+    const borderColor = (extraStyle||'').match(/border-color:([^;]+)/)?.[1] || 'var(--border)';
+    const maxW = (extraStyle||'').match(/max-width:([^;]+)/)?.[1] || '100%';
+    return `<div style="position:relative;width:100%;max-width:${maxW}">
+      <label id="${id}_txt" style="display:block;font-size:11px;color:var(--text2);margin-bottom:3px;pointer-events:none">${displayVal}</label>
+      <input type="datetime-local" id="${id}" value="${v}"
+        oninput="BULK._onFechaChange('${id}')" onchange="BULK._onFechaChange('${id}')"
+        style="width:100%;background:var(--bg2);border:1px solid ${borderColor};border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;font-family:inherit;box-sizing:border-box;cursor:pointer;color-scheme:dark">
     </div>`;
   }
 
-  // Actualiza el texto display cuando cambia el input nativo
+  // Actualiza el label DD/MM/YYYY cuando cambia el input nativo
   function _onFechaChange(id) {
     const inp = document.getElementById(id);
-    const txt = document.getElementById(id + '_txt');
-    if (inp && txt) txt.textContent = _fmtDisplay(inp.value) || inp.value;
+    const lbl = document.getElementById(id + '_txt');
+    if (inp && lbl) lbl.textContent = _fmtDisplay(inp.value) || inp.value;
   }
 
 
