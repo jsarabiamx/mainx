@@ -56,14 +56,11 @@ const MODS = (() => {
   }
   function _renderFechaInputR(id, value, disabled) {
     const displayVal = _fmtFechaDisplay(value);
-    const disabledStyle = disabled ? 'opacity:.5;cursor:default' : 'cursor:pointer';
     return `<div style="position:relative;width:100%">
-      <div id="${id}_display" onclick="${disabled?'':"document.getElementById('"+id+"').showPicker?document.getElementById('"+id+"').showPicker():document.getElementById('"+id+"').focus()"}" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text1);font-size:12px;padding:8px 12px;width:100%;font-family:inherit;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;${disabledStyle}">
-        <span id="${id}_txt">${displayVal}</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.5;flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      </div>
-      <input type="datetime-local" id="${id}" value="${value}" ${disabled?'disabled':''} oninput="MODS._onRFechaChange('${id}')" onchange="MODS._onRFechaChange('${id}')"
-        style="position:absolute;opacity:0;width:100%;height:100%;top:0;left:0;${disabled?'':'cursor:pointer;'}font-size:16px" tabindex="-1">
+      <label id="${id}_txt" style="display:block;font-size:11px;color:var(--text2);margin-bottom:3px;pointer-events:none">${displayVal}</label>
+      <input type="datetime-local" id="${id}" value="${value}" ${disabled?'disabled':''}
+        oninput="MODS._onRFechaChange('${id}')" onchange="MODS._onRFechaChange('${id}')"
+        style="width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text1);font-size:12px;padding:7px 10px;font-family:inherit;box-sizing:border-box;${disabled?'opacity:.5;cursor:default':'cursor:pointer'};color-scheme:dark">
     </div>`;
   }
 
