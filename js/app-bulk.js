@@ -41,7 +41,7 @@ const BULK = (() => {
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.5;flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       </div>
       <input type="datetime-local" id="${id}" value="${value || _isoMX()}" oninput="BULK._onFechaChange('${id}')" onchange="BULK._onFechaChange('${id}')"
-        style="position:absolute;opacity:0;width:100%;height:100%;top:0;left:0;cursor:pointer;font-size:16px" tabindex="-1">
+        style="position:absolute;opacity:0.01;width:100%;height:100%;top:0;left:0;cursor:pointer;font-size:0;color:transparent;background:transparent;border:none" tabindex="0">
     </div>`;
   }
 
@@ -756,12 +756,11 @@ const BULK = (() => {
       txt+='📋 CON REPORTE (sin cambios)\n';
       conReportePrevio.forEach(u=>{
         const rp = u._reportePendienteOriginal || u.reportePendiente;
-        const folio = rp?.folio || '';
         const cat   = rp?.categoria  || '';
         const comp  = rp?.componente || '';
         const desc  = rp?.descripcion|| rp?.descripcionFalla || '';
         const falla = [cat,comp].filter(Boolean).join('/') || desc || '—';
-        txt += u.numero + ' — ' + falla + (folio?' ('+folio+')':'') + '\n';
+        txt += u.numero + ' — ' + falla + '\n';
       });
       txt+='\n';
     }
