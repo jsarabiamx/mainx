@@ -496,7 +496,7 @@ const APP = (() => {
   }
 
   return {
-    init, showModule, refreshPlatform, changeEmpresa, setViewMode, closeModal, logout,
+    init, showModule, refreshPlatform, changeEmpresa, setViewMode, setWorld, closeModal, logout,
     // Notifications
     toggleNotif, marcarTodasLeidas, onNotifClick, irAReporte, validarDesdeNotif, showValidacionModule,
     updateNotifBadge
