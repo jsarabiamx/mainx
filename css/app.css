@@ -215,6 +215,31 @@ body {
   border: 1px solid rgba(168,85,247,0.25);
 }
 
+/* ── World Switcher (Prev/Cor ↔ Flota) ─────────────────────── */
+.world-toggle {
+  display: flex; background: var(--bg3); border: 1px solid rgba(139,92,246,.3);
+  border-radius: var(--r); overflow: hidden; padding: 2px; gap: 2px;
+  margin-right: 6px;
+}
+
+.wbtn {
+  background: none; border: none; color: var(--text2); font-size: 10px;
+  font-weight: 600; padding: 3px 10px; border-radius: calc(var(--r) - 2px);
+  cursor: pointer; font-family: inherit; display: flex; align-items: center;
+  gap: 5px; transition: all .15s; white-space: nowrap;
+}
+.wbtn:hover { color: var(--text1); background: rgba(139,92,246,.12); }
+.wbtn.active {
+  background: rgba(139,92,246,.2); color: #a78bfa;
+  border: 1px solid rgba(139,92,246,.35); box-shadow: 0 0 8px rgba(139,92,246,.15);
+}
+
+/* Flota world: hide maintenance-specific nav elements */
+.world-flota #mainNav .nav-btn:not([data-world="all"]) { display: none; }
+.world-flota #viewToggle { display: none; }
+.world-flota #empresaStrip { display: none; }
+.world-flota #header-stats { display: none; }
+
 .view-toggle {
   display: flex; background: var(--bg3); border: 1px solid var(--border);
   border-radius: var(--r); overflow: hidden; padding: 2px; gap: 2px;
