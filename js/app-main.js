@@ -443,30 +443,41 @@ const APP = (() => {
 
   // ── World Switcher ────────────────────────────────────────────
   function setWorld(world) {
-    const btnPC  = document.getElementById('worldPrevCor');
-    const btnFL  = document.getElementById('worldFlota');
-    const nav    = document.getElementById('mainNav');
-    const strip  = document.getElementById('empresaStrip');
-    const toggle = document.getElementById('viewToggle');
-    const main   = document.getElementById('mainContent');
-
-    const navLeft  = document.getElementById('navLeft');
+    const btnPC   = document.getElementById('worldPrevCor');
+    const btnFL   = document.getElementById('worldFlota');
+    const navLeft = document.getElementById('navLeft');
+    const strip   = document.getElementById('empresaStrip');
+    const toggle  = document.getElementById('viewToggle');
+    const main    = document.getElementById('mainContent');
 
     if (world === 'flota') {
       btnPC && btnPC.classList.remove('active');
       btnFL && btnFL.classList.add('active');
-      // Ocultar solo el contenido del nav (no el nav entero, para que worldToggle siga visible)
+      // Ocultar mundo Prev/Cor
       if (navLeft) navLeft.style.display = 'none';
       if (strip)   strip.style.display   = 'none';
       if (toggle)  toggle.style.display  = 'none';
-      // Pantalla vacía
-      if (main) main.innerHTML = '';
+      // Cargar Mesa de Control GPS en iframe full-screen
+      if (main) {
+        main.style.padding = '0';
+        main.innerHTML = `<iframe
+          id="flotaFrame"
+          src="flota/index.html"
+          style="width:100%;height:100%;border:none;display:block;min-height:calc(100vh - 52px)"
+          allow="same-origin"
+        ></iframe>`;
+      }
     } else {
       btnFL && btnFL.classList.remove('active');
       btnPC && btnPC.classList.add('active');
+      // Restaurar mundo Prev/Cor
       if (navLeft) navLeft.style.display = '';
       if (strip)   strip.style.display   = '';
       if (toggle)  toggle.style.display  = '';
+      if (main)    main.style.padding    = '';
+      // Quitar iframe si existe
+      const frame = document.getElementById('flotaFrame');
+      if (frame) frame.remove();
       showModule(currentModule || 'registro');
     }
   }
