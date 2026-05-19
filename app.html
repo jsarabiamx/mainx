@@ -72,6 +72,17 @@
   <nav class="nav" id="mainNav">
     <div class="nav-left" id="navLeft"></div>
     <div class="nav-right">
+      <!-- ═══ WORLD SWITCHER ═══════════════════════════════════ -->
+      <div class="world-toggle" id="worldToggle">
+        <button class="wbtn active" id="worldPrevCor" onclick="APP.setWorld('prevcor')" title="Preventivos y Correctivos">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+          Prev/Cor
+        </button>
+        <button class="wbtn" id="worldFlota" onclick="APP.setWorld('flota')" title="Módulo de Flota">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v4h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+          Flota
+        </button>
+      </div>
       <div class="view-toggle" id="viewToggle">
         <button class="vtbtn active" id="modeIndividual" onclick="APP.setViewMode('individual')">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
