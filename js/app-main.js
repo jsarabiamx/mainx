@@ -459,13 +459,9 @@ const APP = (() => {
       if (toggle)  toggle.style.display  = 'none';
       // Cargar Mesa de Control GPS en iframe full-screen
       if (main) {
-        main.style.padding = '0';
-        main.innerHTML = `<iframe
-          id="flotaFrame"
-          src="flota/index.html"
-          style="width:100%;height:100%;border:none;display:block;min-height:calc(100vh - 52px)"
-          allow="same-origin"
-        ></iframe>`;
+        main.style.cssText = 'padding:0;margin:0;overflow:hidden';
+        // Iframe ocupa TODO el viewport desde debajo del header
+        main.innerHTML = '<iframe id="flotaFrame" src="flota/index.html" style="position:fixed;top:52px;left:0;width:100vw;height:calc(100vh - 52px);border:none;display:block;z-index:100" allowfullscreen></iframe>';
       }
     } else {
       btnFL && btnFL.classList.remove('active');
