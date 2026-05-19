@@ -443,7 +443,6 @@ const APP = (() => {
 
   // ── World Switcher ────────────────────────────────────────────
   function setWorld(world) {
-    const root = document.getElementById('appRoot') || document.body;
     const btnPC  = document.getElementById('worldPrevCor');
     const btnFL  = document.getElementById('worldFlota');
     const nav    = document.getElementById('mainNav');
@@ -452,72 +451,24 @@ const APP = (() => {
     const main   = document.getElementById('mainContent');
 
     if (world === 'flota') {
-      // ── Mundo Flota ─────────────────────────────────────────
-      root.classList.add('world-flota');
       btnPC && btnPC.classList.remove('active');
       btnFL && btnFL.classList.add('active');
-      // Ocultar elementos del mundo Prev/Cor
+      // Ocultar TODO el mundo Prev/Cor
       if (nav)    nav.style.display    = 'none';
       if (strip)  strip.style.display  = 'none';
       if (toggle) toggle.style.display = 'none';
-      // Mostrar interfaz Flota
-      if (main) main.innerHTML = _renderFlotaWorld();
+      // Pantalla completamente vacía
+      if (main) main.innerHTML = '';
     } else {
-      // ── Mundo Prev/Cor (default) ────────────────────────────
-      root.classList.remove('world-flota');
+      // Restaurar mundo Prev/Cor completo
       btnFL && btnFL.classList.remove('active');
       btnPC && btnPC.classList.add('active');
-      // Restaurar elementos
       if (nav)    nav.style.display    = '';
       if (strip)  strip.style.display  = '';
       if (toggle) toggle.style.display = '';
-      // Volver al módulo de registro
-      showModule('registro');
+      // Volver al último módulo activo
+      showModule(currentModule || 'registro');
     }
-  }
-
-  function _renderFlotaWorld() {
-    return `<div class="module active" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:20px;padding:40px">
-      <div style="width:64px;height:64px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);border-radius:16px;display:flex;align-items:center;justify-content:center">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.5">
-          <rect x="1" y="3" width="15" height="13" rx="2"/>
-          <path d="M16 8h4l3 3v4h-7V8z"/>
-          <circle cx="5.5" cy="18.5" r="2.5"/>
-          <circle cx="18.5" cy="18.5" r="2.5"/>
-        </svg>
-      </div>
-      <div style="text-align:center">
-        <div style="font-size:22px;font-weight:800;color:var(--text1);margin-bottom:8px">Módulo de Flota</div>
-        <div style="font-size:13px;color:var(--text2);max-width:400px;line-height:1.6">
-          Este módulo está en construcción. Aquí se gestionarán ventas, inventario de flota, asignaciones y más.
-        </div>
-      </div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:8px">
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 24px;text-align:center;min-width:140px;opacity:.5">
-          <div style="font-size:20px;margin-bottom:6px">🚌</div>
-          <div style="font-size:12px;font-weight:700;color:var(--text1)">Gestión de Flota</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">Próximamente</div>
-        </div>
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 24px;text-align:center;min-width:140px;opacity:.5">
-          <div style="font-size:20px;margin-bottom:6px">💰</div>
-          <div style="font-size:12px;font-weight:700;color:var(--text1)">Ventas</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">Próximamente</div>
-        </div>
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 24px;text-align:center;min-width:140px;opacity:.5">
-          <div style="font-size:20px;margin-bottom:6px">📦</div>
-          <div style="font-size:12px;font-weight:700;color:var(--text1)">Inventario</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">Próximamente</div>
-        </div>
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 24px;text-align:center;min-width:140px;opacity:.5">
-          <div style="font-size:20px;margin-bottom:6px">📊</div>
-          <div style="font-size:12px;font-weight:700;color:var(--text1)">Reportes</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">Próximamente</div>
-        </div>
-      </div>
-      <button onclick="APP.setWorld('prevcor')" style="margin-top:12px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);border-radius:8px;color:#a78bfa;font-size:12px;font-weight:600;padding:8px 20px;cursor:pointer;font-family:inherit">
-        ← Volver a Preventivos/Correctivos
-      </button>
-    </div>`;
   }
 
   async function setViewMode(mode) {
