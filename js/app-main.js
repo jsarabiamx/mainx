@@ -450,23 +450,23 @@ const APP = (() => {
     const toggle = document.getElementById('viewToggle');
     const main   = document.getElementById('mainContent');
 
+    const navLeft  = document.getElementById('navLeft');
+
     if (world === 'flota') {
       btnPC && btnPC.classList.remove('active');
       btnFL && btnFL.classList.add('active');
-      // Ocultar TODO el mundo Prev/Cor
-      if (nav)    nav.style.display    = 'none';
-      if (strip)  strip.style.display  = 'none';
-      if (toggle) toggle.style.display = 'none';
-      // Pantalla completamente vacía
+      // Ocultar solo el contenido del nav (no el nav entero, para que worldToggle siga visible)
+      if (navLeft) navLeft.style.display = 'none';
+      if (strip)   strip.style.display   = 'none';
+      if (toggle)  toggle.style.display  = 'none';
+      // Pantalla vacía
       if (main) main.innerHTML = '';
     } else {
-      // Restaurar mundo Prev/Cor completo
       btnFL && btnFL.classList.remove('active');
       btnPC && btnPC.classList.add('active');
-      if (nav)    nav.style.display    = '';
-      if (strip)  strip.style.display  = '';
-      if (toggle) toggle.style.display = '';
-      // Volver al último módulo activo
+      if (navLeft) navLeft.style.display = '';
+      if (strip)   strip.style.display   = '';
+      if (toggle)  toggle.style.display  = '';
       showModule(currentModule || 'registro');
     }
   }
