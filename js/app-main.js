@@ -460,6 +460,9 @@ const APP = (() => {
       // Cargar Mesa de Control GPS en iframe full-screen
       if (main) {
         main.style.cssText = 'padding:0;margin:0;overflow:hidden';
+        // Bloquear scroll del body para que Prev/Cor no se mueva debajo del iframe
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
         // Calcular offset real del header + nav dinámicamente
         const header = document.querySelector('.header');
         const nav    = document.getElementById('mainNav');
@@ -480,6 +483,9 @@ const APP = (() => {
       if (strip)   strip.style.display   = '';
       if (toggle)  toggle.style.display  = '';
       if (main)    main.style.padding    = '';
+      // Restaurar scroll del body
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
       // Quitar iframe si existe
       const frame = document.getElementById('flotaFrame');
       if (frame) frame.remove();
