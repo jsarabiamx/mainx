@@ -269,9 +269,13 @@ const Parsers = (() => {
     headerRow.forEach((h, i) => {
       const n = normalize(h);
       if (n.includes('ECONOM') || n === 'UNIDAD') colIdx.economico = i;
-      else if (n.includes('CROMATICA') || n.includes('CROMATICA')) colIdx.cromatica = i;
+      // Cromática: columna propia ETN o col M "MARCA COMERCIAL" de GHO
+      else if (n.includes('CROMATICA')) colIdx.cromatica = i;
+      else if (n.includes('MARCACOMERCIAL') || n === 'MARCACOM' || n.includes('MARCA_COM')) colIdx.cromatica = i;
       else if (n.includes('ESTATUS') || n === 'STATUS' || n === 'ESTADO') colIdx.estatus = i;
+      // Modelo: columna propia ETN o col N "TECNOLOGIA" de GHO
       else if (n.includes('MODELO')) colIdx.modelo = i;
+      else if (n.includes('TECNOLOGIA') || n.includes('TECNOLOG')) colIdx.modelo = i;
       else if (n === 'ROL' || n === 'ROLE') colIdx.rol = i;
       else if (n === 'BASE' || n === 'BASEASIGNADA') colIdx.base = i;
       else if (n.includes('EMPRESA') || n.includes('OPERADORA')) colIdx.empresa = i;
