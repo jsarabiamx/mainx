@@ -380,13 +380,16 @@ const UI = (() => {
     const from=Math.min((page-1)*PAGE_SIZE+1,total), to=Math.min(page*PAGE_SIZE,total);
     inf.textContent=total>0?`Mostrando ${from}–${to} de ${total} unidades`:'Sin resultados';
     if(pages<=1){btns.innerHTML='';return;}
+    // Guardar callback en registro global para que onclick pueda invocarlo
+    if(!window._UI_PAGE_CBS) window._UI_PAGE_CBS = {};
+    window._UI_PAGE_CBS[btnsId] = onPage;
     const nums=[];
     if(pages<=7){for(let i=1;i<=pages;i++)nums.push(i);}
     else{nums.push(1);if(page>3)nums.push('…');for(let i=Math.max(2,page-1);i<=Math.min(pages-1,page+1);i++)nums.push(i);if(page<pages-2)nums.push('…');nums.push(pages);}
     btns.innerHTML=
-      `<button class="page-btn" ${page<=1?'disabled':''} onclick="(${onPage})(${page-1})">‹</button>`+
-      nums.map(n=>n==='…'?`<span class="page-btn" style="cursor:default;opacity:.4">…</span>`:`<button class="page-btn ${n===page?'active':''}" onclick="(${onPage})(${n})">${n}</button>`).join('')+
-      `<button class="page-btn" ${page>=pages?'disabled':''} onclick="(${onPage})(${page+1})">›</button>`;
+      `<button class="page-btn" ${page<=1?'disabled':''} onclick="if(window._UI_PAGE_CBS&&window._UI_PAGE_CBS['${btnsId}'])window._UI_PAGE_CBS['${btnsId}'](${page-1})">‹</button>`+
+      nums.map(n=>n==='…'?`<span class="page-btn" style="cursor:default;opacity:.4">…</span>`:`<button class="page-btn ${n===page?'active':''}" onclick="if(window._UI_PAGE_CBS&&window._UI_PAGE_CBS['${btnsId}'])window._UI_PAGE_CBS['${btnsId}'](${n})">${n}</button>`).join('')+
+      `<button class="page-btn" ${page>=pages?'disabled':''} onclick="if(window._UI_PAGE_CBS&&window._UI_PAGE_CBS['${btnsId}'])window._UI_PAGE_CBS['${btnsId}'](${page+1})">›</button>`;
   }
 
   /* ══════════════════════════════════════════════════════
