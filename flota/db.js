@@ -287,6 +287,19 @@ const DB = (() => {
 
     u.updatedAt = new Date().toISOString();
     save();
+
+    // ── Persistir en Supabase (async, no bloquea UI) ──────────────────────
+    if (window.GPS_SB) {
+      GPS_SB.registrarFalla(num, falla, emp || _s.empresaActiva)
+        .then(rows => {
+          if (rows && rows[0] && rows[0].id) {
+            falla._sbId = rows[0].id;
+            save();
+          }
+        })
+        .catch(e => console.warn('[DB] registrarFalla Supabase:', e));
+    }
+
     return falla;
   }
 
@@ -348,6 +361,13 @@ const DB = (() => {
 
     u.updatedAt = ahora;
     save();
+
+    // ── Resolver en Supabase si tenemos _sbId ─────────────────────────────
+    if (window.GPS_SB && f._sbId) {
+      GPS_SB.resolverFalla(f._sbId, motivo)
+        .catch(e => console.warn('[DB] resolverFalla Supabase:', e));
+    }
+
     return true;
   }
 
@@ -358,6 +378,8 @@ const DB = (() => {
     const u = getUnidad(num, emp);
     if (!u || !u.fallas) return false;
     const before = u.fallas.length;
+    // Guardar _sbId antes de filtrar
+    const fallaAEliminar = u.fallas.find(x => x.id === fallaId || String(x.id) === String(fallaId));
     u.fallas = u.fallas.filter(x => x.id !== fallaId && String(x.id) !== String(fallaId));
     if (u.fallas.length === before) return false;
     u.fallaCount = u.fallas.length;
@@ -371,6 +393,13 @@ const DB = (() => {
     u.historial.push({ fecha: new Date().toISOString(), tipo: 'falla_eliminada', fallaId });
     u.updatedAt = new Date().toISOString();
     save();
+
+    // ── Eliminar en Supabase si tenemos _sbId ────────────────────────────
+    if (window.GPS_SB && fallaAEliminar && fallaAEliminar._sbId) {
+      GPS_SB.eliminarFallaDB(fallaAEliminar._sbId)
+        .catch(e => console.warn('[DB] eliminarFalla Supabase:', e));
+    }
+
     return true;
   }
 
