@@ -1020,6 +1020,48 @@ const UI = (() => {
 
   /* ══ MODAL: REGISTRAR FALLA ═══════════════════════════ */
   function openRegistrarFalla(num,emp) {
+    emp = emp || DB.getEmpresaActiva();
+    const u = DB.getUnidad(num, emp);
+    const fallasActivas = (u && u.fallas || []).filter(f => !f.resuelta);
+
+    // Si ya tiene falla activa → mostrar la falla existente, no formulario nuevo
+    if (fallasActivas.length > 0) {
+      const f = fallasActivas[fallasActivas.length - 1];
+      const color = f.esSiniestro ? 'var(--red)' : 'var(--yellow)';
+      const borderC = f.esSiniestro ? 'rgba(239,68,68,.5)' : 'rgba(245,158,11,.4)';
+      const bgC = f.esSiniestro ? 'rgba(239,68,68,.08)' : 'rgba(245,158,11,.08)';
+      const icon = f.esSiniestro ? '🚨' : '⚠';
+      const titulo = f.esSiniestro ? 'SINIESTRO ACTIVO' : 'FALLA ACTIVA';
+      openModal(`
+        <div style="background:var(--bg-panel);border:1px solid ${borderC};border-radius:14px;width:520px;max-height:85vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.6)">
+          <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center">
+            <span style="font-size:18px;margin-right:8px">${icon}</span>
+            <h3 style="font-size:14px;font-weight:600;flex:1;color:${color}">${titulo} — Unidad ${esc(num)}</h3>
+            <button onclick="UI.closeModal()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px">✕</button>
+          </div>
+          <div style="padding:18px 20px">
+            <div style="background:${bgC};border:1px solid ${borderC};border-radius:10px;padding:14px;margin-bottom:14px">
+              <div style="font-size:13px;font-weight:700;margin-bottom:8px;color:${color}">${esc(f.motivo||'Sin motivo')}</div>
+              ${f.descripcion?`<div style="font-size:12px;color:var(--text2);margin-bottom:6px">${esc(f.descripcion)}</div>`:''}
+              ${f.ubicacion?`<div style="font-size:11px;color:var(--text3)">📍 ${esc(f.ubicacion)}</div>`:''}
+              <div style="font-size:11px;color:var(--text3);margin-top:6px">Registrada: ${Parsers.fmtDate(f.fechaOcurrencia||f.fecha)}</div>
+            </div>
+            <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Esta unidad ya tiene una falla activa. ¿Qué deseas hacer?</div>
+          </div>
+          <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+            <button onclick="UI.closeModal();UI._marcarFallaResuelta('${esc(num)}','${esc(emp)}',${f.id})" class="act-btn-ok" style="flex:1">✓ Marcar resuelta</button>
+            <button onclick="UI._abrirFormNuevaFalla('${esc(num)}','${esc(emp)}')" class="act-btn" style="flex:1;border-color:var(--red);color:var(--red)">+ Nueva falla adicional</button>
+            <button onclick="UI.closeModal()" class="act-btn" style="flex:1">Cerrar</button>
+          </div>
+        </div>`);
+      return;
+    }
+
+    // Sin falla activa → formulario normal
+    _abrirFormNuevaFalla(num, emp);
+  }
+
+  function _abrirFormNuevaFalla(num, emp) {
     openModal(`
       <div style="background:var(--bg-panel);border:1px solid var(--border2);border-radius:14px;width:500px;max-height:85vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.6)">
         <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center">
@@ -1035,7 +1077,7 @@ const UI = (() => {
             </label>
           </div>
           ${_formGroup('Motivo de la falla *','f-motivo','text','','Ej: Motor, GPS desconectado, Accidente...')}
-          ${_formGroup('Descripción detallada','f-desc-falla','textarea','','')}
+          ${_formGroup('Descripción detallada','f-desc-falla','textarea','',' ')}
           <div style="margin-bottom:12px">
             <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);display:block;margin-bottom:5px">Fecha y hora del incidente</label>
             <div style="display:flex;gap:8px">
@@ -1052,7 +1094,6 @@ const UI = (() => {
         </div>
       </div>`);
   }
-
   function _guardarFalla(num,emp){
     const motivo=$('f-motivo')?.value.trim();
     if(!motivo){if($('f-err-falla'))$('f-err-falla').textContent='El motivo es requerido';return;}
@@ -4702,7 +4743,7 @@ const UI = (() => {
     renderViajes, renderGraficas, renderFallasPanel, renderBarridoManual, renderMaestra,
     // unit actions
     openUnitDetail, openEditarUnidad, openRegistrarFalla,
-    _guardarUnidad, _guardarFalla,
+    _guardarUnidad, _guardarFalla, _abrirFormNuevaFalla,
     _registrarFalla: openRegistrarFalla,
     _reactivar, _confirmarEliminar, _addNote,
     _updateManualFechaConISO, _updatePlatFechaConISO,
