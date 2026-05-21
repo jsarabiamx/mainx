@@ -281,11 +281,83 @@ const App = (() => {
     sel.innerHTML = DB.getEmpresasList().map(e => `<option value="${e}" ${e===DB.getEmpresaActiva()?'selected':''}>${e}</option>`).join('');
   }
 
+  // ── Sincronización en tiempo real de fallas desde Supabase ───────────────
+  let _fallasSyncTimer = null;
+  let _fallasSyncHash = '';
+
+  async function _syncFallasFromSupabase() {
+    if (!window.GPS_SB) return;
+    try {
+      const emp = DB.getEmpresaActiva();
+      if (!emp) return;
+      const rows = await GPS_SB.getFallasActivas(emp);
+      if (!rows || !rows.length) return;
+
+      // Hash simple para detectar cambios
+      const hash = rows.map(r => r.id + ':' + r.activa + ':' + r.resuelta).join('|');
+      if (hash === _fallasSyncHash) return;
+      _fallasSyncHash = hash;
+
+      // Sincronizar cada falla al estado local
+      let huboNuevas = false;
+      rows.forEach(row => {
+        const num = row.num_economico;
+        const u = DB.getUnidad(num, emp);
+        if (!u) return;
+
+        u.fallas = u.fallas || [];
+        // Verificar si ya tenemos esta falla por _sbId
+        const existe = u.fallas.find(f => f._sbId === row.id || String(f.id) === String(row.datos_extra?.id));
+        if (!existe) {
+          // Falla registrada desde otro dispositivo
+          const falla = {
+            ...(row.datos_extra || {}),
+            id: row.datos_extra?.id || Date.now(),
+            _sbId: row.id,
+            motivo: row.etiqueta || row.datos_extra?.motivo || '',
+            descripcion: row.descripcion || row.datos_extra?.descripcion || '',
+            esSiniestro: row.tipo === 'SINIESTRO',
+            resuelta: false,
+            fecha: row.created_at
+          };
+          u.fallas.push(falla);
+          if (falla.esSiniestro) { u.siniestro = true; u.siniestroDesc = falla.motivo; }
+          huboNuevas = true;
+        } else {
+          // Actualizar _sbId si no lo tenía
+          if (!existe._sbId) { existe._sbId = row.id; }
+          // Si en Supabase está resuelta pero local no
+          if (row.resuelta && !existe.resuelta) {
+            existe.resuelta = true;
+            existe.fechaResolucion = row.updated_at;
+            huboNuevas = true;
+          }
+        }
+      });
+
+      if (huboNuevas) {
+        DB.save && DB.save();
+        // Re-renderizar panel de fallas si está activo
+        const panel = document.getElementById('panel-fallas');
+        if (panel && !panel.classList.contains('hidden')) UI.renderFallasPanel();
+      }
+    } catch(e) {
+      console.debug('[FallaSync]', e.message);
+    }
+  }
+
+  function _startFallasSync() {
+    _syncFallasFromSupabase();
+    _fallasSyncTimer = setInterval(_syncFallasFromSupabase, 15000); // cada 15 seg
+  }
+
   function init() {
     populateEmpresaSelect();
     injectStyles();
     UI.renderResumen();
     document.getElementById('tb-date').textContent = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
+    // Iniciar sincronización en tiempo real de fallas
+    setTimeout(_startFallasSync, 2000);
   }
 
   function injectStyles() {
