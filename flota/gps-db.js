@@ -260,21 +260,42 @@ const GPS_SB = (() => {
   }
 
   // ── Fallas ────────────────────────────────────────────────────────────────
+  async function getFallas(emp) {
+    return _get('gps_fallas',
+      `empresa_id=eq.${encodeURIComponent(emp)}&order=created_at.desc`
+    );
+  }
+
+  async function getFallasActivas(emp) {
+    return _get('gps_fallas',
+      `empresa_id=eq.${encodeURIComponent(emp)}&activa=eq.true&order=created_at.desc`
+    );
+  }
+
   async function registrarFalla(num, falla, emp) {
     return _upsert('gps_fallas', {
       num_economico: String(num),
       empresa_id:    emp,
-      tipo:          falla.tipo || 'AFR',
-      etiqueta:      falla.etiqueta || null,
+      tipo:          falla.esSiniestro ? 'SINIESTRO' : (falla.tipo || 'AFR'),
+      etiqueta:      falla.motivo || falla.etiqueta || null,
       descripcion:   falla.descripcion || null,
       activa:        true,
+      resuelta:      false,
       datos_extra:   falla,
       created_at:    new Date().toISOString()
     });
   }
 
-  async function resolverFalla(id) {
-    return _patch('gps_fallas', 'id=eq.' + id, { activa: false, resuelta: true });
+  async function resolverFalla(id, motivo) {
+    return _patch('gps_fallas', 'id=eq.' + id, {
+      activa: false,
+      resuelta: true,
+      datos_extra: { motivo_resolucion: motivo || '' }
+    });
+  }
+
+  async function eliminarFallaDB(id) {
+    return _delete('gps_fallas', 'id=eq.' + id);
   }
 
   // ── SIMs ──────────────────────────────────────────────────────────────────
@@ -311,7 +332,7 @@ const GPS_SB = (() => {
     // Historial
     addLog, getHistorialGlobal,
     // Fallas
-    registrarFalla, resolverFalla,
+    getFallas, getFallasActivas, registrarFalla, resolverFalla, eliminarFallaDB,
     // SIMs
     getSims, saveSim, deleteSim,
     // Helper: saber si Supabase está disponible
