@@ -110,7 +110,14 @@ const DB = (() => {
   _s = _load();
 
   function save() {
-    try { localStorage.setItem(KEY, JSON.stringify(_s)); return true; }
+    try {
+      localStorage.setItem(KEY, JSON.stringify(_s));
+      // También sincronizar empresa activa a Supabase si GPS_SB disponible
+      if (typeof GPS_SB !== 'undefined') {
+        GPS_SB.setEmpresaActiva(_s.empresaActiva).catch(()=>{});
+      }
+      return true;
+    }
     catch(e) { console.error('DB save error', e); return false; }
   }
 
@@ -650,6 +657,10 @@ const DB = (() => {
   function getBarridos(emp) { return _empB(emp); }
 
   function saveBarrido(plataforma, registros, emp) {
+    // Sincronizar a Supabase en paralelo (no bloquea el flujo local)
+    if (typeof GPS_SB !== 'undefined') {
+      GPS_SB.saveBarrido(plataforma, registros, emp || _s.empresaActiva).catch(e=>console.warn('[GPS_SB barrido]',e));
+    }
     emp = emp || _s.empresaActiva;
     const now = new Date().toISOString();
     let actualizadas = 0, noEncontradas = 0, vinActualizados = 0;
@@ -730,6 +741,10 @@ const DB = (() => {
   function getAsignaciones(emp) { return _empA(emp); }
 
   function saveAsignacion(mesLabel, filas, emp, opciones) {
+    // Sincronizar a Supabase en paralelo
+    if (typeof GPS_SB !== 'undefined') {
+      GPS_SB.saveAsignacion(mesLabel, filas, emp || _s.empresaActiva).catch(e=>console.warn('[GPS_SB asig]',e));
+    }
     emp = emp || _s.empresaActiva;
     opciones = opciones || { marcarInactivas: true };
     const now = new Date().toISOString();
