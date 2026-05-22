@@ -198,25 +198,68 @@ const GPS_SB = (() => {
   }
 
   async function saveBarrido(plataforma, registros, emp) {
-    // Borrar barrido anterior de esta plataforma/empresa y reemplazar
-    await _delete('gps_barridos',
-      `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${plataforma}`
-    ).catch(() => {});
-
     if (!registros || registros.length === 0) return { actualizadas: 0, total: 0 };
+    const now = new Date().toISOString();
 
-    const rows = registros.map(r => ({
-      empresa_id:     emp,
-      plataforma:     plataforma,
-      num_economico:  String(r.num || r.placa || r.vehiculo || r.numero || ''),
-      ultima_conexion: r.ultimaConexion || r.ultima_conexion || null,
-      tiene_datos:    !!(r.ultimaConexion || r.ultima_conexion),
-      datos_raw:      r,
-      cargado_at:     new Date().toISOString()
-    }));
+    // 1. Traer registros existentes para preservar observaciones
+    let existentes = {};
+    try {
+      const rows = await _getRaw('gps_barridos',
+        `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${encodeURIComponent(plataforma)}`
+      );
+      rows.forEach(r => { existentes[String(r.num_economico)] = r; });
+    } catch(e) { console.warn('[GPS_SB] getBarridos prev:', e); }
 
-    await _upsert('gps_barridos', rows);
-    return { actualizadas: rows.length, noEncontradas: 0, total: rows.length };
+    const numsNuevos = new Set(registros.map(r => String(r.num || '').trim()).filter(Boolean));
+
+    // 2. Preparar filas para UPSERT (ON CONFLICT DO UPDATE via Prefer header)
+    const rows = registros.map(r => {
+      const num = String(r.num || r.placa || r.vehiculo || r.numero || '').trim();
+      if (!num) return null;
+      const ultimaConexion = r.fecha || r.ultimaConexion || r.ultima_conexion || null;
+      const prev = existentes[num];
+      // Preservar observaciones del registro anterior si no vienen en el nuevo
+      const observaciones = r.observaciones || prev?.datos_raw?.observaciones || null;
+      return {
+        empresa_id:      emp,
+        plataforma,
+        num_economico:   num,
+        ultima_conexion: ultimaConexion || null,
+        tiene_datos:     !!ultimaConexion,
+        activa:          true,
+        datos_raw:       { ...r, observaciones },
+        cargado_at:      now
+      };
+    }).filter(Boolean);
+
+    // UPSERT en lotes de 200 (ON CONFLICT en empresa_id+plataforma+num_economico)
+    const lotes = [];
+    for (let i = 0; i < rows.length; i += 200) lotes.push(rows.slice(i, i + 200));
+    await Promise.all(lotes.map(lote =>
+      fetch(`${BASE}/gps_barridos`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Prefer': 'return=representation,resolution=merge-duplicates' },
+        body: JSON.stringify(lote)
+      }).then(r => { if (!r.ok) r.text().then(t => console.warn('[GPS_SB barrido upsert]', t)); })
+        .catch(e => console.warn('[GPS_SB barrido upsert]', e))
+    ));
+
+    // 3. Marcar inactivos los que ya no están en el nuevo barrido
+    const aEliminar = Object.keys(existentes).filter(n => !numsNuevos.has(n));
+    if (aEliminar.length > 0) {
+      await Promise.all(aEliminar.map(n =>
+        _patch('gps_barridos',
+          `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${encodeURIComponent(plataforma)}&num_economico=eq.${n}`,
+          { activa: false }
+        ).catch(() => {})
+      ));
+    }
+
+    return {
+      total: registros.length,
+      upserted: rows.length,
+      eliminados: aEliminar.length
+    };
   }
 
   // ── Asignaciones ─────────────────────────────────────────────────────────
@@ -367,7 +410,7 @@ const GPS_SB = (() => {
     // SIMs
     getSims, saveSim, deleteSim,
     // Helper: saber si Supabase está disponible
-    _getRaw,
+    _getRaw, _patch,
     isAvailable: () => true,
     // Save dummy (compatibilidad — Supabase no necesita save() manual)
     save: () => true
