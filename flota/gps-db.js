@@ -41,6 +41,17 @@ const GPS_SB = (() => {
     return r.json();
   }
 
+  // INSERT simple (para tablas sin UNIQUE constraint como gps_fallas)
+  async function _insert(table, data) {
+    const r = await fetch(`${BASE}/${table}`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Prefer': 'return=representation' },
+      body: JSON.stringify(data)
+    });
+    if (!r.ok) { const e = await r.text(); throw new Error(`GPS_SB INSERT ${table}: ${e}`); }
+    return r.json();
+  }
+
   async function _patch(table, filter, data) {
     const r = await fetch(`${BASE}/${table}?${filter}`, {
       method: 'PATCH',
@@ -273,7 +284,7 @@ const GPS_SB = (() => {
   }
 
   async function registrarFalla(num, falla, emp) {
-    return _upsert('gps_fallas', {
+    return _insert('gps_fallas', {
       num_economico: String(num),
       empresa_id:    emp,
       tipo:          falla.esSiniestro ? 'SINIESTRO' : (falla.tipo || 'AFR'),
@@ -341,3 +352,4 @@ const GPS_SB = (() => {
     save: () => true
   };
 })();
+window.GPS_SB = GPS_SB;
