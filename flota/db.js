@@ -109,6 +109,136 @@ const DB = (() => {
   }
   _s = _load();
 
+  // ── Carga inicial desde Supabase ──────────────────────────────────────────
+  // Se llama desde app.js después de que GPS_SB esté disponible.
+  // Reconstruye unidades a partir de asignaciones en Supabase (misma lógica que saveAsignacion).
+  async function initFromSupabase() {
+    if (!window.GPS_SB) return;
+    try {
+      const empresas = Object.keys(_s.empresas || {});
+      for (const emp of empresas) {
+        // ── 1. Asignaciones ───────────────────────────────────────────────
+        const asigRows = await GPS_SB._getRaw('gps_asignaciones',
+          `empresa_id=eq.${encodeURIComponent(emp)}&activa=eq.true&order=mes_label.desc,num_economico`
+        );
+        if (asigRows && asigRows.length > 0) {
+          // Agrupar por mes, tomar el más reciente
+          const meses = {};
+          asigRows.forEach(r => {
+            if (!meses[r.mes_label]) meses[r.mes_label] = [];
+            meses[r.mes_label].push(r);
+          });
+          const mesReciente = Object.keys(meses).sort().reverse()[0];
+          const filas = meses[mesReciente];
+
+          // Reinicializar unidades de esta empresa
+          if (!_s.unidades) _s.unidades = {};
+          _s.unidades[emp] = {};
+
+          filas.forEach(r => {
+            const extra = r.datos_extra || {};
+            const num = String(r.num_economico);
+            _s.unidades[emp][num] = {
+              num,
+              economico:    extra.economico || num,
+              cromatica:    r.cromatica || extra.cromatica || '',
+              estatus:      r.estatus   || extra.estatus   || '',
+              modelo:       r.modelo    || extra.modelo    || '',
+              rol:          r.rol       || extra.rol       || '',
+              base:         r.base      || extra.base      || '',
+              empresa_asig: extra.empresa || emp,
+              serie:        extra.serie   || '',
+              motor:        extra.motor   || '',
+              placa:        extra.placa   || '',
+              asientos:     extra.asientos || '',
+              observaciones:extra.observaciones || '',
+              mes:          r.mes_label,
+              activa:       true,
+              fallas:       [],
+              historialFallas: [],
+              historial:    [],
+              siniestro:    false,
+              siniestroDesc:'',
+              fallaCount:   0,
+              _fuente:      'supabase_asignacion'
+            };
+          });
+
+          // Registrar la asignación en el historial local
+          if (!_s.asignaciones) _s.asignaciones = {};
+          if (!_s.asignaciones[emp]) _s.asignaciones[emp] = [];
+          if (_s.asignaciones[emp].length === 0) {
+            _s.asignaciones[emp] = [{ id: Date.now(), mes: mesReciente, fecha: new Date().toISOString(), empresa: emp, total: filas.length, creadas: filas.length, actualizadas: 0, inactivadas: 0 }];
+          }
+        }
+
+        // ── 2. Barridos GPS — actualizar ultima_act por plataforma ─────────
+        const barridoRows = await GPS_SB._getRaw('gps_barridos',
+          `empresa_id=eq.${encodeURIComponent(emp)}&order=cargado_at.desc&limit=1400`
+        );
+        if (barridoRows && barridoRows.length > 0) {
+          const idFieldByPlat = { CEIBA:'dvr_ceiba', SAMSARA:'vin_samsara', MAN:'placa_man', SCANIA:'placa_scania' };
+          barridoRows.forEach(r => {
+            const num = String(r.num_economico);
+            const u = (_s.unidades[emp] || {})[num];
+            if (!u) return;
+            const plat = (r.plataforma || '').toUpperCase();
+            const platKey = 'ultima_act_' + plat.toLowerCase();
+            if (r.ultima_conexion) {
+              if (!u[platKey] || new Date(r.ultima_conexion) > new Date(u[platKey])) {
+                u[platKey] = r.ultima_conexion;
+              }
+              if (!u.ultima_act || new Date(r.ultima_conexion) > new Date(u.ultima_act)) {
+                u.ultima_act = r.ultima_conexion;
+              }
+            }
+            const idField = idFieldByPlat[plat];
+            const raw = r.datos_raw || {};
+            if (idField && raw.serie && !u[idField]) u[idField] = raw.serie;
+          });
+        }
+
+        // ── 3. Fallas activas ─────────────────────────────────────────────
+        const fallaRows = await GPS_SB._getRaw('gps_fallas',
+          `empresa_id=eq.${encodeURIComponent(emp)}&activa=eq.true`
+        );
+        if (fallaRows && fallaRows.length > 0) {
+          fallaRows.forEach(r => {
+            const num = String(r.num_economico);
+            const u = (_s.unidades[emp] || {})[num];
+            if (!u) return;
+            u.fallas = u.fallas || [];
+            const existe = u.fallas.find(f => f._sbId === r.id);
+            if (!existe) {
+              const extra = r.datos_extra || {};
+              const falla = {
+                id: extra.id || r.id,
+                _sbId: r.id,
+                motivo: r.etiqueta || extra.motivo || '',
+                descripcion: r.descripcion || extra.descripcion || '',
+                ubicacion: extra.ubicacion || '',
+                esSiniestro: r.tipo === 'SINIESTRO',
+                resuelta: false,
+                fecha: r.created_at,
+                fechaOcurrencia: extra.fechaOcurrencia || r.created_at
+              };
+              u.fallas.push(falla);
+              if (falla.esSiniestro) { u.siniestro = true; u.siniestroDesc = falla.motivo; }
+              u.fallaCount = u.fallas.length;
+            }
+          });
+        }
+      }
+
+      save();
+      console.log('[DB] initFromSupabase: carga completa');
+      return true;
+    } catch(e) {
+      console.warn('[DB] initFromSupabase error:', e);
+      return false;
+    }
+  }
+
   function save() {
     try {
       localStorage.setItem(KEY, JSON.stringify(_s));
@@ -1232,7 +1362,7 @@ const DB = (() => {
 
   return {
     getEmpresaActiva, setEmpresaActiva, getEmpresas, getEmpresasList, addEmpresa, removeEmpresa, renombrarEmpresa,
-    getUnidades, getUnidadesList, getUnidad, upsertUnidad,
+    getUnidades, getUnidadesList, getUnidad, upsertUnidad, initFromSupabase,
     marcarInactiva, reactivarUnidad, eliminarUnidad, registrarFalla, resolverFalla, eliminarFalla,
     getBarridos, saveBarrido,
     getAsignaciones, saveAsignacion, eliminarTodasAsignaciones,
