@@ -195,6 +195,10 @@ const DB = (() => {
             const idField = idFieldByPlat[plat];
             const raw = r.datos_raw || {};
             if (idField && raw.serie && !u[idField]) u[idField] = raw.serie;
+            // Preservar observaciones del barrido si la unidad no tiene
+            if (raw.observaciones && !u.observaciones) u.observaciones = raw.observaciones;
+            // Estado samsara
+            if (plat === 'SAMSARA' && raw.estadoSamsara) u.estado_samsara = raw.estadoSamsara;
           });
         }
 
@@ -334,6 +338,19 @@ const DB = (() => {
     }
     delete store[k]._fuente;
     save();
+
+    // ── Sincronizar observaciones a Supabase cuando se editan manualmente ──
+    if (window.GPS_SB && datos.observaciones !== undefined && datos._fuente && datos._fuente.includes('obs')) {
+      const u = store[k];
+      const plataformas = ['CEIBA','SAMSARA','AVL','SCANIA','MAN','VOLVO','MOTIVE'];
+      plataformas.forEach(plat => {
+        GPS_SB._patch('gps_barridos',
+          `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${plat}&num_economico=eq.${k}`,
+          { datos_raw: { observaciones: datos.observaciones } }
+        ).catch(() => {});
+      });
+    }
+
     return store[k];
   }
 
