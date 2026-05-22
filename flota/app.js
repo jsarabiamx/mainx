@@ -356,8 +356,47 @@ const App = (() => {
     injectStyles();
     UI.renderResumen();
     document.getElementById('tb-date').textContent = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
+
+    // ── Carga desde Supabase ──────────────────────────────────────────────
+    const hayDatos = DB.getUnidadesList(DB.getEmpresaActiva()).length > 0;
+    if (!hayDatos) {
+      // Sin datos locales: carga completa y bloquea UI con banner
+      _showSyncBanner('⏳ Cargando datos desde Supabase...');
+      DB.initFromSupabase().then(ok => {
+        _hideSyncBanner();
+        if (ok) { UI.renderResumen(); populateEmpresaSelect(); }
+      });
+    } else {
+      // Con datos locales: sincroniza en background silenciosamente
+      setTimeout(() => {
+        DB.initFromSupabase().then(ok => {
+          if (ok) {
+            // Re-renderizar el panel activo sin interrumpir
+            UI.renderResumen();
+          }
+        });
+      }, 1500);
+    }
+
     // Iniciar sincronización en tiempo real de fallas
     setTimeout(_startFallasSync, 2000);
+  }
+
+  function _showSyncBanner(msg) {
+    let b = document.getElementById('sync-banner');
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'sync-banner';
+      b.style.cssText = 'position:fixed;top:44px;left:0;right:0;background:#1d4ed8;color:#fff;text-align:center;font-size:12px;padding:6px;z-index:9999;font-family:var(--font,sans-serif)';
+      document.body.appendChild(b);
+    }
+    b.textContent = msg;
+    b.style.display = 'block';
+  }
+
+  function _hideSyncBanner() {
+    const b = document.getElementById('sync-banner');
+    if (b) b.style.display = 'none';
   }
 
   function injectStyles() {
