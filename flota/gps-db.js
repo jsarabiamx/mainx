@@ -31,6 +31,26 @@ const GPS_SB = (() => {
     return r.json();
   }
 
+  // _getRaw: igual que _get pero con paginación automática (hasta 5000 filas)
+  async function _getRaw(table, params = '') {
+    const limit = 1000;
+    let offset = 0;
+    let all = [];
+    while (true) {
+      const sep = params ? '&' : '';
+      const r = await fetch(`${BASE}/${table}?${params}${sep}limit=${limit}&offset=${offset}`, {
+        headers: { ...HEADERS, 'Prefer': 'count=none' }
+      });
+      if (!r.ok) throw new Error(`GPS_SB GET ${table}: ${r.status}`);
+      const rows = await r.json();
+      all = all.concat(rows);
+      if (rows.length < limit) break;
+      offset += limit;
+      if (offset > 4000) break; // seguridad
+    }
+    return all;
+  }
+
   async function _upsert(table, data) {
     const r = await fetch(`${BASE}/${table}`, {
       method: 'POST',
@@ -347,6 +367,7 @@ const GPS_SB = (() => {
     // SIMs
     getSims, saveSim, deleteSim,
     // Helper: saber si Supabase está disponible
+    _getRaw,
     isAvailable: () => true,
     // Save dummy (compatibilidad — Supabase no necesita save() manual)
     save: () => true
