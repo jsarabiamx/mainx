@@ -174,7 +174,7 @@ const DB = (() => {
 
         // ── 2. Barridos GPS — actualizar ultima_act por plataforma ─────────
         const barridoRows = await GPS_SB._getRaw('gps_barridos',
-          `empresa_id=eq.${encodeURIComponent(emp)}&order=cargado_at.desc&limit=1400`
+          `empresa_id=eq.${encodeURIComponent(emp)}&activa=eq.true`
         );
         if (barridoRows && barridoRows.length > 0) {
           const idFieldByPlat = { CEIBA:'dvr_ceiba', SAMSARA:'vin_samsara', MAN:'placa_man', SCANIA:'placa_scania' };
@@ -184,20 +184,22 @@ const DB = (() => {
             if (!u) return;
             const plat = (r.plataforma || '').toUpperCase();
             const platKey = 'ultima_act_' + plat.toLowerCase();
-            if (r.ultima_conexion) {
-              if (!u[platKey] || new Date(r.ultima_conexion) > new Date(u[platKey])) {
-                u[platKey] = r.ultima_conexion;
+            const raw = r.datos_raw || {};
+
+            // Fecha: usar ultima_conexion o fallback a datos_raw.fecha
+            const fechaStr = r.ultima_conexion || raw.fecha || null;
+            if (fechaStr) {
+              if (!u[platKey] || new Date(fechaStr) > new Date(u[platKey])) {
+                u[platKey] = fechaStr;
               }
-              if (!u.ultima_act || new Date(r.ultima_conexion) > new Date(u.ultima_act)) {
-                u.ultima_act = r.ultima_conexion;
+              if (!u.ultima_act || new Date(fechaStr) > new Date(u.ultima_act)) {
+                u.ultima_act = fechaStr;
               }
             }
+
             const idField = idFieldByPlat[plat];
-            const raw = r.datos_raw || {};
             if (idField && raw.serie && !u[idField]) u[idField] = raw.serie;
-            // Preservar observaciones del barrido si la unidad no tiene
             if (raw.observaciones && !u.observaciones) u.observaciones = raw.observaciones;
-            // Estado samsara
             if (plat === 'SAMSARA' && raw.estadoSamsara) u.estado_samsara = raw.estadoSamsara;
           });
         }
