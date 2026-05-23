@@ -882,7 +882,13 @@ const DB = (() => {
 
     registros.forEach(r => {
       if (!r.num) return;
-      const u = getUnidad(r.num, emp);
+      // Para MOTIVE: la empresa viene en r.empresa (campo GRUPOS del archivo)
+      // Buscar primero en la empresa activa, si no en la del registro
+      let empTarget = emp;
+      if (!getUnidad(r.num, emp) && r.empresa && r.empresa !== emp) {
+        empTarget = r.empresa;
+      }
+      const u = getUnidad(r.num, empTarget);
       const platKey = 'ultima_act_' + plataforma.toLowerCase();
 
       if (u) {
@@ -909,7 +915,7 @@ const DB = (() => {
           if (r.estado)        datos.estado_motive    = r.estado;
           if (r.empresa)       datos.empresa_motive   = r.empresa;
         }
-        upsertUnidad(r.num, { ...datos, _fuente: 'barrido_' + plataforma }, emp);
+        upsertUnidad(r.num, { ...datos, _fuente: 'barrido_' + plataforma }, empTarget);
         actualizadas++;
       } else {
         // Unidad no existe en asignación — guardar solo en barrido
