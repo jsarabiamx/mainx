@@ -358,25 +358,29 @@ const App = (() => {
     document.getElementById('tb-date').textContent = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
 
     // ── Carga desde Supabase ──────────────────────────────────────────────
+    // Solo sincronizar si: (a) no hay datos locales, o (b) los datos tienen >24h sin actualizar
     const hayDatos = DB.getUnidadesList(DB.getEmpresaActiva()).length > 0;
+    const ultimaActLocal = DB.getUltimaActualizacion ? DB.getUltimaActualizacion() : null;
+    const horasDesdeUpdate = ultimaActLocal ? (Date.now() - new Date(ultimaActLocal)) / 3600000 : 999;
+    const datosViejos = horasDesdeUpdate > 24;
+
     if (!hayDatos) {
-      // Sin datos locales: carga completa y bloquea UI con banner
+      // Sin datos locales: carga completa desde Supabase
       _showSyncBanner('⏳ Cargando datos desde Supabase...');
       DB.initFromSupabase().then(ok => {
         _hideSyncBanner();
         if (ok) { UI.renderResumen(); populateEmpresaSelect(); }
       });
-    } else {
-      // Con datos locales: sincroniza en background silenciosamente
+    } else if (datosViejos) {
+      // Datos muy viejos: sincronizar en background (>24h)
+      console.log('[App] Datos locales de', Math.round(horasDesdeUpdate), 'h — sync Supabase en background');
       setTimeout(() => {
         DB.initFromSupabase().then(ok => {
-          if (ok) {
-            // Re-renderizar el panel activo sin interrumpir
-            UI.renderResumen();
-          }
+          if (ok) UI.renderResumen();
         });
-      }, 1500);
+      }, 3000);
     }
+    // Si hayDatos y son recientes: NO sync — respetar lo que el usuario tiene local
 
     // Iniciar sincronización en tiempo real de fallas
     setTimeout(_startFallasSync, 2000);
