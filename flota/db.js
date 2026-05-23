@@ -856,11 +856,21 @@ const DB = (() => {
   function getBarridos(emp) { return _empB(emp); }
 
   function saveBarrido(plataforma, registros, emp) {
-    // Sincronizar a Supabase en paralelo (no bloquea el flujo local)
-    if (typeof GPS_SB !== 'undefined') {
-      GPS_SB.saveBarrido(plataforma, registros, emp || _s.empresaActiva).catch(e=>console.warn('[GPS_SB barrido]',e));
-    }
     emp = emp || _s.empresaActiva;
+
+    // Para MOTIVE: agrupar registros por empresa y sincronizar cada grupo a Supabase
+    if (typeof GPS_SB !== 'undefined') {
+      // Agrupar por empresa real del registro (r.empresa) para MOTIVE
+      const grupos = {};
+      registros.forEach(r => {
+        const e = r.empresa || emp;
+        if (!grupos[e]) grupos[e] = [];
+        grupos[e].push(r);
+      });
+      Object.entries(grupos).forEach(([e, regs]) => {
+        GPS_SB.saveBarrido(plataforma, regs, e).catch(e2=>console.warn('[GPS_SB barrido]',e2));
+      });
+    }
     const now = new Date().toISOString();
     let actualizadas = 0, noEncontradas = 0, vinActualizados = 0;
 
