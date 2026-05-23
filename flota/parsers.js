@@ -721,10 +721,126 @@ const Parsers = (() => {
   }
 
   /* ══════════════════════════════════════════════════════
+     PARSER: MOTIVE
+     Archivo: *devices_report*.xlsx (nombre tiene "devices_report")
+     Hoja: misma que el libro (o primera hoja)
+     Columnas relevantes:
+       A(0)  = ID DE ENTIDAD  → número de unidad
+       F(5)  = ÚLTIMA UBICACIÓN (texto, solo referencia)
+       G(6)  = FECHA DE LA ÚLTIMA UBICACIÓN → fecha principal
+       H(7)  = GRUPOS → empresa (GHO, ETN, etc.)
+       I(8)  = DISPOSITIVO → tipo (Vehicle Gateway / Al Dashcam)
+       J(9)  = NÚMERO DE SERIE → serie del dispositivo
+       K(10) = MODELO → modelo del dispositivo (LBB, DC54…)
+       N(13) = ÚLTIMA ACTIVIDAD DEL DISPOSITIVO → fecha de actividad
+       O(14) = ESTADO → Normal / Powered Off / etc.
+     Filas duplicadas por unidad (una por dispositivo).
+     Se agrupan: Vehicle Gateway y Dashcam en un solo registro.
+  ══════════════════════════════════════════════════════ */
+  function parseMOTIVE(rows) {
+    if (!rows || rows.length < 2) return [];
+
+    // Encontrar fila de headers buscando "ID DE ENTIDAD"
+    let hIdx = 0;
+    for (let i = 0; i < Math.min(rows.length, 5); i++) {
+      const r = rows[i];
+      if (Array.isArray(r) && r.some(c => String(c||'').toUpperCase().includes('ID DE ENTIDAD'))) {
+        hIdx = i; break;
+      }
+    }
+
+    // Mapear índices de columna dinámicamente por nombre
+    const headers = (rows[hIdx] || []).map(c => String(c||'').toUpperCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '').trim());
+
+    const col = name => headers.findIndex(h => h.includes(name));
+
+    const colId     = col('ID DE ENTIDAD') !== -1 ? col('ID DE ENTIDAD') : 0;
+    const colFecha  = col('LTIMA ACTIVIDAD DEL DISPOSITIVO') !== -1
+                       ? col('LTIMA ACTIVIDAD DEL DISPOSITIVO')
+                       : col('LTIMA UBICACI') !== -1 ? col('LTIMA UBICACI') : 6;
+    const colFechaG = col('FECHA DE LA') !== -1 ? col('FECHA DE LA') : 6;
+    const colGrupo  = col('GRUPOS') !== -1 ? col('GRUPOS') : 7;
+    const colDisp   = col('DISPOSITIVO') !== -1 ? col('DISPOSITIVO') : 8;
+    const colSerie  = col('MERO DE SERIE') !== -1 ? col('MERO DE SERIE')
+                       : col('SERIE') !== -1 ? col('SERIE') : 9;
+    const colModelo = col('MODELO') !== -1 ? col('MODELO') : 10;
+    const colEstado = col('ESTADO') !== -1 ? col('ESTADO') : 14;
+
+    // Agrupar por num_unidad: preservar la fecha más reciente y agregar info de ambos dispositivos
+    const agrupado = {};
+
+    for (let i = hIdx + 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!Array.isArray(row) || row[colId] === undefined || row[colId] === null || row[colId] === '') continue;
+
+      const rawId = String(row[colId] || '').trim();
+      const num = cleanNum(rawId);
+      if (!num || isNaN(Number(num))) continue;
+      const n = Number(num);
+      if (n < 100 || n > 99999) continue;
+
+      // Fecha: usar col N (última actividad) si existe, sino col G (fecha ubicación)
+      const rawFechaAct = row[colFecha] || '';
+      const rawFechaUbic = row[colFechaG] || '';
+      const fechaAct  = parseDate(String(rawFechaAct).trim());
+      const fechaUbic = parseDate(String(rawFechaUbic).trim());
+      // Tomar la más reciente de ambas
+      let fechaMejor = null;
+      if (fechaAct && fechaUbic) fechaMejor = fechaAct > fechaUbic ? fechaAct : fechaUbic;
+      else fechaMejor = fechaAct || fechaUbic;
+
+      const grupo  = String(row[colGrupo]  || '').trim();
+      const disp   = String(row[colDisp]   || '').trim().toUpperCase();
+      const serie  = String(row[colSerie]  || '').trim();
+      const modelo = String(row[colModelo] || '').trim();
+      const estado = String(row[colEstado] || '').trim();
+
+      const esGateway = disp.includes('GATEWAY') || disp.includes('VG') || disp.includes('VEHICLE');
+      const esDashcam = disp.includes('DASH') || disp.includes('CAM') || disp.includes('FACING');
+
+      if (!agrupado[num]) {
+        agrupado[num] = {
+          num,
+          fecha:     fechaMejor ? fechaMejor.toISOString() : null,
+          fechaStr:  fechaMejor ? fmtDate(fechaMejor) : null,
+          empresa:   grupo || '',
+          estado:    estado || '',
+          // Dispositivos
+          serieGateway:  esGateway ? serie  : '',
+          modeloGateway: esGateway ? modelo : '',
+          serieDashcam:  esDashcam ? serie  : '',
+          modeloDashcam: esDashcam ? modelo : '',
+          dispositivos:  [{ tipo: disp, serie, modelo, estado, fecha: fechaMejor ? fechaMejor.toISOString() : null }],
+          plataforma: 'MOTIVE'
+        };
+      } else {
+        const ent = agrupado[num];
+        // Actualizar fecha si la nueva es más reciente
+        if (fechaMejor && (!ent.fecha || fechaMejor > new Date(ent.fecha))) {
+          ent.fecha    = fechaMejor.toISOString();
+          ent.fechaStr = fmtDate(fechaMejor);
+          ent.estado   = estado || ent.estado;
+        }
+        if (esGateway && serie) { ent.serieGateway = serie; ent.modeloGateway = modelo; }
+        if (esDashcam && serie) { ent.serieDashcam = serie; ent.modeloDashcam = modelo; }
+        if (!ent.empresa && grupo) ent.empresa = grupo;
+        ent.dispositivos.push({ tipo: disp, serie, modelo, estado, fecha: fechaMejor ? fechaMejor.toISOString() : null });
+      }
+    }
+
+    const result = Object.values(agrupado);
+    console.log(`[MOTIVE] ${result.length} unidades (agrupadas), con fecha: ${result.filter(r=>r.fecha).length}`);
+    return result;
+  }
+
+  /* ══════════════════════════════════════════════════════
      DETECCIÓN DE PLATAFORMA Y HOJA CORRECTA
   ══════════════════════════════════════════════════════ */
   function detectarPlataforma(filename, sheetNames) {
     const f = String(filename||'').toLowerCase();
+    // MOTIVE: archivo contiene "devices_report" en el nombre
+    if (f.includes('devices_report') || f.includes('devices report')) return 'MOTIVE';
     if (f.includes('samsara') || f.includes('reporte_del_estado') || f.includes('reporte del estado')) return 'SAMSARA';
     if (f.includes('last gps') || f.includes('last_gps') || f.match(/info[-_]\d{8}/)) return 'CEIBA';
     if (f.includes('dispositivos') || f.match(/dispositivos[_\s]\d+/)) return 'MAN';
@@ -803,6 +919,11 @@ const Parsers = (() => {
       const sh = sheetNames.find(n => normalize(n).includes('dispositivo'));
       return sh || sheetNames[0];
     }
+    if (plat === 'MOTIVE') {
+      // La hoja tiene el mismo nombre que el archivo (sin extensión) o es la primera hoja
+      const sh = sheetNames.find(n => normalize(n).includes('devices_report') || normalize(n).includes('devices report'));
+      return sh || sheetNames[0];
+    }
     return sheetNames[0];
   }
 
@@ -813,6 +934,7 @@ const Parsers = (() => {
       case 'AVL':     return parseAVL(rows);
       case 'SCANIA':  return parseScania(rows);
       case 'MAN':     return parseMAN(rows);
+      case 'MOTIVE':  return parseMOTIVE(rows);
       default:        return [];
     }
   }
