@@ -249,6 +249,7 @@ const DB = (() => {
 
             u.fallas = u.fallas || [];
             const existe = u.fallas.find(f => f._sbId === r.id);
+            const esSiniestroRow = r.tipo === 'SINIESTRO';
             if (!existe) {
               const extra = r.datos_extra || {};
               const falla = {
@@ -257,21 +258,24 @@ const DB = (() => {
                 motivo: r.etiqueta || extra.motivo || '',
                 descripcion: r.descripcion || extra.descripcion || '',
                 ubicacion: extra.ubicacion || '',
-                esSiniestro: r.tipo === 'SINIESTRO',
+                esSiniestro: esSiniestroRow,
                 resuelta: false,
                 fecha: r.created_at,
                 fechaOcurrencia: extra.fechaOcurrencia || r.created_at
               };
               u.fallas.push(falla);
-              if (falla.esSiniestro) {
+              if (esSiniestroRow) {
                 u.siniestro = true;
                 u.siniestroDesc = falla.motivo;
-                u.observaciones = falla.motivo; // sync observaciones
               }
               u.fallaCount = u.fallas.length;
-            } else if (!existe._sbId) {
-              existe._sbId = r.id;
-              if (r.tipo === 'SINIESTRO') { u.siniestro = true; u.siniestroDesc = existe.motivo; }
+            } else {
+              // Falla ya existe — asegurar flag de siniestro si faltaba
+              if (!existe._sbId) existe._sbId = r.id;
+              if (esSiniestroRow && !u.siniestro) {
+                u.siniestro = true;
+                u.siniestroDesc = existe.motivo || r.etiqueta || '';
+              }
             }
           });
         }
