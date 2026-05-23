@@ -601,7 +601,7 @@ const App = (() => {
   document.addEventListener('DOMContentLoaded', init);
 
   return {
-    nav, populateEmpresaSelect, renderManual, renderConfig, _filterManual,
+    nav, populateEmpresaSelect, renderManual, renderConfig, _filterManual, _syncFallasDesdeInicio,
     _editarEmpresa, _eliminarEmpresa, _nuevaEmpresa,
     _eliminarHistorialAsignaciones, _eliminarDatosPlataforma, _borrarEmpresa
   };
