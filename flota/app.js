@@ -302,8 +302,15 @@ const App = (() => {
       let huboNuevas = false;
       rows.forEach(row => {
         const num = row.num_economico;
-        const u = DB.getUnidad(num, emp);
-        if (!u) return;
+        let u = DB.getUnidad(num, emp);
+        // Si la unidad no existe local, crear stub para que el siniestro sea visible
+        if (!u) {
+          DB.upsertUnidad(num, {
+            activa: true, siniestro: false, fallas: [], _fuente: 'supabase_falla_sync'
+          }, emp);
+          u = DB.getUnidad(num, emp);
+          if (!u) return;
+        }
 
         u.fallas = u.fallas || [];
         // Verificar si ya tenemos esta falla por _sbId
