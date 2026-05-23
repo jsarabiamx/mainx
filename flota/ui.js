@@ -1499,7 +1499,7 @@ const UI = (() => {
     const el=$('plat-detect-cards');
     if(!el)return;
     const COLS={CEIBA:'Plate No. | GPS Time | Serial No.',SAMSARA:'Nombre | Última hora de registro | VG/Serie',AVL:'Grouping | Último mensaje',SCANIA:'Vehículo | Hora',MAN:'Dispositivo | VIN | Ultima Conexion',VOLVO:'Captura manual',MOTIVE:'ID Entidad | Última Actividad | Estado | Serie VG | Serie Cam'};
-    el.innerHTML=['CEIBA','SAMSARA','AVL','SCANIA','MAN'].map(p=>{
+    el.innerHTML=ALL_PLATS.map(p=>{
       const d=_barridosPending[p];
       return`<div style="background:var(--bg-panel);border:1px solid ${d?'var(--green-border)':'var(--border)'};border-top:2px solid ${d?'var(--green)':'var(--border)'};border-radius:10px;padding:12px">
         <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px">${platIcon(p,22)}<div>
