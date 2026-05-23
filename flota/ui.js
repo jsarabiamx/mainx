@@ -568,7 +568,7 @@ const UI = (() => {
     let sinVIN=0, sinPlaca=0, siniestros=0;
     unsFiltradas.forEach(u => {
       // Siniestros activos se excluyen de conteos GPS (fuera/atención/en línea)
-      if (!u.siniestro) {
+      if (!_tieneSiniestroActivo(u)) {
         if (!u.ultima_act) { sinDatos++; }
         else {
           const d = u.dias;
@@ -1108,9 +1108,19 @@ const UI = (() => {
       esSiniestro:$('f-es-siniestro')?.checked||false
     };
     DB.registrarFalla(num,emp,fichaFalla);
-    // Sincronizar observaciones con el motivo de la falla
-    const etiqueta = fichaFalla.esSiniestro ? `🚨 ${fichaFalla.motivo}` : fichaFalla.motivo;
+    // Sincronizar observaciones con el motivo de la falla (local + Supabase)
+    const etiqueta = fichaFalla.esSiniestro ? fichaFalla.motivo : fichaFalla.motivo;
     DB.upsertUnidad(num, { observaciones: etiqueta, _fuente: 'falla_sync' }, emp);
+    // Actualizar observaciones en gps_barridos de Supabase para todos los navegadores
+    if (window.GPS_SB) {
+      const plataformas = ['CEIBA','SAMSARA','AVL','SCANIA','MAN','VOLVO','MOTIVE'];
+      plataformas.forEach(plat => {
+        GPS_SB._patch('gps_barridos',
+          `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${plat}&num_economico=eq.${encodeURIComponent(num)}`,
+          { datos_raw: { observaciones: etiqueta } }
+        ).catch(()=>{});
+      });
+    }
     closeModal();
     toast(`Falla registrada en unidad ${num}${fichaFalla.esSiniestro?' — SINIESTRO':''}`,'warn',5000);
     renderDetalle(num,emp);
@@ -1556,6 +1566,15 @@ const UI = (() => {
   /* ══════════════════════════════════════════════════════
      PANEL: PLATAFORMAS (v7 — layout horizontal + detalle inline + multibuscar)
   ══════════════════════════════════════════════════════ */
+
+  // Helper: detecta siniestro activo aunque u.siniestro no esté seteado
+  // (puede pasar si el sync de Supabase aún no corrió)
+  function _tieneSiniestroActivo(u) {
+    if (!u) return false;
+    if (u.siniestro) return true;
+    return (u.fallas || []).some(f => f.esSiniestro && !f.resuelta);
+  }
+
   let _platExpandida = '';
   let _platTableFilter = { emp:[], base:[], crom:[], est:[], dias:[], estadoSam:[], search:'' };
   let _platDetailUnit = null;  // unidad "enfocada" dentro de la tabla (detalle inline)
@@ -1622,7 +1641,7 @@ const UI = (() => {
 
     // Excluir "Para venta" Y siniestros activos de los conteos operativos de plataformas
     const operativas = todasUns.filter(u =>
-      Parsers.categorizarEstatus(u.estatus) !== 'Para venta' && !u.siniestro
+      Parsers.categorizarEstatus(u.estatus) !== 'Para venta' && !_tieneSiniestroActivo(u)
     );
 
     // Barra de acciones superior (export + cargar masivo)
@@ -1648,7 +1667,7 @@ const UI = (() => {
       const k='ultima_act_'+p.toLowerCase();
       const conFecha=operativas.filter(u=>u[k]);
       // Excluir siniestros de conteos GPS en tarjetas de plataforma
-      const conFechaGPS=conFecha.filter(u=>!u.siniestro);
+      const conFechaGPS=conFecha.filter(u=>!_tieneSiniestroActivo(u));
       const enLinea=conFechaGPS.filter(u=>Math.floor((hoy-new Date(u[k]))/86400000)<=cfg.diasLinea).length;
       const fuera=conFechaGPS.length-enLinea;
       const esManual=p==='VOLVO';
@@ -1731,11 +1750,11 @@ const UI = (() => {
     if (plat === 'MOTIVE' || plat === 'VOLVO') {
       const todasEmpresas = DB.getEmpresasList();
       scopeUns = todasEmpresas.flatMap(e => DB.getUnidadesList(e)).filter(u =>
-        u.activa && !u.siniestro && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+        u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
       );
     } else {
       scopeUns = DB.getUnidadesList(emp).filter(u =>
-        u.activa && !u.siniestro && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+        u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
       );
     }
     scopeUns = scopeUns.filter(u => !!u[k]);
@@ -2001,7 +2020,7 @@ const UI = (() => {
     const sum = $('plat-table-summary');
     if (sum) {
       // Excluir siniestros activos de conteos GPS en plataformas
-      const unsGPS = uns.filter(u => !u.siniestro);
+      const unsGPS = uns.filter(u => !_tieneSiniestroActivo(u));
       const enLinea  = unsGPS.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d <= cfg.diasLinea; }).length;
       const atencion = unsGPS.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasLinea && d <= cfg.diasAtencion; }).length;
       const fuera    = unsGPS.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasAtencion; }).length;
@@ -3422,7 +3441,7 @@ const UI = (() => {
 
     // Excluir Para venta y siniestros activos de gráficas
     const uns = DB.getUnidadesList(emp).filter(u =>
-      u.activa && !u.siniestro && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+      u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
     );
 
     // LÓGICA CORREGIDA (v7.1):
