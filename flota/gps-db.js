@@ -218,8 +218,10 @@ const GPS_SB = (() => {
       if (!num) return null;
       const ultimaConexion = r.fecha || r.ultimaConexion || r.ultima_conexion || null;
       const prev = existentes[num];
-      // Preservar observaciones del registro anterior si no vienen en el nuevo
-      const observaciones = r.observaciones || prev?.datos_raw?.observaciones || null;
+      // Preservar observaciones: columna dedicada > datos_raw legacy > null
+      const observaciones = r.observaciones || prev?.observaciones || prev?.datos_raw?.observaciones || null;
+      // datos_raw NO debe incluir observaciones (evita corrupción en PATCH parciales)
+      const { observaciones: _omit, ...rLimpio } = r;
       return {
         empresa_id:      emp,
         plataforma,
@@ -227,7 +229,8 @@ const GPS_SB = (() => {
         ultima_conexion: ultimaConexion || null,
         tiene_datos:     !!ultimaConexion,
         activa:          true,
-        datos_raw:       { ...r, observaciones },
+        observaciones,
+        datos_raw:       rLimpio,
         cargado_at:      now
       };
     }).filter(Boolean);
@@ -372,6 +375,20 @@ const GPS_SB = (() => {
     return _delete('gps_fallas', 'id=eq.' + id);
   }
 
+  /**
+   * Actualiza el campo `observaciones` en gps_barridos para TODAS las plataformas
+   * de una unidad. Usa la columna dedicada (no datos_raw) para evitar corrupción.
+   */
+  async function patchObservacionesBarrido(num, emp, texto) {
+    const plataformas = ["CEIBA","SAMSARA","AVL","SCANIA","MAN","VOLVO","MOTIVE"];
+    await Promise.all(plataformas.map(plat =>
+      _patch("gps_barridos",
+        `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${plat}&num_economico=eq.${encodeURIComponent(num)}`,
+        { observaciones: texto || null }
+      ).catch(() => {})
+    ));
+  }
+
   // ── SIMs ──────────────────────────────────────────────────────────────────
   async function getSims(emp) {
     return _get('gps_sims',
@@ -409,6 +426,8 @@ const GPS_SB = (() => {
     getFallas, getFallasActivas, registrarFalla, resolverFalla, eliminarFallaDB,
     // SIMs
     getSims, saveSim, deleteSim,
+    // Barridos — observaciones
+    patchObservacionesBarrido,
     // Helper: saber si Supabase está disponible
     _getRaw, _patch,
     isAvailable: () => true,
