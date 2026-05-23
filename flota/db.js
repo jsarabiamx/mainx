@@ -232,8 +232,21 @@ const DB = (() => {
         if (fallaRows && fallaRows.length > 0) {
           fallaRows.forEach(r => {
             const num = String(r.num_economico);
-            const u = (_s.unidades[emp] || {})[num];
-            if (!u) return;
+            let u = (_s.unidades[emp] || {})[num];
+
+            // Si la unidad no existe localmente pero hay una falla en Supabase,
+            // crear registro mínimo para que el siniestro sea visible en todos los dispositivos
+            if (!u) {
+              if (!_s.unidades[emp]) _s.unidades[emp] = {};
+              _s.unidades[emp][num] = {
+                num, activa: true, fallas: [], historialFallas: [], historial: [],
+                siniestro: false, siniestroDesc: '', fallaCount: 0,
+                base: '', cromatica: '', estatus: '', modelo: '', rol: '',
+                empresa_asig: emp, _fuente: 'supabase_falla'
+              };
+              u = _s.unidades[emp][num];
+            }
+
             u.fallas = u.fallas || [];
             const existe = u.fallas.find(f => f._sbId === r.id);
             if (!existe) {
@@ -250,8 +263,15 @@ const DB = (() => {
                 fechaOcurrencia: extra.fechaOcurrencia || r.created_at
               };
               u.fallas.push(falla);
-              if (falla.esSiniestro) { u.siniestro = true; u.siniestroDesc = falla.motivo; }
+              if (falla.esSiniestro) {
+                u.siniestro = true;
+                u.siniestroDesc = falla.motivo;
+                u.observaciones = falla.motivo; // sync observaciones
+              }
               u.fallaCount = u.fallas.length;
+            } else if (!existe._sbId) {
+              existe._sbId = r.id;
+              if (r.tipo === 'SINIESTRO') { u.siniestro = true; u.siniestroDesc = existe.motivo; }
             }
           });
         }
