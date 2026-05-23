@@ -76,6 +76,19 @@ const Parsers = (() => {
     let d = new Date(s.replace(' ', 'T'));
     if (!isNaN(d)) return d;
 
+    // Formato americano: MM/DD/YYYY HH:MM AM/PM (MOTIVE)
+    const mAMPM = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})[\s,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i);
+    if (mAMPM) {
+      let hh = parseInt(mAMPM[4]);
+      const mm = parseInt(mAMPM[5]);
+      const ss = parseInt(mAMPM[6] || '0');
+      const ampm = (mAMPM[7] || '').toUpperCase();
+      if (ampm === 'PM' && hh < 12) hh += 12;
+      if (ampm === 'AM' && hh === 12) hh = 0;
+      d = new Date(parseInt(mAMPM[3]), parseInt(mAMPM[1])-1, parseInt(mAMPM[2]), hh, mm, ss);
+      if (!isNaN(d)) return d;
+    }
+
     // DD-MM-YYYY HH:MM:SS o DD/MM/YYYY
     const m1 = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[T\s](\d{1,2}:\d{2}(?::\d{2})?))?/);
     if (m1) {
@@ -755,17 +768,55 @@ const Parsers = (() => {
 
     const col = name => headers.findIndex(h => h.includes(name));
 
-    const colId     = col('ID DE ENTIDAD') !== -1 ? col('ID DE ENTIDAD') : 0;
-    const colFecha  = col('LTIMA ACTIVIDAD DEL DISPOSITIVO') !== -1
-                       ? col('LTIMA ACTIVIDAD DEL DISPOSITIVO')
-                       : col('LTIMA UBICACI') !== -1 ? col('LTIMA UBICACI') : 6;
-    const colFechaG = col('FECHA DE LA') !== -1 ? col('FECHA DE LA') : 6;
-    const colGrupo  = col('GRUPOS') !== -1 ? col('GRUPOS') : 7;
-    const colDisp   = col('DISPOSITIVO') !== -1 ? col('DISPOSITIVO') : 8;
-    const colSerie  = col('MERO DE SERIE') !== -1 ? col('MERO DE SERIE')
-                       : col('SERIE') !== -1 ? col('SERIE') : 9;
-    const colModelo = col('MODELO') !== -1 ? col('MODELO') : 10;
-    const colEstado = col('ESTADO') !== -1 ? col('ESTADO') : 14;
+    const colId = (() => { const i = col('ID DE ENTIDAD'); return i !== -1 ? i : 0; })();
+
+    // colFecha: col N "ULTIMA ACTIVIDAD DEL DISPOSITIVO"
+    // Maneja encoding corrupto (ÃLTIMA, ÃLTIMA) buscando por "ACTIVIDAD"
+    const colFecha = (() => {
+      // Buscar por substring robusto ignorando encoding
+      for (let i = 0; i < headers.length; i++) {
+        if (headers[i].includes('ACTIVIDAD') && headers[i].includes('DISP')) return i;
+        if (headers[i].includes('LTIMA ACTIVIDAD')) return i;
+      }
+      // Fallback posicional: col N = índice 13
+      return 13;
+    })();
+
+    // colFechaG: col G "FECHA DE LA ULTIMA UBICACION"
+    const colFechaG = (() => {
+      for (let i = 0; i < headers.length; i++) {
+        if (headers[i].includes('FECHA') && headers[i].includes('UBICAC')) return i;
+        if (headers[i].includes('FECHA DE LA')) return i;
+      }
+      return 6;
+    })();
+
+    const colGrupo  = (() => { const i = headers.findIndex(h=>h.includes('GRUPO')); return i !== -1 ? i : 7; })();
+    const colDisp   = (() => { const i = col('DISPOSITIVO'); return i !== -1 ? i : 8; })();
+
+    // colSerie: col J "NUMERO DE SERIE"
+    const colSerie  = (() => {
+      for (let i = 0; i < headers.length; i++) {
+        if (headers[i].includes('SERIE') && i > 8) return i;
+      }
+      return 9;
+    })();
+
+    // colModelo DISPOSITIVO: col K — hay dos col MODELO (C y K), tomamos la que está después de col I
+    const colModelo = (() => {
+      const all = [];
+      headers.forEach((h,i) => { if(h === 'MODELO' && i > colDisp) all.push(i); });
+      if (all.length > 0) return all[0];
+      const i = col('MODELO'); return i !== -1 && i > colDisp ? i : 10;
+    })();
+
+    // colEstado: col O — "ESTADO" (no "SUBESTADO")
+    const colEstado = (() => {
+      const i = headers.findIndex(h => h === 'ESTADO' || (h.includes('ESTADO') && !h.includes('SUB') && !h.includes('FECHA')));
+      return i !== -1 ? i : 14;
+    })();
+
+    console.log('[MOTIVE] colFecha='+colFecha+'('+headers[colFecha]+') colGrupo='+colGrupo+'('+headers[colGrupo]+') colEstado='+colEstado+'('+headers[colEstado]+')');
 
     // Agrupar por num_unidad: preservar la fecha más reciente y agregar info de ambos dispositivos
     const agrupado = {};
