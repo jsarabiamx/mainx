@@ -368,6 +368,76 @@ const App = (() => {
     }
   }
 
+  // Sincronización inicial de fallas — siempre corre al inicio aunque haya datos locales
+  async function _syncFallasDesdeInicio() {
+    if (!window.GPS_SB) return;
+    try {
+      const empresas = DB.getEmpresasList();
+      let huboNuevas = false;
+
+      for (const emp of empresas) {
+        const rows = await GPS_SB.getFallasActivas(emp);
+        if (!rows || !rows.length) continue;
+
+        rows.forEach(row => {
+          const num = String(row.num_economico);
+          let u = DB.getUnidad(num, emp);
+
+          // Crear stub si la unidad no existe
+          if (!u) {
+            DB.upsertUnidad(num, { activa: true, siniestro: false, fallas: [], _fuente: 'supabase_falla_init' }, emp);
+            u = DB.getUnidad(num, emp);
+            if (!u) return;
+          }
+
+          u.fallas = u.fallas || [];
+          const esSiniestro = row.tipo === 'SINIESTRO';
+          const existe = u.fallas.find(f => f._sbId === row.id);
+
+          if (!existe) {
+            const extra = row.datos_extra || {};
+            const falla = {
+              id: extra.id || row.id,
+              _sbId: row.id,
+              motivo: row.etiqueta || extra.motivo || '',
+              descripcion: row.descripcion || extra.descripcion || '',
+              ubicacion: extra.ubicacion || '',
+              esSiniestro,
+              resuelta: false,
+              fecha: row.created_at,
+              fechaOcurrencia: extra.fechaOcurrencia || row.created_at
+            };
+            u.fallas.push(falla);
+            u.fallaCount = u.fallas.length;
+            huboNuevas = true;
+          }
+
+          // SIEMPRE corregir el flag de siniestro si corresponde
+          if (esSiniestro && !u.siniestro) {
+            u.siniestro = true;
+            u.siniestroDesc = row.etiqueta || '';
+            huboNuevas = true;
+          }
+          // Si tenía siniestro marcado pero ya no hay falla activa de tipo SINIESTRO, limpiarlo
+          if (!esSiniestro && u.siniestro) {
+            const tieneSiniestroActivo = u.fallas.some(f => f.esSiniestro && !f.resuelta);
+            if (!tieneSiniestroActivo) { u.siniestro = false; u.siniestroDesc = ''; huboNuevas = true; }
+          }
+        });
+      }
+
+      if (huboNuevas) {
+        DB.save && DB.save();
+        // Re-renderizar todo para reflejar siniestros
+        UI.renderResumen && UI.renderResumen();
+        const platGrid = document.getElementById('plataformas-grid');
+        if (platGrid) UI.renderPlataformas && UI.renderPlataformas();
+      }
+    } catch(e) {
+      console.warn('[FallaInit]', e.message);
+    }
+  }
+
   function _startFallasSync() {
     _syncFallasFromSupabase();
     _fallasSyncTimer = setInterval(_syncFallasFromSupabase, 15000); // cada 15 seg
@@ -402,10 +472,15 @@ const App = (() => {
         });
       }, 3000);
     }
-    // Si hayDatos y son recientes: NO sync — respetar lo que el usuario tiene local
+    // Si hayDatos y son recientes: NO sync de asignaciones — respetar datos locales
+    // PERO siempre sincronizar fallas activas (siniestros, AFR) desde Supabase
+    // Esto garantiza que cualquier dispositivo vea siniestros registrados en otro
+    setTimeout(() => {
+      _syncFallasDesdeInicio();
+    }, 1500);
 
     // Iniciar sincronización en tiempo real de fallas
-    setTimeout(_startFallasSync, 2000);
+    setTimeout(_startFallasSync, 4000);
   }
 
   function _showSyncBanner(msg) {
