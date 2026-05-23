@@ -1620,8 +1620,10 @@ const UI = (() => {
     // (MOTIVE/VOLVO pueden tener unidades en empresas distintas a la activa)
     const todasUns = DB.getEmpresasList().flatMap(e => DB.getUnidadesList(e)).filter(u => u.activa);
 
-    // Excluir "Para venta" para los conteos operativos
-    const operativas = todasUns.filter(u => Parsers.categorizarEstatus(u.estatus) !== 'Para venta');
+    // Excluir "Para venta" Y siniestros activos de los conteos operativos de plataformas
+    const operativas = todasUns.filter(u =>
+      Parsers.categorizarEstatus(u.estatus) !== 'Para venta' && !u.siniestro
+    );
 
     // Barra de acciones superior (export + cargar masivo)
     let topBar = `<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
@@ -1729,11 +1731,11 @@ const UI = (() => {
     if (plat === 'MOTIVE' || plat === 'VOLVO') {
       const todasEmpresas = DB.getEmpresasList();
       scopeUns = todasEmpresas.flatMap(e => DB.getUnidadesList(e)).filter(u =>
-        u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+        u.activa && !u.siniestro && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
       );
     } else {
       scopeUns = DB.getUnidadesList(emp).filter(u =>
-        u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+        u.activa && !u.siniestro && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
       );
     }
     scopeUns = scopeUns.filter(u => !!u[k]);
@@ -3418,8 +3420,10 @@ const UI = (() => {
     const el = $('graficas-content');
     if (!el) return;
 
-    // Excluir Para venta
-    const uns = DB.getUnidadesList(emp).filter(u => u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta');
+    // Excluir Para venta y siniestros activos de gráficas
+    const uns = DB.getUnidadesList(emp).filter(u =>
+      u.activa && !u.siniestro && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+    );
 
     // LÓGICA CORREGIDA (v7.1):
     // Cada plataforma tiene su PROPIO UNIVERSO (sus dispositivos, no todas las unidades de la empresa).
