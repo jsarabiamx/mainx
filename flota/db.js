@@ -271,12 +271,22 @@ const DB = (() => {
                 u.siniestroDesc = falla.motivo;
               }
               u.fallaCount = u.fallas.length;
+              // Propagar etiqueta de falla activa a u.observaciones para que
+              // la tabla de Plataformas la muestre en cualquier navegador/dispositivo
+              if (!u.observaciones && falla.motivo) {
+                u.observaciones = esSiniestroRow ? ('🚨 ' + falla.motivo) : falla.motivo;
+              }
             } else {
               // Falla ya existe — asegurar flag de siniestro si faltaba
               if (!existe._sbId) existe._sbId = r.id;
               if (esSiniestroRow && !u.siniestro) {
                 u.siniestro = true;
                 u.siniestroDesc = existe.motivo || r.etiqueta || '';
+              }
+              // También propagar a observaciones si no hay ninguna aún
+              if (!u.observaciones && (existe.motivo || r.etiqueta)) {
+                const mot = existe.motivo || r.etiqueta || '';
+                u.observaciones = esSiniestroRow ? ('🚨 ' + mot) : mot;
               }
             }
           });
@@ -540,6 +550,26 @@ const DB = (() => {
       // Quitar etiqueta AFR si no quedan fallas AFR activas
       const otrasAFR = (u.fallas || []).some(x => !x.esSiniestro && !x.resuelta && x.id !== f.id);
       if (!otrasAFR) removeEtiquetaUnidad(num, emp, 'AFR');
+    }
+
+    // Limpiar u.observaciones si ya no quedan fallas activas
+    const _fallasRestantes = (u.fallas || []).filter(x => !x.resuelta && x.id !== f.id);
+    if (_fallasRestantes.length === 0) {
+      u.observaciones = '';
+      // Sincronizar limpieza a Supabase
+      if (window.GPS_SB) {
+        GPS_SB.patchObservacionesBarrido(num, emp, null).catch(() => {});
+      }
+    } else {
+      // Actualizar con la falla activa más reciente
+      const _siguienteFalla = _fallasRestantes[_fallasRestantes.length - 1];
+      const _newObs = _siguienteFalla.esSiniestro
+        ? ('🚨 ' + (_siguienteFalla.motivo || ''))
+        : (_siguienteFalla.motivo || '');
+      u.observaciones = _newObs;
+      if (window.GPS_SB) {
+        GPS_SB.patchObservacionesBarrido(num, emp, _newObs).catch(() => {});
+      }
     }
 
     // Agregar etiqueta LIBERADA (temporal — se muestra en el panel Liberadas)
