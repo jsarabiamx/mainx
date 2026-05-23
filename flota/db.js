@@ -279,6 +279,8 @@ const DB = (() => {
   }
 
   /* ─── EMPRESA ────────────────────────────────────────── */
+  function getUltimaActualizacion() { return _s._ultimaActualizacion || null; }
+  function _marcarActualizacion() { _s._ultimaActualizacion = new Date().toISOString(); save(); }
   function getEmpresaActiva() { return _s.empresaActiva; }
   function setEmpresaActiva(k) { _s.empresaActiva = k; save(); }
   function getEmpresas() { return _s.empresas; }
@@ -937,7 +939,15 @@ const DB = (() => {
         }
         if (idField && r.serie) extras[idField] = r.serie;
         if (plataforma === 'SAMSARA' && r.estadoSamsara) extras.estado_samsara = r.estadoSamsara;
-        upsertUnidad(r.num, extras, emp);
+        // MOTIVE extras
+        if (plataforma === 'MOTIVE') {
+          if (r.serieGateway) extras.motive_vg      = r.serieGateway;
+          if (r.serieDashcam) extras.motive_cam     = r.serieDashcam;
+          if (r.estado)       extras.estado_motive  = r.estado;
+          if (r.empresa)      extras.empresa_motive = r.empresa;
+        }
+        // Usar empTarget (empresa real del registro) no emp (empresa activa)
+        upsertUnidad(r.num, extras, empTarget);
       }
     });
 
@@ -970,6 +980,7 @@ const DB = (() => {
     emp = emp || _s.empresaActiva;
     opciones = opciones || { marcarInactivas: true };
     const now = new Date().toISOString();
+    _marcarActualizacion(); // registrar que hay datos locales frescos
 
     const numeros = new Set(filas.map(f => String(f.num)));
     let creadas = 0, actualizadas = 0, inactivadas = 0;
@@ -1424,7 +1435,7 @@ const DB = (() => {
   }
 
   return {
-    getEmpresaActiva, setEmpresaActiva, getEmpresas, getEmpresasList, addEmpresa, removeEmpresa, renombrarEmpresa,
+    getEmpresaActiva, setEmpresaActiva, getEmpresas, getEmpresasList, addEmpresa, removeEmpresa, renombrarEmpresa, getUltimaActualizacion,
     getUnidades, getUnidadesList, getUnidad, upsertUnidad, initFromSupabase,
     marcarInactiva, reactivarUnidad, eliminarUnidad, registrarFalla, resolverFalla, eliminarFalla,
     getBarridos, saveBarrido,
