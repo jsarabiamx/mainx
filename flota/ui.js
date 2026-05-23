@@ -1498,7 +1498,7 @@ const UI = (() => {
   function _renderPlatDetectCards(){
     const el=$('plat-detect-cards');
     if(!el)return;
-    const COLS={CEIBA:'Plate No. | GPS Time | Serial No.',SAMSARA:'Nombre | Última hora de registro | VG/Serie',AVL:'Grouping | Último mensaje',SCANIA:'Vehículo | Hora',MAN:'Dispositivo | VIN | Ultima Conexion',VOLVO:'Captura manual',MOTIVE:'Captura manual'};
+    const COLS={CEIBA:'Plate No. | GPS Time | Serial No.',SAMSARA:'Nombre | Última hora de registro | VG/Serie',AVL:'Grouping | Último mensaje',SCANIA:'Vehículo | Hora',MAN:'Dispositivo | VIN | Ultima Conexion',VOLVO:'Captura manual',MOTIVE:'ID Entidad | Última Actividad | Estado | Serie VG | Serie Cam'};
     el.innerHTML=['CEIBA','SAMSARA','AVL','SCANIA','MAN'].map(p=>{
       const d=_barridosPending[p];
       return`<div style="background:var(--bg-panel);border:1px solid ${d?'var(--green-border)':'var(--border)'};border-top:2px solid ${d?'var(--green)':'var(--border)'};border-radius:10px;padding:12px">
@@ -1632,7 +1632,7 @@ const UI = (() => {
       const conFecha=operativas.filter(u=>u[k]);
       const enLinea=conFecha.filter(u=>Math.floor((hoy-new Date(u[k]))/86400000)<=cfg.diasLinea).length;
       const fuera=conFecha.length-enLinea;
-      const esManual=p==='VOLVO'||p==='MOTIVE';
+      const esManual=p==='VOLVO';
       const COLS_MAP={
         CEIBA:'Plate No. | GPS time | Serial No.',
         SAMSARA:'Nombre | Última hora de registro | N° serie',
@@ -1640,7 +1640,7 @@ const UI = (() => {
         SCANIA:'Vehículo | Hora',
         MAN:'Dispositivo | VIN | Ultima Conexion',
         VOLVO:'Captura manual',
-        MOTIVE:'Captura manual'
+        MOTIVE:'ID Entidad | Última Actividad | Estado | Serie VG | Serie Cam'
       };
       const activa = _platExpandida === p;
       return `<div class="plat-card ${activa?'plat-card-active':''}" onclick="UI._togglePlatDetail('${p}')">
@@ -1700,7 +1700,7 @@ const UI = (() => {
     const box = $('plat-detail-box');
     if (!box) return;
     const k = 'ultima_act_' + plat.toLowerCase();
-    const esManual = plat === 'VOLVO' || plat === 'MOTIVE';
+    const esManual = plat === 'VOLVO';
 
     // BASE de unidades para este panel:
     // - Plataformas NO manuales (CEIBA, SAMSARA, AVL, SCANIA, MAN): SOLO unidades que aparecen
@@ -1979,7 +1979,7 @@ const UI = (() => {
     }
 
     if (!uns.length) {
-      const esManual = plat === 'VOLVO' || plat === 'MOTIVE';
+      const esManual = plat === 'VOLVO';
       const hayFiltros = (f.emp && f.emp.length) || (f.base && f.base.length) ||
                          (f.crom && f.crom.length) || (f.est && f.est.length) ||
                          (f.dias && f.dias.length) || (f.estadoSam && f.estadoSam.length) ||
@@ -2010,12 +2010,16 @@ const UI = (() => {
 
     const idLabel = _labelIdPlat(plat);
     const incluyeEstadoCol = (plat === 'SAMSARA');
+    const esMotive = (plat === 'MOTIVE');
 
     const th = `
       <th>UNIDAD</th><th>BASE</th><th>CROMÁTICA</th><th>MODELO</th>
       <th>ESTATUS</th>
-      ${incluyeEstadoCol ? '<th>ESTADO</th>' : ''}
-      <th>${plat} ÚLT. CONEXIÓN</th><th>DÍAS</th><th>${idLabel}</th><th>OBSERVACIONES</th>`;
+      ${incluyeEstadoCol ? '<th>ESTADO SAMSARA</th>' : ''}
+      ${esMotive ? '<th>ESTADO DISP.</th><th>EMPRESA</th>' : ''}
+      <th>${plat} ÚLT. ACTIVIDAD</th><th>DÍAS</th>
+      ${esMotive ? '<th>SERIE VG</th><th>SERIE CAM</th>' : `<th>${idLabel}</th>`}
+      <th>OBSERVACIONES</th>`;
 
     const rows = uns.map(u => {
       const fecha = u[k];
@@ -2048,6 +2052,19 @@ const UI = (() => {
       const obsTexto = u.observaciones || '';
       const isSelected = _platDetailUnit === u.num;
 
+      // Motive: extraer estado y series de datos_raw si los tiene en barrido
+      const motiveRaw = esMotive ? (u._motiveRaw || {}) : {};
+      const motiveEstado = motiveRaw.estado || u.estado_motive || '';
+      const motiveEmpresa = motiveRaw.empresa || u.empresa_motive || '';
+      const motiveSerieVG  = motiveRaw.serieGateway || u.serie_vg_motive || u.motive_vg || '';
+      const motiveSerieCam = motiveRaw.serieDashcam  || u.serie_cam_motive || u.motive_cam || '';
+      const motiveEstadoCell = esMotive ? (() => {
+        const e = String(motiveEstado).toUpperCase();
+        const isOff = e.includes('POWERED OFF') || e.includes('OFF');
+        const c = isOff ? 'var(--red)' : (e.includes('NORMAL') ? 'var(--green)' : 'var(--text3)');
+        return `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${c}22;color:${c};border:1px solid ${c}44">${motiveEstado||'—'}</span>`;
+      })() : '';
+
       return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" style="cursor:pointer">
         <td style="font-weight:700">${esc(u.num)}</td>
         <td>${esc(u.base||'—')}</td>
@@ -2055,9 +2072,13 @@ const UI = (() => {
         <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.modelo||'—')}</td>
         <td>${estatusCell}</td>
         ${incluyeEstadoCol ? `<td>${estadoSamsaraCell}</td>` : ''}
+        ${esMotive ? `<td>${motiveEstadoCell}</td><td style="font-size:11px">${esc(motiveEmpresa||'—')}</td>` : ''}
         <td style="font-size:11px">${fecha?Parsers.fmtDate(fecha):'<span style="color:var(--text3)">Sin datos</span>'}</td>
         <td>${diasBadge(d)}</td>
-        <td style="font-family:monospace;font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(idValue)}</td>
+        ${esMotive
+          ? `<td style="font-family:monospace;font-size:10px">${esc(motiveSerieVG||'—')}</td><td style="font-family:monospace;font-size:10px">${esc(motiveSerieCam||'—')}</td>`
+          : `<td style="font-family:monospace;font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(idValue)}</td>`
+        }
         <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarObsRapido('${esc(u.num)}','${esc(u.empresa||emp)}','${plat}')" title="Click para editar — ${esc(obsTexto||'sin observación')}">
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${esc(obsTexto)||'<span style="color:var(--text3);font-style:italic">+ agregar…</span>'}</span>
           <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
