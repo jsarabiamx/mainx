@@ -1109,18 +1109,8 @@ const UI = (() => {
     };
     DB.registrarFalla(num,emp,fichaFalla);
     // Sincronizar observaciones con el motivo de la falla (local + Supabase)
-    const etiqueta = fichaFalla.esSiniestro ? fichaFalla.motivo : fichaFalla.motivo;
-    DB.upsertUnidad(num, { observaciones: etiqueta, _fuente: 'falla_sync' }, emp);
-    // Actualizar observaciones en gps_barridos de Supabase para todos los navegadores
-    if (window.GPS_SB) {
-      const plataformas = ['CEIBA','SAMSARA','AVL','SCANIA','MAN','VOLVO','MOTIVE'];
-      plataformas.forEach(plat => {
-        GPS_SB._patch('gps_barridos',
-          `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${plat}&num_economico=eq.${encodeURIComponent(num)}`,
-          { datos_raw: { observaciones: etiqueta } }
-        ).catch(()=>{});
-      });
-    }
+    const etiqueta = fichaFalla.motivo || "";
+    DB.upsertUnidad(num, { observaciones: etiqueta, _fuente: "falla_sync" }, emp);
     closeModal();
     toast(`Falla registrada en unidad ${num}${fichaFalla.esSiniestro?' — SINIESTRO':''}`,'warn',5000);
     renderDetalle(num,emp);
