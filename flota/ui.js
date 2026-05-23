@@ -1568,11 +1568,15 @@ const UI = (() => {
   ══════════════════════════════════════════════════════ */
 
   // Helper: detecta siniestro activo aunque u.siniestro no esté seteado
-  // (puede pasar si el sync de Supabase aún no corrió)
+  // Revisa: flag siniestro, fallas activas, y observaciones con keyword siniestro
   function _tieneSiniestroActivo(u) {
     if (!u) return false;
     if (u.siniestro) return true;
-    return (u.fallas || []).some(f => f.esSiniestro && !f.resuelta);
+    if ((u.fallas || []).some(f => f.esSiniestro && !f.resuelta)) return true;
+    // Fallback: si la observación menciona siniestro (puesto manual o por sync)
+    const obs = String(u.observaciones || u.siniestroDesc || '').toUpperCase();
+    if (obs.includes('SINIESTRO')) return true;
+    return false;
   }
 
   let _platExpandida = '';
@@ -1628,9 +1632,20 @@ const UI = (() => {
 
   function renderPlataformas(){
     const emp=DB.getEmpresaActiva();
-    const uns=DB.getUnidadesList(emp).filter(u=>u.activa);
     const el=$('plataformas-grid');
     if(!el)return;
+
+    // Sincronizar fallas activas de Supabase antes de renderizar
+    // para garantizar que u.siniestro esté correcto en todos los dispositivos
+    if (window.GPS_SB && !renderPlataformas._syncDone) {
+      renderPlataformas._syncDone = true;
+      App._syncFallasDesdeInicio && App._syncFallasDesdeInicio().then(() => {
+        renderPlataformas();
+      });
+      // Renderizar con datos actuales mientras llega el sync (no bloquear UI)
+    }
+
+    const uns=DB.getUnidadesList(emp).filter(u=>u.activa);
 
     const cfg=DB.getConfig();
     const hoy=Date.now();
