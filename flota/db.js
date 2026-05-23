@@ -213,7 +213,9 @@ const DB = (() => {
 
             const idField = idFieldByPlat[plat];
             if (idField && raw.serie && !u[idField]) u[idField] = raw.serie;
-            if (raw.observaciones && !u.observaciones) u.observaciones = raw.observaciones;
+            // observaciones: columna dedicada tiene prioridad sobre datos_raw legacy
+            const obsBarrido = r.observaciones || raw.observaciones || null;
+            if (obsBarrido && !u.observaciones) u.observaciones = obsBarrido;
             if (plat === 'SAMSARA' && raw.estadoSamsara) u.estado_samsara = raw.estadoSamsara;
             if (plat === 'MOTIVE') {
               if (raw.serieGateway) u.motive_vg = raw.serieGateway;
@@ -389,15 +391,8 @@ const DB = (() => {
     save();
 
     // ── Sincronizar observaciones a Supabase cuando se editan manualmente ──
-    if (window.GPS_SB && datos.observaciones !== undefined && datos._fuente && datos._fuente.includes('obs')) {
-      const u = store[k];
-      const plataformas = ['CEIBA','SAMSARA','AVL','SCANIA','MAN','VOLVO','MOTIVE'];
-      plataformas.forEach(plat => {
-        GPS_SB._patch('gps_barridos',
-          `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${plat}&num_economico=eq.${k}`,
-          { datos_raw: { observaciones: datos.observaciones } }
-        ).catch(() => {});
-      });
+    if (window.GPS_SB && datos.observaciones !== undefined) {
+      GPS_SB.patchObservacionesBarrido(k, emp, datos.observaciones || null).catch(() => {});
     }
 
     return store[k];
