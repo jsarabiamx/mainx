@@ -258,7 +258,8 @@ const Parsers = (() => {
       if (!Array.isArray(row)) continue;
       const rowStr = row.map(c => String(c||'').toUpperCase().replace(/[ÁÉÍÓÚÜ]/g, m =>
         ({Á:'A',É:'E',Í:'I',Ó:'O',Ú:'U',Ü:'U'}[m]||m))).join('|');
-      if (rowStr.includes('ECONOMICO') || rowStr.includes('ECONÓMICO') || rowStr.includes('CROMATICA')) {
+      if (rowStr.includes('ECONOMICO') || rowStr.includes('ECONÓMICO') || rowStr.includes('CROMATICA')
+          || rowStr.includes('AUTOBUS') || rowStr.includes('AUTOBUSES')) {
         headerRowIdx = i;
         break;
       }
@@ -281,27 +282,46 @@ const Parsers = (() => {
     const colIdx = {};
     headerRow.forEach((h, i) => {
       const n = normalize(h);
-      if (n.includes('ECONOM') || n === 'UNIDAD') colIdx.economico = i;
+      // Número de unidad: ECONÓMICO, UNIDAD, AUTOBUS, AUTOBUS (GHO), NUM, N°, NO.
+      if (n.includes('ECONOM') || n === 'UNIDAD' || n === 'AUTOBUS' || n === 'AUTOBUSES'
+          || n === 'NOUNIDAD' || n === 'NUMUNIDAD' || n === 'NUM' || n === 'NO')
+        colIdx.economico = i;
       // Cromática: columna propia ETN o col M "MARCA COMERCIAL" de GHO
       else if (n.includes('CROMATICA')) colIdx.cromatica = i;
       else if (n.includes('MARCACOMERCIAL') || n === 'MARCACOM' || n.includes('MARCA_COM')) colIdx.cromatica = i;
-      else if (n.includes('ESTATUS') || n === 'STATUS' || n === 'ESTADO') colIdx.estatus = i;
+      else if (n.includes('ESTATUS') || n === 'STATUS') colIdx.estatus = i;
+      else if (n === 'ESTATUSSUC' || n === 'ESTATUSSUCURSAL') colIdx.estatus = colIdx.estatus ?? i; // GHO fallback
       // Modelo: columna propia ETN o col N "TECNOLOGIA" de GHO
       else if (n.includes('MODELO')) colIdx.modelo = i;
       else if (n.includes('TECNOLOGIA') || n.includes('TECNOLOG')) colIdx.modelo = i;
       else if (n === 'ROL' || n === 'ROLE') colIdx.rol = i;
       else if (n === 'BASE' || n === 'BASEASIGNADA') colIdx.base = i;
-      else if (n.includes('EMPRESA') || n.includes('OPERADORA')) colIdx.empresa = i;
+      // Empresa: en GHO viene como "Empresa Principal" — no debe tomarse como empresa_asig
+      // Solo usar si no hay ambigüedad
+      else if ((n.includes('EMPRESA') || n.includes('OPERADORA')) && !n.includes('PRINCIPAL')) colIdx.empresa = i;
+      else if (n === 'EMPRESAPRINCIPAL') colIdx.empresa_principal = i; // GHO: guardar pero no usar como empresa_asig
       else if (n.includes('SERIE') || n === 'VIN' || n === 'SERIAL') colIdx.serie = i;
       else if (n.includes('MOTOR')) colIdx.motor = i;
       else if (n.includes('PLACA') || n.includes('TARJETA')) colIdx.placa = i;
       else if (n.includes('ASIENTO')) colIdx.asientos = i;
       else if (n.includes('OBSERV') || n.includes('OBS')) colIdx.observaciones = i;
+      // GHO específicos
+      else if (n === 'CLAVEROL' || n === 'CLAVERUTA') colIdx.clave_rol = i;
     });
 
-    // Fallbacks por posición exacta según documentación del PDF:
+    // Para GHO: si no detectó número de unidad por nombre pero sí hay AUTOBUS,
+    // buscar específicamente la columna "Autobus" que es el número real
+    if (colIdx.economico === undefined) {
+      const busIdx = headerRow.findIndex(h => {
+        const n = normalize(h);
+        return n === 'AUTOBUS' || n === 'AUTOBUSES' || n === 'NUMERODEAUTOBUS';
+      });
+      if (busIdx !== -1) colIdx.economico = busIdx;
+    }
+
+    // Fallbacks por posición (formato ETN estándar):
     // A=ECONÓMICO(0), B=CROMÁTICA(1), C=ESTATUS(2), D=MODELO(3), E=ROL(4), F=BASE(5), G=EMPRESA(6)
-    // H=SERIE(7), I=MOTOR(8), J=PLACA(9), K=ASIENTOS(10), L=OBSERVACIONES(11)
+    // Solo aplicar si NO se detectó por nombre (evita sobreescribir detección GHO)
     if (colIdx.economico === undefined) colIdx.economico = 0;
     if (colIdx.cromatica === undefined) colIdx.cromatica = 1;
     if (colIdx.estatus   === undefined) colIdx.estatus   = 2;
@@ -314,6 +334,10 @@ const Parsers = (() => {
     if (colIdx.placa     === undefined) colIdx.placa     = 9;
     if (colIdx.asientos  === undefined) colIdx.asientos  = 10;
     if (colIdx.observaciones === undefined) colIdx.observaciones = 11;
+
+    // GHO detectado: número de unidad está en AUTOBUS, el resultado num debe ser ese valor
+    const isGHO = colIdx.economico > 0; // Si economico no es col A, es formato GHO u otro
+    console.log('[Asignacion] colIdx:', JSON.stringify(colIdx), 'isGHO:', isGHO);
 
     const result = [];
     const seen = new Set();
