@@ -313,30 +313,41 @@ const App = (() => {
         }
 
         u.fallas = u.fallas || [];
-        // Verificar si ya tenemos esta falla por _sbId
         const existe = u.fallas.find(f => f._sbId === row.id || String(f.id) === String(row.datos_extra?.id));
+        const esSiniestro = row.tipo === 'SINIESTRO';
+
         if (!existe) {
-          // Falla registrada desde otro dispositivo
+          // Falla nueva desde otro dispositivo
           const falla = {
             ...(row.datos_extra || {}),
             id: row.datos_extra?.id || Date.now(),
             _sbId: row.id,
             motivo: row.etiqueta || row.datos_extra?.motivo || '',
             descripcion: row.descripcion || row.datos_extra?.descripcion || '',
-            esSiniestro: row.tipo === 'SINIESTRO',
+            esSiniestro,
             resuelta: false,
             fecha: row.created_at
           };
           u.fallas.push(falla);
-          if (falla.esSiniestro) { u.siniestro = true; u.siniestroDesc = falla.motivo; }
+          if (esSiniestro) { u.siniestro = true; u.siniestroDesc = falla.motivo; }
           huboNuevas = true;
         } else {
-          // Actualizar _sbId si no lo tenía
+          // Falla ya existe — asegurar que _sbId y siniestro estén actualizados
           if (!existe._sbId) { existe._sbId = row.id; }
-          // Si en Supabase está resuelta pero local no
+          // CRÍTICO: si la falla es siniestro pero la unidad no tiene el flag, corregirlo
+          if (esSiniestro && !u.siniestro) {
+            u.siniestro = true;
+            u.siniestroDesc = existe.motivo || row.etiqueta || '';
+            huboNuevas = true;
+          }
           if (row.resuelta && !existe.resuelta) {
             existe.resuelta = true;
             existe.fechaResolucion = row.updated_at;
+            // Si se resolvió el siniestro, limpiar flag si no quedan más siniestros activos
+            if (esSiniestro) {
+              const quedanSiniestros = u.fallas.some(f => f.esSiniestro && !f.resuelta);
+              if (!quedanSiniestros) { u.siniestro = false; u.siniestroDesc = ''; }
+            }
             huboNuevas = true;
           }
         }
@@ -344,9 +355,13 @@ const App = (() => {
 
       if (huboNuevas) {
         DB.save && DB.save();
-        // Re-renderizar panel de fallas si está activo
-        const panel = document.getElementById('panel-fallas');
-        if (panel && !panel.classList.contains('hidden')) UI.renderFallasPanel();
+        // Re-renderizar la vista activa para reflejar cambios de siniestro
+        if (typeof UI !== 'undefined') {
+          UI.renderResumen && UI.renderResumen();
+          // Si Plataformas está visible, también refrescarla
+          const platGrid = document.getElementById('plataformas-grid');
+          if (platGrid) UI.renderPlataformas && UI.renderPlataformas();
+        }
       }
     } catch(e) {
       console.debug('[FallaSync]', e.message);
