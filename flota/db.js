@@ -1064,7 +1064,9 @@ const DB = (() => {
 
     const hoy = Date.now();
     let enLinea = 0, atencion = 0, fuera = 0, sinDatos = 0;
-    operativas.forEach(u => {
+    // Excluir siniestros activos de conteos GPS — están en su propia categoría
+    const operativasGPS = operativas.filter(u => !u.siniestro);
+    operativasGPS.forEach(u => {
       if (!u.ultima_act) { sinDatos++; return; }
       const d = Math.floor((hoy - new Date(u.ultima_act)) / 86400000);
       if (d <= cfg.diasLinea)   enLinea++;
