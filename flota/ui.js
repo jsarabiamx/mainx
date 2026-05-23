@@ -1108,6 +1108,9 @@ const UI = (() => {
       esSiniestro:$('f-es-siniestro')?.checked||false
     };
     DB.registrarFalla(num,emp,fichaFalla);
+    // Sincronizar observaciones con el motivo de la falla
+    const etiqueta = fichaFalla.esSiniestro ? `🚨 ${fichaFalla.motivo}` : fichaFalla.motivo;
+    DB.upsertUnidad(num, { observaciones: etiqueta, _fuente: 'falla_sync' }, emp);
     closeModal();
     toast(`Falla registrada en unidad ${num}${fichaFalla.esSiniestro?' — SINIESTRO':''}`,'warn',5000);
     renderDetalle(num,emp);
@@ -1130,8 +1133,13 @@ const UI = (() => {
     const motivo = $('fix-motivo')?.value.trim() || '';
     const ok = DB.resolverFalla(num, emp, Number(fallaId), motivo);
     closeModal();
-    if (ok) { toast('Falla marcada como resuelta','success'); renderDetalle(num, emp); }
-    else    { toast('No se pudo actualizar la falla','error'); }
+    if (ok) {
+      const _uR = DB.getUnidad(num, emp);
+      const _rest = (_uR?.fallas||[]).filter(f=>!f.resuelta);
+      DB.upsertUnidad(num, { observaciones: _rest.length ? _rest[0].motivo||'' : '' }, emp);
+      toast('Falla marcada como resuelta','success');
+      renderDetalle(num, emp);
+    } else { toast('No se pudo actualizar la falla','error'); }
   }
   function _eliminarFalla(num, emp, fallaId) {
     openModal(`
@@ -2070,7 +2078,11 @@ const UI = (() => {
       // Identificador SEGÚN la plataforma (desde el campo específico del barrido)
       const idValue = _idValorUnidad(u, plat);
       const selected = _platDetailUnit === u.num ? 'background:rgba(59,130,246,.12)' : '';
-      const obsTexto = u.observaciones || '';
+      // obsTexto: primero observaciones manuales, si no la etiqueta de la falla activa
+      const _fallaActiva = (u.fallas||[]).find(f => !f.resuelta);
+      const _etiquetaFalla = _fallaActiva ? (_fallaActiva.motivo || _fallaActiva.etiqueta || '') : '';
+      const _siniestroLabel = u.siniestro ? (u.siniestroDesc ? `🚨 ${u.siniestroDesc}` : '🚨 SINIESTRO') : '';
+      const obsTexto = u.observaciones || _siniestroLabel || _etiquetaFalla || '';
       const isSelected = _platDetailUnit === u.num;
 
       // Motive: extraer estado y series de datos_raw si los tiene en barrido
@@ -2385,13 +2397,29 @@ const UI = (() => {
   function _editarObsRapido(num, emp, plat) {
     const u = DB.getUnidad(num, emp);
     if (!u) { toast('Unidad no encontrada','error'); return; }
-    const actual = u.observaciones || '';
+    const fallaActiva = (u.fallas||[]).find(f => !f.resuelta);
+    const actual = u.observaciones || (fallaActiva ? fallaActiva.motivo : '') || '';
     const nuevo = window.prompt(
-      `Observaciones para unidad ${num}:\n\n(Deja vacío para borrar)`,
+      `Observaciones para unidad ${num}:\n(Se sincroniza con el registro de fallas)\n\n(Deja vacío para borrar)`,
       actual
     );
     if (nuevo === null) return; // canceló
-    DB.upsertUnidad(num, { observaciones: nuevo.trim(), _fuente: 'edit_obs_inline' }, emp);
+    const texto = nuevo.trim();
+    DB.upsertUnidad(num, { observaciones: texto, _fuente: 'edit_obs_inline' }, emp);
+
+    // Sincronizar con fallas:
+    if (texto) {
+      if (fallaActiva) {
+        // Actualizar motivo de falla activa existente
+        fallaActiva.motivo = texto;
+        fallaActiva.etiqueta = texto;
+        DB.upsertUnidad(num, { fallas: u.fallas }, emp);
+      } else if (!u.siniestro) {
+        // Crear falla AFR con este texto si no hay ninguna activa
+        DB.registrarFalla(num, emp, { motivo: texto, tipo: 'AFR', esSiniestro: false });
+      }
+    }
+
     toast('Observación guardada','success');
     if (_platExpandida === plat) _refreshPlatTable(plat);
   }
@@ -3827,6 +3855,9 @@ const UI = (() => {
   function _liberarFalla(num, emp, fallaId) {
     if (!confirm(`¿Liberar la falla de la unidad ${num}?\nSe moverá a "Liberadas" y quedará en el historial.`)) return;
     DB.resolverFalla(num, emp, Number(fallaId), 'Liberada desde módulo de Fallas');
+    const _uLib = DB.getUnidad(num, emp);
+    const _restLib = (_uLib?.fallas||[]).filter(f=>!f.resuelta);
+    DB.upsertUnidad(num, { observaciones: _restLib.length ? _restLib[0].motivo||'' : '' }, emp);
     toast(`✓ Unidad ${num} liberada y movida al historial`, 'success');
     renderFallasPanel();
   }
@@ -3886,6 +3917,8 @@ const UI = (() => {
       esSiniestro: $('f-es-siniestro')?.checked||false
     };
     DB.registrarFalla(num, emp, fichaFalla);
+    const _etqG = fichaFalla.esSiniestro ? '🚨 ' + fichaFalla.motivo : fichaFalla.motivo;
+    DB.upsertUnidad(num, { observaciones: _etqG, _fuente: 'falla_sync' }, emp);
     closeModal();
     toast(`Falla registrada en unidad ${num}${fichaFalla.esSiniestro?' — SINIESTRO':''}`, 'warn', 5000);
     renderFallasPanel();
