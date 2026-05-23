@@ -567,12 +567,15 @@ const UI = (() => {
     const porBase={}, porCromatica={};
     let sinVIN=0, sinPlaca=0, siniestros=0;
     unsFiltradas.forEach(u => {
-      if (!u.ultima_act) { sinDatos++; }
-      else {
-        const d = u.dias;
-        if (d<=cfg.diasLinea) enLinea++;
-        else if (d<=cfg.diasAtencion) atencion++;
-        else fuera++;
+      // Siniestros activos se excluyen de conteos GPS (fuera/atención/en línea)
+      if (!u.siniestro) {
+        if (!u.ultima_act) { sinDatos++; }
+        else {
+          const d = u.dias;
+          if (d<=cfg.diasLinea) enLinea++;
+          else if (d<=cfg.diasAtencion) atencion++;
+          else fuera++;
+        }
       }
       if (u.base)      porBase[u.base]=(porBase[u.base]||0)+1;
       if (u.cromatica) porCromatica[u.cromatica]=(porCromatica[u.cromatica]||0)+1;
@@ -1605,8 +1608,12 @@ const UI = (() => {
     const cfg=DB.getConfig();
     const hoy=Date.now();
 
+    // Para conteos de plataformas: incluir unidades de TODAS las empresas
+    // (MOTIVE/VOLVO pueden tener unidades en empresas distintas a la activa)
+    const todasUns = DB.getEmpresasList().flatMap(e => DB.getUnidadesList(e)).filter(u => u.activa);
+
     // Excluir "Para venta" para los conteos operativos
-    const operativas = uns.filter(u => Parsers.categorizarEstatus(u.estatus) !== 'Para venta');
+    const operativas = todasUns.filter(u => Parsers.categorizarEstatus(u.estatus) !== 'Para venta');
 
     // Barra de acciones superior (export + cargar masivo)
     let topBar = `<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
@@ -1630,8 +1637,10 @@ const UI = (() => {
     const cardsHTML = ALL_PLATS.map(p=>{
       const k='ultima_act_'+p.toLowerCase();
       const conFecha=operativas.filter(u=>u[k]);
-      const enLinea=conFecha.filter(u=>Math.floor((hoy-new Date(u[k]))/86400000)<=cfg.diasLinea).length;
-      const fuera=conFecha.length-enLinea;
+      // Excluir siniestros de conteos GPS en tarjetas de plataforma
+      const conFechaGPS=conFecha.filter(u=>!u.siniestro);
+      const enLinea=conFechaGPS.filter(u=>Math.floor((hoy-new Date(u[k]))/86400000)<=cfg.diasLinea).length;
+      const fuera=conFechaGPS.length-enLinea;
       const esManual=p==='VOLVO';
       const COLS_MAP={
         CEIBA:'Plate No. | GPS time | Serial No.',
@@ -1707,9 +1716,18 @@ const UI = (() => {
     //   en el archivo de esa plataforma (tienen ultima_act_<plat> o fueron cargadas por barrido).
     //   Esto evita que por ejemplo el filtro TAPA muestre unidades sin Samsara.
     // - Plataformas manuales (VOLVO, MOTIVE): solo las que tienen captura manual (ultima_act_<plat>).
-    let scopeUns = DB.getUnidadesList(emp).filter(u =>
-      u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-    );
+    // MOTIVE y VOLVO pueden tener unidades en múltiples empresas — cargar de todas
+    let scopeUns;
+    if (plat === 'MOTIVE' || plat === 'VOLVO') {
+      const todasEmpresas = DB.getEmpresasList();
+      scopeUns = todasEmpresas.flatMap(e => DB.getUnidadesList(e)).filter(u =>
+        u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+      );
+    } else {
+      scopeUns = DB.getUnidadesList(emp).filter(u =>
+        u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+      );
+    }
     scopeUns = scopeUns.filter(u => !!u[k]);
 
     // Los selects se pueblan SOLO con valores presentes en el scope (unidades de esta plataforma).
@@ -1972,10 +1990,13 @@ const UI = (() => {
     // Summary: el TOTAL ahora es solo del scope de esta plataforma
     const sum = $('plat-table-summary');
     if (sum) {
-      const enLinea  = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d <= cfg.diasLinea; }).length;
-      const atencion = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasLinea && d <= cfg.diasAtencion; }).length;
-      const fuera    = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasAtencion; }).length;
-      sum.innerHTML = `<strong>${uns.length}</strong> unidades en ${plat} · <span style="color:var(--green)">${enLinea} en línea</span> · <span style="color:var(--yellow)">${atencion} atención</span> · <span style="color:var(--red)">${fuera} fuera</span>`;
+      // Excluir siniestros activos de conteos GPS en plataformas
+      const unsGPS = uns.filter(u => !u.siniestro);
+      const enLinea  = unsGPS.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d <= cfg.diasLinea; }).length;
+      const atencion = unsGPS.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasLinea && d <= cfg.diasAtencion; }).length;
+      const fuera    = unsGPS.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasAtencion; }).length;
+      const sinis    = uns.filter(u => u.siniestro).length;
+      sum.innerHTML = `<strong>${uns.length}</strong> unidades en ${plat} · <span style="color:var(--green)">${enLinea} en línea</span> · <span style="color:var(--yellow)">${atencion} atención</span> · <span style="color:var(--red)">${fuera} fuera</span>${sinis?` · <span style="color:#ef4444">🚨 ${sinis} siniestro${sinis>1?'s':''}</span>`:''}`;
     }
 
     if (!uns.length) {
