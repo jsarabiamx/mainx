@@ -1011,6 +1011,21 @@ const UI = (() => {
     renderDetalle(num,emp);
   }
 
+
+  function _eliminarUnidadDePlat(num, plat, emp) {
+    if (!confirm(`¿Eliminar la unidad ${num} de la plataforma ${plat}?\n\nLa unidad seguirá existiendo en otras plataformas y en la asignación.`)) return;
+    const platKey = 'ultima_act_' + plat.toLowerCase();
+    DB.upsertUnidad(num, { [platKey]: null, _fuente: 'eliminar_plat' }, emp);
+    if (window.GPS_SB) {
+      GPS_SB._patch('gps_barridos',
+        `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${plat}&num_economico=eq.${encodeURIComponent(num)}`,
+        { activa: false }
+      ).catch(() => {});
+    }
+    toast(`Unidad ${num} eliminada de ${plat}`, 'warn');
+    _refreshPlatTable(plat);
+  }
+
   function _updatePlatFechaConISO(num,plat,emp,iso){
     const k='ultima_act_'+plat.toLowerCase();
     const u=DB.getUnidad(num,emp);
@@ -2144,6 +2159,9 @@ const UI = (() => {
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${esc(obsTexto)||'<span style="color:var(--text3);font-style:italic">+ agregar…</span>'}</span>
           <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
         </td>
+        <td style="width:32px;text-align:center" onclick="event.stopPropagation()">
+          <button title="Eliminar unidad de ${plat}" onclick="UI._eliminarUnidadDePlat('${esc(u.num)}','${plat}','${esc(u.empresa||emp)}')" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;padding:2px 4px;border-radius:4px;opacity:0.6" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.6">✕</button>
+        </td>
       </tr>`;
     }).join('');
 
@@ -2498,8 +2516,18 @@ const UI = (() => {
     _platExpandida = plat;
     _platDetailUnit = null;
     renderPlataformas();
-    // Dar foco al input de número
-    setTimeout(() => { const e = $('pf-m-num'); if (e) e.focus(); }, 150);
+    setTimeout(() => {
+      const eNum = $('pf-m-num');
+      if (eNum) eNum.focus();
+      // Auto-llenar fecha con hora actual
+      const eFecha = $('pf-m-fecha');
+      if (eFecha && !eFecha.value) {
+        const now = new Date();
+        const pad = n => String(n).padStart(2,'0');
+        eFecha.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        _recalcularDiasManual();
+      }
+    }, 150);
   }
 
   function _autocompletarCapturaManual(plat) {
@@ -4868,7 +4896,7 @@ const UI = (() => {
     _recalcularDiasManual, _guardarCapturaManualPlat,
     _updatePlatFechaConISO,
     // v7.1: tabs del detalle inline y guardar observaciones in-situ
-    _cambiarPlatDetailTab, _guardarObsInline, _editarObsRapido,
+    _cambiarPlatDetailTab, _guardarObsInline, _editarObsRapido, _eliminarUnidadDePlat,
     // v7.2: multi-select dropdowns
     _msToggle, _msOnCheck, _msSelectAll, _msFilterOptions,
     // alertas
