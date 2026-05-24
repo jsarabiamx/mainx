@@ -449,6 +449,7 @@ const App = (() => {
 
     // Aplicar tema de empresa desde el inicio
     if (UI._applyEmpresaTheme) UI._applyEmpresaTheme(DB.getEmpresaActiva());
+    if (UI._initNavGroups) UI._initNavGroups();
 
     UI.renderResumen();
     document.getElementById('tb-date').textContent = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
