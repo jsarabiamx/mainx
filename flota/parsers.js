@@ -716,41 +716,40 @@ const Parsers = (() => {
   function parseMAN(rows) {
     if (!rows || rows.length < 2) return [];
 
-    // Encontrar fila de headers
+    // Buscar fila de headers (contiene "Dispositivo" o "VIN" o "Ultima Conexion")
     let hIdx = 0;
     for (let i = 0; i < Math.min(rows.length, 5); i++) {
       const r = rows[i];
-      if (Array.isArray(r) && r.some(c => String(c||'').toLowerCase().includes('dispositivo'))) {
+      if (!Array.isArray(r)) continue;
+      const rowStr = r.map(c => String(c||'').toLowerCase()).join('|');
+      if (rowStr.includes('dispositivo') || rowStr.includes('ultima conexion') || rowStr.includes('vin')) {
         hIdx = i; break;
       }
     }
 
+    // Detectar columnas por nombre de header
+    const headers = (rows[hIdx] || []).map(c =>
+      String(c||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim()
+    );
+    const iDisp  = (() => { const i = headers.findIndex(h => h.includes('dispositivo')); return i >= 0 ? i : 0; })();
+    const iVin   = (() => { const i = headers.findIndex(h => h === 'vin' || h.includes('serie')); return i >= 0 ? i : 1; })();
+    const iFecha = (() => { const i = headers.findIndex(h => h.includes('ultima conexion') || h.includes('last')); return i >= 0 ? i : 3; })();
+
     const result = [];
     for (let i = hIdx + 1; i < rows.length; i++) {
       const row = rows[i];
-      if (!Array.isArray(row) || !row[0]) continue;
+      if (!Array.isArray(row) || !row[iDisp]) continue;
 
-      // Col A(0) = Dispositivo — "3039 - AERS", "57027 R7 *06:20* C", "20157"
-      const rawDisp = String(row[0] || '').trim();
-      // Extraer primer número de 4-5 dígitos (ignora tiempos como *06:20*)
-      const numMatch = rawDisp.match(/(\d{4,5})/);
+      // Número económico: primer número de 4-5 dígitos del campo Dispositivo
+      const rawDisp = String(row[iDisp] || '').trim();
+      const numMatch = rawDisp.match(/\b(\d{4,5})\b/);
       if (!numMatch) continue;
       const num = numMatch[1];
       const n = Number(num);
       if (n < 1000 || n > 99999) continue;
 
-      // Col B(1) = VIN — mantener tal cual "WMARR4ZZ8KC024699"
-      const vin = String(row[1] || '').trim();
-
-      // Fecha: buscar en múltiples columnas (D=3 para ETN, puede variar en GHO)
-      // Intentar col D(3), luego col C(2), luego col E(4)
-      let fecha = null;
-      for (const colIdx of [3, 2, 4, 5]) {
-        const rawDate = String(row[colIdx] || '').trim();
-        if (!rawDate || rawDate === '0') continue;
-        const parsed = parseDate(rawDate);
-        if (parsed && parsed.getFullYear() > 2020) { fecha = parsed; break; }
-      }
+      const vin   = String(row[iVin] || '').trim();
+      const fecha = parseDate(row[iFecha]);
 
       result.push({
         num,
