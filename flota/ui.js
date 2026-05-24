@@ -2015,6 +2015,10 @@ const UI = (() => {
     );
     uns = uns.filter(u => !!u[k]);
 
+    // Siniestros activos NO aparecen en tabla de Plataformas GPS.
+    // Solo aparecen en Resumen y módulo de Fallas.
+    uns = uns.filter(u => !_tieneSiniestroActivo(u));
+
     const f = _platTableFilter;
 
     // Filtros multi-selección: cada filtro es un ARRAY.
