@@ -2128,7 +2128,10 @@ const UI = (() => {
         return `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${c}22;color:${c};border:1px solid ${c}44">${motiveEstado||'—'}</span>`;
       })() : '';
 
-      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" style="cursor:pointer">
+      const dblHandler = esManual
+        ? `ondblclick="event.stopPropagation();UI._editarCapturaManuaRow('${esc(u.num)}','${plat}')"`
+        : '';
+      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" ${dblHandler} style="cursor:pointer" title="${esManual?'Doble clic para editar fecha':''}" >
         <td style="font-weight:700">${esc(u.num)}</td>
         <td>${esc(u.base||'—')}</td>
         <td>${esc(u.cromatica||'—')}</td>
@@ -2587,6 +2590,43 @@ const UI = (() => {
     ['pf-m-num','pf-m-base','pf-m-crom','pf-m-modelo','pf-m-id','pf-m-fecha'].forEach(id => { const e = $(id); if (e && e.tagName !== 'DIV') e.value = ''; });
     if ($('pf-m-dias')) $('pf-m-dias').textContent = '—';
     _refreshPlatTable(plat);
+  }
+
+  /**
+   * Doble clic en fila de VOLVO/MOTIVE: pre-llena el formulario de captura manual
+   * con los datos de la unidad para que el usuario solo corrija la fecha.
+   */
+  function _editarCapturaManuaRow(num, plat) {
+    const emp = DB.getEmpresaActiva();
+    const u = DB.getUnidad(num, emp);
+    if (!u) return;
+
+    // Asegurarse de que el panel de captura manual esté visible
+    _platExpandida = plat;
+    renderPlataformas();
+
+    setTimeout(() => {
+      // Pre-llenar todos los campos
+      if ($('pf-m-num'))    { $('pf-m-num').value = num; }
+      if ($('pf-m-base'))   { $('pf-m-base').value = u.base || ''; }
+      if ($('pf-m-crom'))   { $('pf-m-crom').value = u.cromatica || ''; }
+      if ($('pf-m-modelo')) { $('pf-m-modelo').value = u.modelo || ''; }
+      if ($('pf-m-id'))     { $('pf-m-id').value = u.placa || ''; }
+
+      // Fecha: usar la hora actual (es un barrido del día de hoy)
+      const eFecha = $('pf-m-fecha');
+      if (eFecha) {
+        const now = new Date();
+        const pad = n => String(n).padStart(2,'0');
+        eFecha.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        _recalcularDiasManual();
+      }
+
+      // Scroll al form y foco en la fecha para que el usuario la corrija si quiere
+      const bar = $('pf-manual-bar');
+      if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      if ($('pf-m-fecha')) $('pf-m-fecha').focus();
+    }, 120);
   }
 
   function _updatePlatFechaConISO(num, plat, emp, iso) {
@@ -4890,7 +4930,7 @@ const UI = (() => {
     // plataformas v7: detalle inline, búsqueda multi-token, captura manual
     _onPlatRowClick, _cerrarPlatDetailInline,
     _abrirCapturaManualPlat, _autocompletarCapturaManual,
-    _recalcularDiasManual, _guardarCapturaManualPlat,
+    _recalcularDiasManual, _guardarCapturaManualPlat, _editarCapturaManuaRow,
     _updatePlatFechaConISO,
     // v7.1: tabs del detalle inline y guardar observaciones in-situ
     _cambiarPlatDetailTab, _guardarObsInline, _editarObsRapido,
