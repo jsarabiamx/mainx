@@ -14,7 +14,9 @@
 <!-- ═══ SIDEBAR ═══════════════════════════════════ -->
 <aside id="sidebar">
   <div class="sb-logo">
-    <div class="sb-logo-icon">🚌</div>
+    <div class="sb-logo-icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 4v4h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+    </div>
     <div><div class="sb-logo-title">Mesa de Control</div><div class="sb-logo-sub">Monitoreo GPS</div></div>
   </div>
   <div class="sb-emp">
@@ -22,28 +24,107 @@
     <select id="empresa-select" onchange="UI.cambiarEmpresa(this.value)"></select>
   </div>
   <nav>
-    <div class="nav-section">Principal</div>
-    <div class="nav-item active" id="nav-resumen"     onclick="App.nav(this,'panel-resumen')"><span class="nav-icon">▦</span> Resumen</div>
-    <div class="nav-item" id="nav-plataformas"        onclick="App.nav(this,'panel-plataformas')"><span class="nav-icon">📡</span> Plataformas</div>
-    <div class="nav-section">Datos</div>
-    <div class="nav-item" id="nav-asignacion"         onclick="App.nav(this,'panel-asignacion')"><span class="nav-icon">📋</span> Asignación</div>
-    <div class="nav-item" id="nav-carga-asig"         onclick="App.nav(this,'panel-carga-asig')"><span class="nav-icon">↑</span> Cargar Asignación</div>
-    <div class="nav-item" id="nav-barridos"           onclick="App.nav(this,'panel-barridos')"><span class="nav-icon">📂</span> Barridos GPS</div>
-    <div class="nav-item" id="nav-manual"             onclick="App.nav(this,'panel-manual')"><span class="nav-icon">✎</span> Captura Manual</div>
-    <div class="nav-item" id="nav-viajes"             onclick="App.nav(this,'panel-viajes')"><span class="nav-icon">🚐</span> Viajes</div>
-    <div class="nav-item" id="nav-barrido-manual"      onclick="App.nav(this,'panel-barrido-manual')"><span class="nav-icon">📝</span> Barrido Manual</div>
-    <div class="nav-section">Sims</div>
-    <div class="nav-item" id="nav-sims"               onclick="App.nav(this,'panel-sims')"><span class="nav-icon">📶</span> Control de SIMs</div>
-    <div class="nav-section">Análisis</div>
-    <div class="nav-item" id="nav-reportes"           onclick="App.nav(this,'panel-maestra')"><span class="nav-icon">📊</span> Maestra</div>
-    <div class="nav-item" id="nav-graficas"           onclick="App.nav(this,'panel-graficas')"><span class="nav-icon">📈</span> Gráficas</div>
-    <div class="nav-item" id="nav-fallas-panel"       onclick="App.nav(this,'panel-fallas')"><span class="nav-icon">⚠</span> Fallas</div>
-    <div class="nav-item" id="nav-historial"          onclick="App.nav(this,'panel-historial')"><span class="nav-icon">🕐</span> Historial</div>
-    <div class="nav-section">Sistema</div>
-    <div class="nav-item" id="nav-alertas"            onclick="App.nav(this,'panel-alertas')"><span class="nav-icon">🔔</span> Alertas <span class="nav-badge" id="nav-alertas-badge">0</span></div>
-    <div class="nav-item" id="nav-config"             onclick="App.nav(this,'panel-config')"><span class="nav-icon">⚙</span> Configuración</div>
+    <!-- PRINCIPAL -->
+    <div class="nav-section-hdr" onclick="toggleNavSection('sec-principal')">
+      <span>Principal</span>
+      <svg class="nav-sec-arrow" id="arrow-sec-principal" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="nav-section-body" id="sec-principal">
+      <div class="nav-item active" id="nav-resumen" onclick="App.nav(this,'panel-resumen')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Resumen
+      </div>
+      <div class="nav-item" id="nav-plataformas" onclick="App.nav(this,'panel-plataformas')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
+        Plataformas
+      </div>
+    </div>
+
+    <!-- DATOS -->
+    <div class="nav-section-hdr" onclick="toggleNavSection('sec-datos')">
+      <span>Datos</span>
+      <svg class="nav-sec-arrow" id="arrow-sec-datos" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="nav-section-body" id="sec-datos">
+      <div class="nav-item" id="nav-asignacion" onclick="App.nav(this,'panel-asignacion')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+        Asignación
+      </div>
+      <div class="nav-item" id="nav-carga-asig" onclick="App.nav(this,'panel-carga-asig')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Cargar Asignación
+      </div>
+      <div class="nav-item" id="nav-barridos" onclick="App.nav(this,'panel-barridos')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        Barridos GPS
+      </div>
+      <div class="nav-item" id="nav-manual" onclick="App.nav(this,'panel-manual')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Captura Manual
+      </div>
+      <div class="nav-item" id="nav-viajes" onclick="App.nav(this,'panel-viajes')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 4v4h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+        Viajes
+      </div>
+      <div class="nav-item" id="nav-barrido-manual" onclick="App.nav(this,'panel-barrido-manual')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        Barrido Manual
+      </div>
+    </div>
+
+    <!-- SIMs -->
+    <div class="nav-section-hdr" onclick="toggleNavSection('sec-sims')">
+      <span>SIMs</span>
+      <svg class="nav-sec-arrow" id="arrow-sec-sims" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="nav-section-body" id="sec-sims">
+      <div class="nav-item" id="nav-sims" onclick="App.nav(this,'panel-sims')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/><path d="M9 6h6M9 10h4"/></svg>
+        Control de SIMs
+      </div>
+    </div>
+
+    <!-- ANÁLISIS -->
+    <div class="nav-section-hdr" onclick="toggleNavSection('sec-analisis')">
+      <span>Análisis</span>
+      <svg class="nav-sec-arrow" id="arrow-sec-analisis" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="nav-section-body" id="sec-analisis">
+      <div class="nav-item" id="nav-reportes" onclick="App.nav(this,'panel-maestra')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        Maestra
+      </div>
+      <div class="nav-item" id="nav-graficas" onclick="App.nav(this,'panel-graficas')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Gráficas
+      </div>
+      <div class="nav-item" id="nav-fallas-panel" onclick="App.nav(this,'panel-fallas')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Fallas
+      </div>
+      <div class="nav-item" id="nav-historial" onclick="App.nav(this,'panel-historial')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Historial
+      </div>
+    </div>
+
+    <!-- SISTEMA -->
+    <div class="nav-section-hdr" onclick="toggleNavSection('sec-sistema')">
+      <span>Sistema</span>
+      <svg class="nav-sec-arrow" id="arrow-sec-sistema" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="nav-section-body" id="sec-sistema">
+      <div class="nav-item" id="nav-alertas" onclick="App.nav(this,'panel-alertas')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        Alertas <span class="nav-badge" id="nav-alertas-badge">0</span>
+      </div>
+      <div class="nav-item" id="nav-config" onclick="App.nav(this,'panel-config')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        Configuración
+      </div>
+    </div>
   </nav>
-  <div class="sb-footer">v4.0 · localStorage</div>
+  <div class="sb-footer">v4.0 · localStore</div>
 </aside>
 
 <!-- ═══ MAIN ═══════════════════════════════════════ -->
@@ -529,3 +610,13 @@ window.$ = id => document.getElementById(id);
 </script>
 </body>
 </html>
+<script>
+// Secciones colapsables del sidebar
+function toggleNavSection(id) {
+  const body = document.getElementById(id);
+  const arrow = document.getElementById('arrow-' + id);
+  if (!body) return;
+  const collapsed = body.classList.toggle('nav-section-collapsed');
+  if (arrow) arrow.style.transform = collapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+}
+</script>
