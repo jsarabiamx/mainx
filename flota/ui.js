@@ -1558,7 +1558,7 @@ const UI = (() => {
   function _renderPlatDetectCards(){
     const el=$('plat-detect-cards');
     if(!el)return;
-    const COLS={CEIBA:'Plate No. | GPS Time | Serial No.',SAMSARA:'Nombre | Última hora de registro | VG/Serie',AVL:'Grouping | Último mensaje',SCANIA:'Vehículo | Hora',MAN:'Dispositivo | VIN | Ultima Conexion',VOLVO:'Captura manual',MOTIVE:'ID Entidad | Última Actividad | Estado | Serie VG | Serie Cam'};
+    const COLS={CEIBA:'Plate No. | GPS Time | Serial No.',SAMSARA:'Nombre | Última hora de registro | VG/Serie',AVL:'Grouping | Último mensaje',SCANIA:'Vehículo | Hora',MAN:'Dispositivo | VIN | Ultima Conexion',VOLVO:'Vehículo | Tiempo (última actividad)',MOTIVE:'ID Entidad | Última Actividad | Estado | Serie VG | Serie Cam'};
     el.innerHTML=ALL_PLATS.map(p=>{
       const d=_barridosPending[p];
       return`<div style="background:var(--bg-panel);border:1px solid ${d?'var(--green-border)':'var(--border)'};border-top:2px solid ${d?'var(--green)':'var(--border)'};border-radius:10px;padding:12px">
@@ -1730,7 +1730,7 @@ const UI = (() => {
         AVL:'Grouping | Último mensaje',
         SCANIA:'Vehículo | Hora',
         MAN:'Dispositivo | VIN | Ultima Conexion',
-        VOLVO:'Captura manual',
+        VOLVO:'Vehículo | Tiempo',
         MOTIVE:'ID Entidad | Última Actividad | Estado | Serie VG | Serie Cam'
       };
       const activa = _platExpandida === p;
@@ -1750,7 +1750,11 @@ const UI = (() => {
         <div class="plat-card-cols">${esc(COLS_MAP[p])}</div>
         <div onclick="event.stopPropagation()">
         ${esManual
-          ? `<button class="plat-card-btn-manual" onclick="UI._abrirCapturaManualPlat('${p}')">+ Captura manual</button>`
+          ? `<label class="plat-card-btn-upload">
+              ↑ Cargar archivo VOLVO
+              <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="UI._cargarArchivoPlat('${p}',this.files[0]);this.value=''">
+            </label>
+            <button class="plat-card-btn-manual" style="margin-top:4px" onclick="UI._abrirCapturaManualPlat('${p}')">+ Captura manual</button>`
           : `<label class="plat-card-btn-upload">
               ↑ Cargar archivo ${p}
               <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="UI._cargarArchivoPlat('${p}',this.files[0]);this.value=''">
