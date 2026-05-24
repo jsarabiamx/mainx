@@ -429,7 +429,7 @@ const GPS_SB = (() => {
     // Barridos — observaciones
     patchObservacionesBarrido,
     // Helper: saber si Supabase está disponible
-    _getRaw, _patch,
+    _getRaw, _patch, _delete,
     isAvailable: () => true,
     // Save dummy (compatibilidad — Supabase no necesita save() manual)
     save: () => true
