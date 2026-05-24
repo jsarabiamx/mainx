@@ -730,25 +730,33 @@ const Parsers = (() => {
       const row = rows[i];
       if (!Array.isArray(row) || !row[0]) continue;
 
-      // Col A(0) = Dispositivo — "3039 - AERS C S", "2787 - AERS", "2596 Mont 2608 - AERS"
+      // Col A(0) = Dispositivo — "3039 - AERS", "57027 R7 *06:20* C", "20157"
       const rawDisp = String(row[0] || '').trim();
-      const num = cleanNum(rawDisp);
-      if (!num || isNaN(Number(num))) continue;
+      // Extraer primer número de 4-5 dígitos (ignora tiempos como *06:20*)
+      const numMatch = rawDisp.match(/(\d{4,5})/);
+      if (!numMatch) continue;
+      const num = numMatch[1];
       const n = Number(num);
-      if (n < 100 || n > 99999) continue;
+      if (n < 1000 || n > 99999) continue;
 
       // Col B(1) = VIN — mantener tal cual "WMARR4ZZ8KC024699"
       const vin = String(row[1] || '').trim();
 
-      // Col D(3) = Ultima Conexion — "14-04-2026 20:57:54"
-      const rawDate = String(row[3] || '').trim();
-      const fecha = parseDate(rawDate);
+      // Fecha: buscar en múltiples columnas (D=3 para ETN, puede variar en GHO)
+      // Intentar col D(3), luego col C(2), luego col E(4)
+      let fecha = null;
+      for (const colIdx of [3, 2, 4, 5]) {
+        const rawDate = String(row[colIdx] || '').trim();
+        if (!rawDate || rawDate === '0') continue;
+        const parsed = parseDate(rawDate);
+        if (parsed && parsed.getFullYear() > 2020) { fecha = parsed; break; }
+      }
 
       result.push({
         num,
         fecha: fecha ? fecha.toISOString() : null,
         fechaStr: fecha ? fmtDate(fecha) : null,
-        serie: vin,  // guardar VIN como serie
+        serie: vin,
         plataforma: 'MAN'
       });
     }
