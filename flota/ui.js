@@ -2157,7 +2157,24 @@ const UI = (() => {
       const _fallaActiva = (u.fallas||[]).find(f => !f.resuelta);
       const _etiquetaFalla = _fallaActiva ? (_fallaActiva.motivo || _fallaActiva.etiqueta || '') : '';
       const _siniestroLabel = u.siniestro ? (u.siniestroDesc ? `🚨 ${u.siniestroDesc}` : '🚨 SINIESTRO') : '';
-      const obsTexto = u.observaciones || _siniestroLabel || _etiquetaFalla || '';
+      const _obsRaw = u.observaciones || _siniestroLabel || _etiquetaFalla || '';
+      // Formatear etiquetas conocidas como chips visuales
+      const obsTexto = _obsRaw;
+      const _obsChip = (() => {
+        if (!_obsRaw) return '';
+        const o = _obsRaw.toUpperCase();
+        if (o.includes('SIM BAJA') || o === 'SIM BAJA')
+          return `<span style="background:#7c3aed22;color:#a78bfa;border:1px solid #7c3aed44;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600">📵 SIM BAJA</span>`;
+        if (o.includes('DVR') && (o.includes('DAÑADO') || o.includes('DANADO') || o.includes('MAL')))
+          return `<span style="background:#92400e22;color:#fbbf24;border:1px solid #92400e44;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600">⚠ DVR</span>`;
+        if (o.includes('GPS MAL') || o === 'GPS MAL')
+          return `<span style="background:#78350f22;color:#fb923c;border:1px solid #78350f44;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600">⚠ GPS MAL</span>`;
+        if (o.startsWith('🚨') || o.includes('SINIEST'))
+          return `<span style="background:#7f1d1d22;color:#f87171;border:1px solid #7f1d1d44;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600">🚨 ${_obsRaw.replace(/🚨/g,'').trim()}</span>`;
+        if (o.includes('AFR') || o.includes('FALLA'))
+          return `<span style="background:#78350f22;color:#fb923c;border:1px solid #78350f44;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600">⚠ ${_obsRaw}</span>`;
+        return esc(_obsRaw);
+      })();
       const isSelected = _platDetailUnit === u.num;
 
       // Motive: extraer estado y series de datos_raw si los tiene en barrido
@@ -2188,7 +2205,7 @@ const UI = (() => {
           : `<td style="font-family:monospace;font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(idValue)}</td>`
         }
         <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarObsRapido('${esc(u.num)}','${esc(u.empresa||emp)}','${plat}')" title="Click para editar — ${esc(obsTexto||'sin observación')}">
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${esc(obsTexto)||'<span style="color:var(--text3);font-style:italic">+ agregar…</span>'}</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${_obsChip||'<span style="color:var(--text3);font-style:italic">+ agregar…</span>'}</span>
           <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
         </td>
         <td style="width:32px;text-align:center" onclick="event.stopPropagation()">
@@ -3524,10 +3541,15 @@ const UI = (() => {
     const el = $('graficas-content');
     if (!el) return;
 
-    // Excluir Para venta y siniestros activos de gráficas
-    const uns = DB.getUnidadesList(emp).filter(u =>
-      u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-    );
+    // Excluir de gráficas: Para venta, siniestros, fuera de operación, desenrolado, fuera de servicio
+    const _estatusExcluidos = new Set(['Para venta','Fuera de operación','Desenrolado','Fuera de servicio','Entregado','Baja','Siniestro']);
+    const uns = DB.getUnidadesList(emp).filter(u => {
+      if (!u.activa) return false;
+      if (_tieneSiniestroActivo(u)) return false;
+      const cat = Parsers.categorizarEstatus(u.estatus);
+      if (_estatusExcluidos.has(cat)) return false;
+      return true;
+    });
 
     // LÓGICA CORREGIDA (v7.1):
     // Cada plataforma tiene su PROPIO UNIVERSO (sus dispositivos, no todas las unidades de la empresa).
@@ -3539,12 +3561,21 @@ const UI = (() => {
     const statsByPlat = ALL_PLATS.map(p => {
       const k = 'ultima_act_' + p.toLowerCase();
       const conFecha = uns.filter(u => u[k]);
-      const enLinea = conFecha.filter(u => Math.floor((hoy - new Date(u[k]))/86400000) <= cfg.diasLinea).length;
+      // Unidades con falla AFR activa (no siniestro) cuentan como EN LÍNEA — están en operación
+      const tieneAFR = u => (u.fallas||[]).some(f => !f.resuelta && !f.esSiniestro);
+      const enLinea = conFecha.filter(u => {
+        if (tieneAFR(u)) return true; // AFR activo → en línea
+        return Math.floor((hoy - new Date(u[k]))/86400000) <= cfg.diasLinea;
+      }).length;
       const atencion = conFecha.filter(u => {
+        if (tieneAFR(u)) return false; // AFR no cuenta como atención
         const d = Math.floor((hoy - new Date(u[k]))/86400000);
         return d > cfg.diasLinea && d <= cfg.diasAtencion;
       }).length;
-      const fueraEstricto = conFecha.filter(u => Math.floor((hoy - new Date(u[k]))/86400000) > cfg.diasAtencion).length;
+      const fueraEstricto = conFecha.filter(u => {
+        if (tieneAFR(u)) return false; // AFR no cuenta como fuera
+        return Math.floor((hoy - new Date(u[k]))/86400000) > cfg.diasAtencion;
+      }).length;
       const sinEquipo = uns.length - conFecha.length;           // unidades sin este dispositivo (informativo)
       const totalPlat = conFecha.length;                        // universo REAL de esta plataforma
       const fueraTotal = atencion + fueraEstricto;              // atención cuenta como fuera en la dona
@@ -4792,9 +4823,9 @@ const UI = (() => {
           <span class="plat-filter-lbl">ESTATUS OP.</span>
           <select id="ma-f-est" onchange="UI._onMaestraFilterChange()">
             <option value="">Todos</option>
-            <option value="En operación" ${f.est==='En operación'?'selected':''}>En operación</option>
-            <option value="Fuera de operación" ${f.est==='Fuera de operación'?'selected':''}>Fuera de op.</option>
-            <option value="Para venta" ${f.est==='Para venta'?'selected':''}>Para venta</option>
+            ${[...new Set(uns.map(u => Parsers.categorizarEstatus(u.estatus)).filter(Boolean))].sort().map(e =>
+              `<option value="${esc(e)}" ${f.est===e?'selected':''}>${esc(e)}</option>`
+            ).join('')}
           </select>
         </div>
         <button class="act-btn" onclick="UI._resetMaestraFilters()">↺ Reset</button>
