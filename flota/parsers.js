@@ -1118,6 +1118,7 @@ const Parsers = (() => {
   function normalizarEstatus(val) {
     const v = String(val||'').toUpperCase().trim();
     if (!v || v === '—') return '';
+    // ETN
     if (v.includes('EN OPERACI') || v === 'OPERACION') return 'En operación';
     if (v.includes('ARRENDAMIENTO') || v.includes('ARRENDADO')) return 'Arrendamiento';
     if (v.includes('PARA VENTA') || v === 'A VENTA') return 'Para venta';
@@ -1125,17 +1126,30 @@ const Parsers = (() => {
     if (v.includes('RENTADO A SAME') || v.includes('RENT')) return 'Rentado a SAME';
     if (v.includes('BAJA')) return 'Baja';
     if (v.includes('SINIESTRO')) return 'Siniestro';
+    // GHO
+    if (v === 'ENROLADO' || v.includes('ENROLADO')) return 'Enrolado';
+    if (v === 'DESENROLADO' || v.includes('DESENROLADO')) return 'Desenrolado';
+    if (v === 'ENTREGADO' || v.includes('ENTREGADO')) return 'Entregado';
+    if (v === 'ESCUELA' || v.includes('ESCUELA')) return 'Escuela';
+    if (v.includes('FUERA DE SERVICIO')) return 'Fuera de servicio';
     return val.trim();
   }
 
   function categorizarEstatus(est) {
     const e = normalizarEstatus(est);
+    // ETN
     if (e === 'En operación' || e === 'Arrendamiento') return 'En operación';
     if (e === 'Para venta') return 'Para venta';
     if (e === 'Fuera de operación' || e === 'Rentado a SAME') return 'Fuera de operación';
     if (e === 'Siniestro') return 'Siniestro';
     if (e === 'Baja') return 'Baja';
-    return 'Otro';
+    // GHO — cada estatus es su propia categoría para filtrado granular
+    if (e === 'Enrolado') return 'Enrolado';
+    if (e === 'Desenrolado') return 'Desenrolado';
+    if (e === 'Entregado') return 'Entregado';
+    if (e === 'Escuela') return 'Escuela';
+    if (e === 'Fuera de servicio') return 'Fuera de servicio';
+    return e || 'Otro';
   }
 
   return {
