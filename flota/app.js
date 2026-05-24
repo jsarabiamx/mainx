@@ -457,8 +457,6 @@ const App = (() => {
   function init() {
     populateEmpresaSelect();
     injectStyles();
-    // Aplicar tema de empresa activa al cargar
-    document.body.setAttribute('data-empresa', DB.getEmpresaActiva() || '');
     UI.renderResumen();
     document.getElementById('tb-date').textContent = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
 
