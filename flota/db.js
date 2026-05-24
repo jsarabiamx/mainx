@@ -165,7 +165,7 @@ const DB = (() => {
               motor:        extra.motor   || '',
               placa:        extra.placa   || '',
               asientos:     extra.asientos || '',
-              observaciones:extra.observaciones || '',
+              observaciones:'', // NO leer de datos_extra — exclusivo de fallas
               mes:          r.mes_label,
               activa:       true,
               fallas:       [],
