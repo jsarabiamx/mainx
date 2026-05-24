@@ -4910,6 +4910,8 @@ const UI = (() => {
     DB.setEmpresaActiva(name);
     const sel=$('empresa-select');if(sel)sel.value=name;
     const selE=$('filter-emp');if(selE)selE.value=name;
+    // Aplicar tema de empresa al body
+    document.body.setAttribute('data-empresa', name || '');
     const active=document.querySelector('.panel.active');
     if(active)App.nav(null,active.id);
   }
