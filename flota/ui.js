@@ -1026,6 +1026,30 @@ const UI = (() => {
     _refreshPlatTable(plat);
   }
 
+
+  // Doble clic en fila VOLVO/MOTIVE: pre-llena el form con datos de la unidad
+  function _editarCapturaManuaRow(num, plat) {
+    const emp = DB.getEmpresaActiva();
+    const u = DB.getUnidad(num, emp);
+    if (!u) return;
+    _platDetailUnit = null;
+    if ($('pf-m-num'))    $('pf-m-num').value    = num;
+    if ($('pf-m-base'))   $('pf-m-base').value   = u.base || '';
+    if ($('pf-m-crom'))   $('pf-m-crom').value   = u.cromatica || '';
+    if ($('pf-m-modelo')) $('pf-m-modelo').value = u.modelo || '';
+    if ($('pf-m-id'))     $('pf-m-id').value     = u.placa || '';
+    const eFecha = $('pf-m-fecha');
+    if (eFecha) {
+      const now = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      eFecha.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      _recalcularDiasManual();
+    }
+    const bar = $('pf-manual-bar');
+    if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (eFecha) eFecha.focus();
+  }
+
   function _updatePlatFechaConISO(num,plat,emp,iso){
     const k='ultima_act_'+plat.toLowerCase();
     const u=DB.getUnidad(num,emp);
@@ -2141,7 +2165,7 @@ const UI = (() => {
         return `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${c}22;color:${c};border:1px solid ${c}44">${motiveEstado||'—'}</span>`;
       })() : '';
 
-      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" style="cursor:pointer">
+      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" ondblclick="UI._editarCapturaManuaRow('${esc(u.num)}','${plat}')" style="cursor:pointer" title="${esManual?'Doble clic para editar fecha':''}">
         <td style="font-weight:700">${esc(u.num)}</td>
         <td>${esc(u.base||'—')}</td>
         <td>${esc(u.cromatica||'—')}</td>
@@ -2580,9 +2604,27 @@ const UI = (() => {
     }
     const iso = new Date(fecha).toISOString();
     const platKey = 'ultima_act_' + plat.toLowerCase();
+    const idPlaca = ($('pf-m-id')?.value || '').trim();
     const datos = { [platKey]: iso, plataforma: plat, _fuente: 'captura_manual_' + plat };
     if (!u || !u.ultima_act || new Date(iso) > new Date(u.ultima_act)) datos.ultima_act = iso;
     DB.upsertUnidad(num, datos, emp);
+
+    // Guardar en Supabase: gps_unidades + gps_barridos
+    if (window.GPS_SB) {
+      const uActual = DB.getUnidad(num, emp) || {};
+      const upsertData = {
+        num,
+        base:      uActual.base      || $('pf-m-base')?.value   || null,
+        cromatica: uActual.cromatica || $('pf-m-crom')?.value   || null,
+        modelo:    uActual.modelo    || $('pf-m-modelo')?.value || null,
+        placa:     idPlaca           || uActual.placa           || null,
+        estatus:   uActual.estatus   || 'EN_OPERACION',
+      };
+      GPS_SB.upsertUnidad(upsertData, emp)
+        .then(() => GPS_SB.saveBarrido(plat, [{ num, fecha: iso, fechaStr: Parsers.fmtDate(iso), plataforma: plat, placa: idPlaca || null }], emp))
+        .catch(e => console.warn('[Captura manual Supabase]', e));
+    }
+
     DB.addLog('manual', `${plat}: captura manual unidad ${num} (${Parsers.fmtDate(iso)})`, emp);
     toast(`✓ ${plat}: unidad ${num} guardada`, 'success');
 
@@ -4893,7 +4935,7 @@ const UI = (() => {
     // plataformas v7: detalle inline, búsqueda multi-token, captura manual
     _onPlatRowClick, _cerrarPlatDetailInline,
     _abrirCapturaManualPlat, _autocompletarCapturaManual,
-    _recalcularDiasManual, _guardarCapturaManualPlat,
+    _recalcularDiasManual, _guardarCapturaManualPlat, _editarCapturaManuaRow,
     _updatePlatFechaConISO,
     // v7.1: tabs del detalle inline y guardar observaciones in-situ
     _cambiarPlatDetailTab, _guardarObsInline, _editarObsRapido, _eliminarUnidadDePlat,
