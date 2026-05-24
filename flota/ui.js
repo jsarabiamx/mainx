@@ -2500,8 +2500,19 @@ const UI = (() => {
     _platExpandida = plat;
     _platDetailUnit = null;
     renderPlataformas();
-    // Dar foco al input de número
-    setTimeout(() => { const e = $('pf-m-num'); if (e) e.focus(); }, 150);
+    // Dar foco al input de número y auto-llenar fecha/hora actual
+    setTimeout(() => {
+      const eNum = $('pf-m-num');
+      if (eNum) eNum.focus();
+      const eFecha = $('pf-m-fecha');
+      if (eFecha && !eFecha.value) {
+        // datetime-local requiere formato "YYYY-MM-DDTHH:MM"
+        const now = new Date();
+        const pad = n => String(n).padStart(2,'0');
+        eFecha.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        _recalcularDiasManual();
+      }
+    }, 150);
   }
 
   function _autocompletarCapturaManual(plat) {
@@ -2554,9 +2565,21 @@ const UI = (() => {
     }
     const iso = new Date(fecha).toISOString();
     const platKey = 'ultima_act_' + plat.toLowerCase();
+    const idPlaca = ($('pf-m-id')?.value || '').trim();
     const datos = { [platKey]: iso, plataforma: plat, _fuente: 'captura_manual_' + plat };
     if (!u || !u.ultima_act || new Date(iso) > new Date(u.ultima_act)) datos.ultima_act = iso;
     DB.upsertUnidad(num, datos, emp);
+
+    // Guardar también en gps_barridos para que la tabla de Plataformas lo muestre
+    // en cualquier navegador/dispositivo (no solo localStorage)
+    if (window.GPS_SB) {
+      const raw = { num, fecha: iso, fechaStr: Parsers.fmtDate(iso), plataforma: plat };
+      if (idPlaca) raw.placa = idPlaca;
+      GPS_SB.saveBarrido(plat, [raw], emp).catch(e =>
+        console.warn('[Captura manual] Error guardando en gps_barridos:', e)
+      );
+    }
+
     DB.addLog('manual', `${plat}: captura manual unidad ${num} (${Parsers.fmtDate(iso)})`, emp);
     toast(`✓ ${plat}: unidad ${num} guardada`, 'success');
 
