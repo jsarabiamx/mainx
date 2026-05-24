@@ -1759,19 +1759,11 @@ const UI = (() => {
     // - Plataformas NO manuales (CEIBA, SAMSARA, AVL, SCANIA, MAN): SOLO unidades que aparecen
     //   en el archivo de esa plataforma (tienen ultima_act_<plat> o fueron cargadas por barrido).
     //   Esto evita que por ejemplo el filtro TAPA muestre unidades sin Samsara.
-    // - Plataformas manuales (VOLVO, MOTIVE): solo las que tienen captura manual (ultima_act_<plat>).
-    // MOTIVE y VOLVO pueden tener unidades en múltiples empresas — cargar de todas
+    // Scope de unidades: siempre por empresa activa
     let scopeUns;
-    if (plat === 'MOTIVE' || plat === 'VOLVO') {
-      const todasEmpresas = DB.getEmpresasList();
-      scopeUns = todasEmpresas.flatMap(e => DB.getUnidadesList(e)).filter(u =>
-        u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-      );
-    } else {
-      scopeUns = DB.getUnidadesList(emp).filter(u =>
-        u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-      );
-    }
+    scopeUns = DB.getUnidadesList(emp).filter(u =>
+      u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+    );
     scopeUns = scopeUns.filter(u => !!u[k]);
 
     // Los selects se pueblan SOLO con valores presentes en el scope (unidades de esta plataforma).
