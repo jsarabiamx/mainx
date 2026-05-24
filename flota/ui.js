@@ -5013,6 +5013,8 @@ const UI = (() => {
     handleBarridoFiles, integrarBarridos,
     // empresa
     cambiarEmpresa, _applyEmpresaTheme, _toggleNavGroup, _initNavGroups,
+    get _platExpandida(){ return _platExpandida; },
+    _refreshPlatTable,
     // modal
     closeModal,
     // export
