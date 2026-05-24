@@ -1966,9 +1966,14 @@ const UI = (() => {
     // Esto corrige el bug donde filtrar por "TAPA" en Samsara mostraba todas las unidades de
     // TAPA aunque no estuvieran en el archivo de Samsara.
     // Unidades "Para venta" se excluyen de los conteos operativos.
-    let uns = DB.getUnidadesList(emp).filter(u =>
-      u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-    );
+    // VOLVO/MOTIVE son captura manual — pueden tener unidades de cualquier empresa
+    let uns = (plat === 'VOLVO' || plat === 'MOTIVE')
+      ? DB.getEmpresasList().flatMap(e => DB.getUnidadesList(e)).filter(u =>
+          u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+        )
+      : DB.getUnidadesList(emp).filter(u =>
+          u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+        );
     uns = uns.filter(u => !!u[k]);
 
     // Siniestros activos NO aparecen en tabla de Plataformas GPS.
@@ -2578,14 +2583,24 @@ const UI = (() => {
     if (!u || !u.ultima_act || new Date(iso) > new Date(u.ultima_act)) datos.ultima_act = iso;
     DB.upsertUnidad(num, datos, emp);
 
-    // Guardar también en gps_barridos para que la tabla de Plataformas lo muestre
-    // en cualquier navegador/dispositivo (no solo localStorage)
+    // Guardar en Supabase: gps_barridos (para la tabla de Plataformas)
+    // y gps_unidades (para que DB.getUnidadesList la encuentre en cualquier navegador)
     if (window.GPS_SB) {
+      const uActual = DB.getUnidad(num, emp) || {};
       const raw = { num, fecha: iso, fechaStr: Parsers.fmtDate(iso), plataforma: plat };
       if (idPlaca) raw.placa = idPlaca;
-      GPS_SB.saveBarrido(plat, [raw], emp).catch(e =>
-        console.warn('[Captura manual] Error guardando en gps_barridos:', e)
-      );
+
+      // upsert en gps_unidades primero (así la unidad existe antes de upsert en barridos)
+      GPS_SB.upsertUnidad({
+        num,
+        base:      uActual.base      || $('pf-m-base')?.value   || null,
+        cromatica: uActual.cromatica || $('pf-m-crom')?.value   || null,
+        modelo:    uActual.modelo    || $('pf-m-modelo')?.value || null,
+        placa:     idPlaca           || uActual.placa           || null,
+        estatus:   uActual.estatus   || 'EN_OPERACION',
+      }, emp)
+      .then(() => GPS_SB.saveBarrido(plat, [raw], emp))
+      .catch(e => console.warn('[Captura manual] Error guardando en Supabase:', e));
     }
 
     DB.addLog('manual', `${plat}: captura manual unidad ${num} (${Parsers.fmtDate(iso)})`, emp);
