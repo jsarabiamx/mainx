@@ -54,37 +54,12 @@ body { font-family: var(--font); background: var(--bg-base); color: var(--text);
 .sb-emp-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text3); margin-bottom: 4px; }
 #empresa-select { width: 100%; background: var(--bg-card); border: 1px solid var(--border); border-radius: 7px; padding: 6px 24px 6px 9px; color: var(--text); font-family: var(--font); font-size: 12px; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%234a5568' d='M5 7L0 2h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 7px center; }
 
-nav { flex: 1; padding: 4px 6px 8px; overflow-y: auto; }
-
-/* Sección colapsable — header clickeable */
-.nav-section-hdr {
-  display: flex; align-items: center; justify-content: space-between;
-  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
-  color: var(--text3); padding: 10px 6px 4px;
-  cursor: pointer; user-select: none; border-radius: 6px;
-  transition: color .15s;
-}
-.nav-section-hdr:hover { color: var(--text2); }
-.nav-sec-arrow { transition: transform .2s ease; flex-shrink: 0; color: var(--text3); }
-
-/* Cuerpo de sección — animación suave */
-.nav-section-body { overflow: hidden; transition: max-height .25s ease, opacity .2s ease; max-height: 600px; opacity: 1; }
-.nav-section-body.nav-section-collapsed { max-height: 0; opacity: 0; pointer-events: none; }
-
-/* Items del menú */
-.nav-item {
-  display: flex; align-items: center; gap: 9px;
-  padding: 7px 9px; border-radius: 7px; cursor: pointer;
-  color: var(--text2); font-size: 12px; font-weight: 500;
-  transition: background .12s, color .12s; user-select: none; white-space: nowrap;
-}
+nav { flex: 1; padding: 6px 8px; overflow-y: auto; }
+.nav-section { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); padding: 10px 8px 3px; }
+.nav-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px; cursor: pointer; color: var(--text2); font-size: 12px; font-weight: 500; transition: all .15s; user-select: none; white-space: nowrap; }
 .nav-item:hover  { background: var(--bg-hover); color: var(--text); }
-.nav-item.active {
-  background: rgba(59,130,246,.13); color: var(--blue);
-  border-left: 2px solid var(--blue); padding-left: 7px;
-}
-/* Iconos SVG */
-.nav-icon { width: 15px; height: 15px; flex-shrink: 0; }
+.nav-item.active { background: rgba(59,130,246,.12); color: var(--blue); }
+.nav-icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
 .nav-badge { margin-left: auto; background: var(--red); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; min-width: 18px; text-align: center; }
 .sb-footer { padding: 10px 12px; border-top: 1px solid var(--border); font-size: 10px; color: var(--text3); flex-shrink: 0; }
 
@@ -269,11 +244,7 @@ tbody td { padding: 8px 10px; white-space: nowrap; }
 }
 @media(max-width:600px){
   #sidebar{width:52px!important;min-width:52px!important}
-  .sb-logo-title,.sb-logo-sub,.nav-badge,.sb-emp,.nav-section-hdr span,.sb-footer{display:none!important}
-  .nav-section-hdr{justify-content:center!important;padding:6px 0!important}
-  .nav-sec-arrow{display:none!important}
-  .nav-item{justify-content:center!important;padding:10px!important}
-  .nav-item.active{border-left:none!important;padding:10px!important}
+  .sb-logo-title,.sb-logo-sub,.nav-item span:last-child,.nav-badge,.sb-emp,.nav-section,.sb-footer{display:none!important}
   .nav-item{justify-content:center!important;padding:10px!important}
   .kpi-grid{grid-template-columns:1fr 1fr!important}
   #content{padding:10px 10px!important}
@@ -634,32 +605,3 @@ tbody td { padding: 8px 10px; white-space: nowrap; }
   margin: 0;
 }
 .ms-option span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* ══ TEMA GHO (verde oscuro) ══════════════════════════ */
-[data-empresa="GHO"] {
-  --bg-base:    #0a110d;
-  --bg-panel:   #111a14;
-  --bg-card:    #162019;
-  --bg-card2:   #1c2b20;
-  --bg-hover:   #1f3325;
-  --border:     #233d28;
-  --border2:    #2e5235;
-  --blue:       #22c55e;
-  --blue-bg:    rgba(34,197,94,.10);
-  --blue-border:rgba(34,197,94,.28);
-  --teal:       #4ade80;
-  --purple:     #86efac;
-  --purple-bg:  rgba(134,239,172,.10);
-}
-[data-empresa="GHO"] .nav-item.active {
-  background: rgba(34,197,94,.13);
-  color: #22c55e;
-  border-left-color: #22c55e;
-}
-[data-empresa="GHO"] #empresa-select,
-[data-empresa="GHO"] .sb-emp {
-  --blue: #22c55e;
-}
-[data-empresa="GHO"] .sb-logo-icon {
-  background: linear-gradient(135deg, #166534, #22c55e);
-}
