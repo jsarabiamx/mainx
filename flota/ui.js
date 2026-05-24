@@ -1109,8 +1109,18 @@ const UI = (() => {
     };
     DB.registrarFalla(num,emp,fichaFalla);
     // Sincronizar observaciones con el motivo de la falla (local + Supabase)
-    const etiqueta = fichaFalla.motivo || "";
-    DB.upsertUnidad(num, { observaciones: etiqueta, _fuente: "falla_sync" }, emp);
+    const etiqueta = fichaFalla.esSiniestro ? fichaFalla.motivo : fichaFalla.motivo;
+    DB.upsertUnidad(num, { observaciones: etiqueta, _fuente: 'falla_sync' }, emp);
+    // Actualizar observaciones en gps_barridos de Supabase para todos los navegadores
+    if (window.GPS_SB) {
+      const plataformas = ['CEIBA','SAMSARA','AVL','SCANIA','MAN','VOLVO','MOTIVE'];
+      plataformas.forEach(plat => {
+        GPS_SB._patch('gps_barridos',
+          `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${plat}&num_economico=eq.${encodeURIComponent(num)}`,
+          { datos_raw: { observaciones: etiqueta } }
+        ).catch(()=>{});
+      });
+    }
     closeModal();
     toast(`Falla registrada en unidad ${num}${fichaFalla.esSiniestro?' — SINIESTRO':''}`,'warn',5000);
     renderDetalle(num,emp);
@@ -1631,10 +1641,7 @@ const UI = (() => {
       renderPlataformas._syncDone = true;
       App._syncFallasDesdeInicio && App._syncFallasDesdeInicio().then(() => {
         renderPlataformas();
-        // Si hay una plataforma expandida, volver a renderizar su tabla tras el sync
-        if (_platExpandida) {
-          setTimeout(() => _refreshPlatTable(_platExpandida), 100);
-        }
+        if (_platExpandida) setTimeout(() => _refreshPlatTable(_platExpandida), 100);
       });
       // Renderizar con datos actuales mientras llega el sync (no bloquear UI)
     }
@@ -1970,18 +1977,12 @@ const UI = (() => {
     // Esto corrige el bug donde filtrar por "TAPA" en Samsara mostraba todas las unidades de
     // TAPA aunque no estuvieran en el archivo de Samsara.
     // Unidades "Para venta" se excluyen de los conteos operativos.
-    // VOLVO/MOTIVE son captura manual — pueden tener unidades de cualquier empresa
-    let uns = (plat === 'VOLVO' || plat === 'MOTIVE')
-      ? DB.getEmpresasList().flatMap(e => DB.getUnidadesList(e)).filter(u =>
-          u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-        )
-      : DB.getUnidadesList(emp).filter(u =>
-          u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-        );
+    let uns = DB.getUnidadesList(emp).filter(u =>
+      u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+    );
     uns = uns.filter(u => !!u[k]);
 
-    // Siniestros activos NO aparecen en tabla de Plataformas GPS.
-    // Sí aparecen en Resumen y en el módulo de Fallas.
+    // Siniestros activos NO aparecen en tabla de Plataformas GPS
     uns = uns.filter(u => !_tieneSiniestroActivo(u));
 
     const f = _platTableFilter;
@@ -2031,21 +2032,24 @@ const UI = (() => {
       return db - da;
     });
 
-    // Summary: calculado con las unidades ya filtradas (consistente con la tabla)
     const wrap = $('plat-table-wrap');
     if (!wrap) return;
 
+    // Summary: el TOTAL ahora es solo del scope de esta plataforma
     const sum = $('plat-table-summary');
     if (sum) {
-      const enLinea  = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d <= cfg.diasLinea; }).length;
-      const atencion = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasLinea && d <= cfg.diasAtencion; }).length;
-      const fuera    = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasAtencion; }).length;
+      // Excluir siniestros activos de conteos GPS en plataformas
+      const unsGPS = uns.filter(u => !_tieneSiniestroActivo(u));
+      const enLinea  = unsGPS.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d <= cfg.diasLinea; }).length;
+      const atencion = unsGPS.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasLinea && d <= cfg.diasAtencion; }).length;
+      const fuera    = unsGPS.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasAtencion; }).length;
       const sinis    = uns.filter(u => u.siniestro).length;
       sum.innerHTML = `<strong>${uns.length}</strong> unidades en ${plat} · <span style="color:var(--green)">${enLinea} en línea</span> · <span style="color:var(--yellow)">${atencion} atención</span> · <span style="color:var(--red)">${fuera} fuera</span>${sinis?` · <span style="color:#ef4444">🚨 ${sinis} siniestro${sinis>1?'s':''}</span>`:''}`;
     }
 
+    const esManual = plat === 'VOLVO';
+
     if (!uns.length) {
-      const esManual = plat === 'VOLVO';
       const hayFiltros = (f.emp && f.emp.length) || (f.base && f.base.length) ||
                          (f.crom && f.crom.length) || (f.est && f.est.length) ||
                          (f.dias && f.dias.length) || (f.estadoSam && f.estadoSam.length) ||
@@ -2159,7 +2163,7 @@ const UI = (() => {
     // Renderizar tabla + detalle inline (si hay unidad enfocada).
     // IMPORTANTE: el detail inline va FUERA del div con scroll, así siempre es visible
     // inmediatamente al hacer click en una fila, sin necesidad de hacer scroll.
-    let html = `<div style="overflow-x:auto"><table style="width:100%;min-width:900px">
+    let html = `<div style="overflow:auto;max-height:55vh"><table style="width:100%;min-width:900px">
       <thead><tr>${th}</tr></thead>
       <tbody id="plat-table-body">${rows}</tbody>
     </table></div>`;
@@ -2507,13 +2511,11 @@ const UI = (() => {
     _platExpandida = plat;
     _platDetailUnit = null;
     renderPlataformas();
-    // Dar foco al input de número y auto-llenar fecha/hora actual
     setTimeout(() => {
       const eNum = $('pf-m-num');
       if (eNum) eNum.focus();
       const eFecha = $('pf-m-fecha');
       if (eFecha && !eFecha.value) {
-        // datetime-local requiere formato "YYYY-MM-DDTHH:MM"
         const now = new Date();
         const pad = n => String(n).padStart(2,'0');
         eFecha.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
@@ -2576,27 +2578,19 @@ const UI = (() => {
     const datos = { [platKey]: iso, plataforma: plat, _fuente: 'captura_manual_' + plat };
     if (!u || !u.ultima_act || new Date(iso) > new Date(u.ultima_act)) datos.ultima_act = iso;
     DB.upsertUnidad(num, datos, emp);
-
-    // Guardar en Supabase: gps_barridos (para la tabla de Plataformas)
-    // y gps_unidades (para que DB.getUnidadesList la encuentre en cualquier navegador)
+    // Guardar en Supabase: gps_unidades + gps_barridos
     if (window.GPS_SB) {
       const uActual = DB.getUnidad(num, emp) || {};
-      const raw = { num, fecha: iso, fechaStr: Parsers.fmtDate(iso), plataforma: plat };
-      if (idPlaca) raw.placa = idPlaca;
-
-      // upsert en gps_unidades primero (así la unidad existe antes de upsert en barridos)
       GPS_SB.upsertUnidad({
-        num,
-        base:      uActual.base      || $('pf-m-base')?.value   || null,
-        cromatica: uActual.cromatica || $('pf-m-crom')?.value   || null,
-        modelo:    uActual.modelo    || $('pf-m-modelo')?.value || null,
-        placa:     idPlaca           || uActual.placa           || null,
-        estatus:   uActual.estatus   || 'EN_OPERACION',
-      }, emp)
-      .then(() => GPS_SB.saveBarrido(plat, [raw], emp))
-      .catch(e => console.warn('[Captura manual] Error guardando en Supabase:', e));
+        num, base: uActual.base || '', cromatica: uActual.cromatica || '',
+        modelo: uActual.modelo || '', placa: idPlaca || uActual.placa || '',
+        estatus: uActual.estatus || 'EN_OPERACION',
+      }, emp).then(() => {
+        const raw = { num, fecha: iso, fechaStr: Parsers.fmtDate(iso), plataforma: plat };
+        if (idPlaca) raw.placa = idPlaca;
+        return GPS_SB.saveBarrido(plat, [raw], emp);
+      }).catch(e => console.warn('[Captura manual Supabase]', e));
     }
-
     DB.addLog('manual', `${plat}: captura manual unidad ${num} (${Parsers.fmtDate(iso)})`, emp);
     toast(`✓ ${plat}: unidad ${num} guardada`, 'success');
 
@@ -2604,41 +2598,6 @@ const UI = (() => {
     ['pf-m-num','pf-m-base','pf-m-crom','pf-m-modelo','pf-m-id','pf-m-fecha'].forEach(id => { const e = $(id); if (e && e.tagName !== 'DIV') e.value = ''; });
     if ($('pf-m-dias')) $('pf-m-dias').textContent = '—';
     _refreshPlatTable(plat);
-  }
-
-  /**
-   * Doble clic en fila de VOLVO/MOTIVE: pre-llena el formulario de captura manual
-   * con los datos de la unidad para que el usuario solo corrija la fecha.
-   * NO re-renderiza — solo llena los campos del form que ya está visible.
-   */
-  function _editarCapturaManuaRow(num, plat) {
-    const emp = DB.getEmpresaActiva();
-    const u = DB.getUnidad(num, emp);
-    if (!u) return;
-
-    // Limpiar detalle inline si estaba abierto (evita que la tabla desaparezca)
-    _platDetailUnit = null;
-
-    // Pre-llenar campos del form que ya está en el DOM
-    if ($('pf-m-num'))    $('pf-m-num').value    = num;
-    if ($('pf-m-base'))   $('pf-m-base').value   = u.base || '';
-    if ($('pf-m-crom'))   $('pf-m-crom').value   = u.cromatica || '';
-    if ($('pf-m-modelo')) $('pf-m-modelo').value = u.modelo || '';
-    if ($('pf-m-id'))     $('pf-m-id').value     = u.placa || '';
-
-    // Fecha: hora actual del momento del barrido
-    const eFecha = $('pf-m-fecha');
-    if (eFecha) {
-      const now = new Date();
-      const pad = n => String(n).padStart(2,'0');
-      eFecha.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-      _recalcularDiasManual();
-    }
-
-    // Scroll suave al formulario y foco en fecha
-    const bar = $('pf-manual-bar');
-    if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    if (eFecha) eFecha.focus();
   }
 
   function _updatePlatFechaConISO(num, plat, emp, iso) {
