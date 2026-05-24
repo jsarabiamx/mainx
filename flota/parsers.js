@@ -932,6 +932,13 @@ const Parsers = (() => {
       if (hasUltimos) return 'AVL';
     }
     if (f.match(/\d{2}_asignaci/i) || f.includes('asignac')) return 'ASIGNACION';
+    // VOLVO: archivo tracking-report con variantes de nombre
+    if (f.includes('tracking-report') || f.includes('tracking_report') || f.includes('trackingreport')) return 'VOLVO';
+    // VOLVO: por hojas — tiene "Actividades del vehículo"
+    if (Array.isArray(sheetNames)) {
+      const normalize = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+      if (sheetNames.some(n => normalize(n).includes('actividades del vehiculo') || normalize(n).includes('actividades del veh'))) return 'VOLVO';
+    }
     return null;
   }
 
@@ -999,7 +1006,77 @@ const Parsers = (() => {
       const sh = sheetNames.find(n => normalize(n).includes('devices_report') || normalize(n).includes('devices report'));
       return sh || sheetNames[0];
     }
+    // VOLVO: usar hoja "Actividades del vehículo"
+    if (plat === 'VOLVO') {
+      const normalize = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+      const sh = sheetNames.find(n => normalize(n).includes('actividades del vehiculo') || normalize(n).includes('actividades del veh'));
+      return sh || sheetNames[0];
+    }
     return sheetNames[0];
+  }
+
+
+  /**
+   * PARSER VOLVO — archivo tracking-report
+   * Hoja: "Actividades del vehículo"
+   * Col A: Vehículo (ej: "ETN-8101")  Col B: Tiempo (ej: "2026-05-24 10:26:55")
+   * Cada unidad aparece varias veces — tomamos la última fecha (máxima).
+   */
+  function parseVolvo(rows) {
+    if (!rows || rows.length < 3) return [];
+
+    // Encontrar fila de encabezado (contiene "Vehículo" y "Tiempo")
+    let hIdx = 1; // default fila 2 (índice 1)
+    for (let i = 0; i < Math.min(rows.length, 5); i++) {
+      const r = rows[i];
+      if (Array.isArray(r) && r.some(c => String(c||'').toLowerCase().includes('veh'))) {
+        hIdx = i; break;
+      }
+    }
+
+    // Mapear: num -> fecha máxima
+    const maxFecha = {};
+    for (let i = hIdx + 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!Array.isArray(row) || !row[0]) continue;
+
+      // Col A: "ETN-8101" o "8101" — extraer número económico
+      const rawVeh = String(row[0] || '').trim();
+      // Quitar prefijos como "ETN-", "GHO-", etc.
+      const numMatch = rawVeh.match(/(\d{3,6})$/);
+      if (!numMatch) continue;
+      const num = numMatch[1];
+
+      // Col B: fecha/hora "2026-05-24 10:26:55" o número serial de Excel
+      let fecha = null;
+      const rawFecha = row[1];
+      if (rawFecha instanceof Date) {
+        fecha = rawFecha;
+      } else if (typeof rawFecha === 'number') {
+        // Excel serial date
+        const d = new Date(Math.round((rawFecha - 25569) * 86400 * 1000));
+        if (!isNaN(d)) fecha = d;
+      } else if (rawFecha) {
+        const parsed = new Date(String(rawFecha).trim());
+        if (!isNaN(parsed)) fecha = parsed;
+      }
+      if (!fecha) continue;
+
+      // Guardar solo la fecha más reciente por unidad
+      if (!maxFecha[num] || fecha > maxFecha[num]) {
+        maxFecha[num] = fecha;
+      }
+    }
+
+    const result = Object.entries(maxFecha).map(([num, fecha]) => ({
+      num,
+      fecha: fecha.toISOString(),
+      fechaStr: fmtDate(fecha),
+      plataforma: 'VOLVO'
+    }));
+
+    console.log(`[VOLVO] ${result.length} unidades, última actividad por unidad`);
+    return result;
   }
 
   function parsearPorPlataforma(plat, rows) {
@@ -1010,6 +1087,7 @@ const Parsers = (() => {
       case 'SCANIA':  return parseScania(rows);
       case 'MAN':     return parseMAN(rows);
       case 'MOTIVE':  return parseMOTIVE(rows);
+      case 'VOLVO':   return parseVolvo(rows);
       default:        return [];
     }
   }
@@ -1064,7 +1142,7 @@ const Parsers = (() => {
     cleanNum, parseDate, fmtDate, fmtDateShort, fmtTime,
     diasDesde, statusClass,
     parseAsignacion, parseCeiba, parseSamsara, parseMAN, parseAVL, parseScania,
-    readXLSX, detectarPlataforma, selectSheet, parsearPorPlataforma, validarResultado,
+    readXLSX, detectarPlataforma, selectSheet, parsearPorPlataforma, validarResultado, parseVolvo,
     normalizarCromatica, normalizarEstatus, categorizarEstatus
   };
 })();
