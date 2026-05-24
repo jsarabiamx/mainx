@@ -1,127 +1,112 @@
 /* ═══════════════════════════════════════════════════════════════════
-   EMPRESA THEMES — Cyberpunk Urban Professional
-   Cada empresa tiene su paleta de acento: activo via [data-empresa] en <body>
-   Todos los colores de acento usan var(--accent-*) para herencia automática
+   EMPRESA THEMES — Cyberpunk Urban Professional v2
+   Paletas más tonadas (menos chillantes), efectos sutiles
 ═══════════════════════════════════════════════════════════════════ */
 
-/* ── ETN · Azul eléctrico (default) ────────────────────────────── */
+/* ── ETN · Azul eléctrico ───────────────────────────────────────── */
 :root,
 body[data-empresa="ETN"] {
-  --accent:         #3b82f6;
-  --accent-2:       #60a5fa;
-  --accent-glow:    rgba(59,130,246,.18);
-  --accent-glow2:   rgba(59,130,246,.08);
-  --accent-border:  rgba(59,130,246,.35);
-  --accent-dim:     rgba(59,130,246,.12);
-
-  --bg-base:        #080c12;
-  --bg-panel:       #0d1220;
-  --bg-card:        #111827;
-  --bg-card2:       #172033;
-  --bg-hover:       #1e2d48;
-  --border:         #1e2d48;
-  --border2:        #2a3f60;
-  --text:           #e2e8f0;
-  --text2:          #8fa7c5;
-  --text3:          #3d5070;
-  --sb-bg:          #090e1a;
-  --sb-border:      #1a2540;
-  --sb-stripe:      rgba(59,130,246,.04);
-  --topbar-bg:      #0b1120;
-  --topbar-line:    rgba(59,130,246,.2);
-  --grid-line:      rgba(59,130,246,.06);
+  --accent:         #4f8ef7;
+  --accent-2:       #7ab0fa;
+  --accent-glow:    rgba(79,142,247,.14);
+  --accent-glow2:   rgba(79,142,247,.06);
+  --accent-border:  rgba(79,142,247,.28);
+  --accent-dim:     rgba(79,142,247,.09);
+  --bg-base:        #090d14;
+  --bg-panel:       #0e1520;
+  --bg-card:        #131d2e;
+  --bg-card2:       #182438;
+  --bg-hover:       #1e2e47;
+  --border:         #1e2d44;
+  --border2:        #273d5c;
+  --text:           #dce8f4;
+  --text2:          #7a9abf;
+  --text3:          #334d6a;
+  --sb-bg:          #070b11;
+  --sb-border:      #162034;
+  --topbar-bg:      #0a1019;
+  --grid-line:      rgba(79,142,247,.04);
 }
 
-/* ── GHO · Verde neón (Grupo Herrad Occidente) ──────────────────── */
+/* ── GHO · Verde oscuro (no neón, más militar) ──────────────────── */
 body[data-empresa="GHO"] {
-  --accent:         #10d98a;
-  --accent-2:       #34eca0;
-  --accent-glow:    rgba(16,217,138,.18);
-  --accent-glow2:   rgba(16,217,138,.07);
-  --accent-border:  rgba(16,217,138,.32);
-  --accent-dim:     rgba(16,217,138,.11);
-
-  --bg-base:        #06100d;
-  --bg-panel:       #091a14;
-  --bg-card:        #0d2018;
-  --bg-card2:       #112a20;
-  --bg-hover:       #183828;
-  --border:         #183828;
-  --border2:        #225038;
-  --text:           #d4f5e8;
-  --text2:          #7dbf9c;
-  --text3:          #2e6048;
-  --sb-bg:          #060f0b;
-  --sb-border:      #122a1e;
-  --sb-stripe:      rgba(16,217,138,.04);
-  --topbar-bg:      #081410;
-  --topbar-line:    rgba(16,217,138,.22);
-  --grid-line:      rgba(16,217,138,.05);
+  --accent:         #2cb87a;
+  --accent-2:       #4dcc94;
+  --accent-glow:    rgba(44,184,122,.13);
+  --accent-glow2:   rgba(44,184,122,.05);
+  --accent-border:  rgba(44,184,122,.26);
+  --accent-dim:     rgba(44,184,122,.08);
+  --bg-base:        #07100d;
+  --bg-panel:       #0c1a14;
+  --bg-card:        #102019;
+  --bg-card2:       #142820;
+  --bg-hover:       #1a3428;
+  --border:         #1a3026;
+  --border2:        #234234;
+  --text:           #cce8d8;
+  --text2:          #6aaa88;
+  --text3:          #2a5040;
+  --sb-bg:          #060e0b;
+  --sb-border:      #10261c;
+  --topbar-bg:      #080f0c;
+  --grid-line:      rgba(44,184,122,.04);
 }
 
-/* ── AERS · Naranja ámbar ───────────────────────────────────────── */
+/* ── AERS · Ámbar apagado / bronce ─────────────────────────────── */
 body[data-empresa="AERS"] {
-  --accent:         #f59e0b;
-  --accent-2:       #fbbf24;
-  --accent-glow:    rgba(245,158,11,.18);
-  --accent-glow2:   rgba(245,158,11,.07);
-  --accent-border:  rgba(245,158,11,.32);
-  --accent-dim:     rgba(245,158,11,.11);
-
-  --bg-base:        #0e0b04;
-  --bg-panel:       #1a1408;
-  --bg-card:        #221b0c;
-  --bg-card2:       #2c2310;
-  --bg-hover:       #3a2e14;
-  --border:         #3a2e14;
-  --border2:        #54421e;
-  --text:           #fef3c7;
-  --text2:          #c8a24e;
-  --text3:          #5c4420;
-  --sb-bg:          #0c0904;
-  --sb-border:      #281e0a;
-  --sb-stripe:      rgba(245,158,11,.04);
-  --topbar-bg:      #120e05;
-  --topbar-line:    rgba(245,158,11,.22);
-  --grid-line:      rgba(245,158,11,.05);
+  --accent:         #d4920a;
+  --accent-2:       #e8aa30;
+  --accent-glow:    rgba(212,146,10,.13);
+  --accent-glow2:   rgba(212,146,10,.05);
+  --accent-border:  rgba(212,146,10,.26);
+  --accent-dim:     rgba(212,146,10,.08);
+  --bg-base:        #0e0c06;
+  --bg-panel:       #181408;
+  --bg-card:        #201a0c;
+  --bg-card2:       #282010;
+  --bg-hover:       #342a14;
+  --border:         #342a12;
+  --border2:        #4a3c1c;
+  --text:           #f0e0b4;
+  --text2:          #aa8840;
+  --text3:          #524018;
+  --sb-bg:          #0b0a05;
+  --sb-border:      #221c0c;
+  --topbar-bg:      #100e06;
+  --grid-line:      rgba(212,146,10,.04);
 }
 
-/* ── SAME · Magenta / Fucsia ────────────────────────────────────── */
+/* ── SAME · Púrpura oscuro (no fucsia) ──────────────────────────── */
 body[data-empresa="SAME"] {
-  --accent:         #ec4899;
-  --accent-2:       #f472b6;
-  --accent-glow:    rgba(236,72,153,.18);
-  --accent-glow2:   rgba(236,72,153,.07);
-  --accent-border:  rgba(236,72,153,.32);
-  --accent-dim:     rgba(236,72,153,.11);
-
-  --bg-base:        #0e060c;
-  --bg-panel:       #1a0d17;
-  --bg-card:        #22101e;
-  --bg-card2:       #2c1528;
-  --bg-hover:       #3a1c34;
-  --border:         #3a1c34;
-  --border2:        #542848;
-  --text:           #fce7f3;
-  --text2:          #c07aaa;
-  --text3:          #5c2848;
-  --sb-bg:          #0c060b;
-  --sb-border:      #280e22;
-  --sb-stripe:      rgba(236,72,153,.04);
-  --topbar-bg:      #120810;
-  --topbar-line:    rgba(236,72,153,.22);
-  --grid-line:      rgba(236,72,153,.05);
+  --accent:         #9b6edb;
+  --accent-2:       #b48ee8;
+  --accent-glow:    rgba(155,110,219,.13);
+  --accent-glow2:   rgba(155,110,219,.05);
+  --accent-border:  rgba(155,110,219,.26);
+  --accent-dim:     rgba(155,110,219,.08);
+  --bg-base:        #0c0910;
+  --bg-panel:       #130e1c;
+  --bg-card:        #1a1228;
+  --bg-card2:       #211632;
+  --bg-hover:       #2c1e42;
+  --border:         #2a1c40;
+  --border2:        #3c2858;
+  --text:           #e0d4f4;
+  --text2:          #8a6cb4;
+  --text3:          #402c60;
+  --sb-bg:          #09060e;
+  --sb-border:      #1c1230;
+  --topbar-bg:      #0d0a16;
+  --grid-line:      rgba(155,110,219,.04);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   APLICAR ACCENT A TODA LA UI — reemplaza var(--blue) y similares
+   OVERRIDE GLOBAL — --blue usa --accent para toda la UI
 ═══════════════════════════════════════════════════════════════════ */
-
-/* Override --blue con --accent para que toda la UI use el color de empresa */
 body {
-  --blue:          var(--accent);
-  --blue-bg:       var(--accent-glow2);
-  --blue-border:   var(--accent-border);
+  --blue:        var(--accent);
+  --blue-bg:     var(--accent-glow2);
+  --blue-border: var(--accent-border);
 }
 
 /* ── Sidebar ────────────────────────────────────────────────────── */
@@ -130,53 +115,75 @@ body {
   border-right: 1px solid var(--sb-border);
   position: relative;
 }
-/* Línea lateral de acento */
+/* Línea lateral derecha sutil */
 #sidebar::after {
   content: '';
   position: absolute;
   top: 0; right: 0;
-  width: 2px; height: 100%;
-  background: linear-gradient(180deg, transparent, var(--accent) 40%, transparent);
-  opacity: .45;
+  width: 1px; height: 100%;
+  background: linear-gradient(180deg, transparent 5%, var(--accent-border) 40%, transparent 95%);
   pointer-events: none;
-}
-/* Scanlines sutiles en sidebar */
-#sidebar::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    180deg,
-    var(--sb-stripe) 0px,
-    var(--sb-stripe) 1px,
-    transparent 1px,
-    transparent 18px
-  );
-  pointer-events: none;
-  z-index: 0;
 }
 
-/* Logo área — badge de empresa con color de acento */
-.sb-logo {
-  border-bottom: 1px solid var(--sb-border);
-  position: relative;
-  z-index: 1;
-}
+.sb-logo { border-bottom: 1px solid var(--sb-border); }
 .sb-logo-icon {
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #fff));
-  box-shadow: 0 0 14px var(--accent-glow);
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #fff 45%));
+  box-shadow: 0 0 10px var(--accent-glow);
 }
-.sb-logo-title {
-  color: var(--text);
+.sb-emp-label { color: var(--text3); letter-spacing: .1em; }
+#empresa-select {
+  background: var(--bg-card);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-2);
+  font-weight: 600;
+}
+#empresa-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
+.sb-footer { border-top: 1px solid var(--sb-border); }
+
+/* ── Nav colapsable ─────────────────────────────────────────────── */
+.nav-group { margin-bottom: 2px; }
+
+.nav-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  padding: 8px 10px 4px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--accent);
+  opacity: .55;
+  transition: opacity .15s;
+}
+.nav-section-toggle:hover { opacity: .85; }
+
+.nav-arrow {
+  font-size: 10px;
+  transition: transform .2s ease;
+  opacity: .7;
+}
+.nav-group.collapsed .nav-arrow { transform: rotate(-90deg); }
+
+.nav-group-items {
+  overflow: hidden;
+  max-height: 500px;
+  transition: max-height .25s ease, opacity .2s ease;
+  opacity: 1;
+}
+.nav-group.collapsed .nav-group-items {
+  max-height: 0;
+  opacity: 0;
 }
 
 /* Nav items */
-nav { position: relative; z-index: 1; }
-.nav-item { transition: all .18s; }
+.nav-item { transition: background .15s, color .15s, border-left .1s; }
 .nav-item:hover {
   background: var(--accent-glow2);
   color: var(--accent-2);
-  border-left: 2px solid var(--accent);
+  border-left: 2px solid var(--accent-border);
   padding-left: 8px;
 }
 .nav-item.active {
@@ -184,93 +191,59 @@ nav { position: relative; z-index: 1; }
   color: var(--accent);
   border-left: 2px solid var(--accent);
   padding-left: 8px;
-  box-shadow: inset 0 0 12px var(--accent-glow2);
-}
-.nav-item.active .nav-icon { filter: drop-shadow(0 0 4px var(--accent)); }
-
-/* Nav section labels */
-.nav-section {
-  color: var(--accent);
-  opacity: .5;
-  letter-spacing: .15em;
-}
-
-/* Empresa selector */
-.sb-emp { position: relative; z-index: 1; }
-.sb-emp-label { color: var(--accent); opacity: .6; }
-#empresa-select {
-  background: var(--bg-card);
-  border: 1px solid var(--accent-border);
-  color: var(--accent-2);
-  font-weight: 600;
-  box-shadow: 0 0 8px var(--accent-glow2);
-}
-#empresa-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
-
-/* Sb footer */
-.sb-footer {
-  border-top: 1px solid var(--sb-border);
-  position: relative; z-index: 1;
 }
 
 /* ── Topbar ─────────────────────────────────────────────────────── */
 #topbar {
   background: var(--topbar-bg);
-  border-bottom: 2px solid transparent;
-  border-image: linear-gradient(90deg, transparent 0%, var(--accent) 40%, var(--accent-2) 60%, transparent 100%) 1;
-  position: relative;
+  border-bottom: 1px solid var(--accent-border);
+  box-shadow: 0 1px 12px var(--accent-glow2);
 }
-/* Glow line bajo topbar */
-#topbar::after {
-  content: '';
-  position: absolute;
-  bottom: -1px; left: 0; right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
-  pointer-events: none;
-}
-/* KPI chips del topbar (TOTAL, PENDIENTES, etc.) */
-#tb-kpis { gap: 18px; }
-.tb-kpi-total  { color: var(--text); }
-.tb-kpi-pend   { color: var(--yellow); }
-.tb-kpi-proc   { color: var(--accent-2); }
-
-/* Avatar con glow de empresa */
 .tb-avatar {
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 50%, #8b5cf6));
-  box-shadow: 0 0 10px var(--accent-glow);
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #8b5cf6 40%));
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 
-/* ── Content background con grid sutil ─────────────────────────── */
+/* Badge empresa en topbar */
+#tb-empresa-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+}
+#tb-empresa-badge::before {
+  content: '';
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
+}
+
+/* ── Content grid sutil ─────────────────────────────────────────── */
 #content {
   background: var(--bg-base);
   background-image:
     linear-gradient(var(--grid-line) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 40px 40px;
+  background-size: 48px 48px;
 }
 
-/* ── Tarjetas / paneles ─────────────────────────────────────────── */
-.kpi-card, .side-card, .chart-card, .asig-kpi, .rep-kpi, .barridos-resumen,
-.asig-table-wrap, .table-wrap, .recents-box, .log-box, .filter-bar,
-#plat-detail-box > div {
-  border-color: var(--border);
-  background: var(--bg-panel);
-}
-.kpi-card:hover {
-  border-color: var(--accent-border);
-  box-shadow: 0 0 16px var(--accent-glow2);
-}
-
-/* ── Botones primarios ──────────────────────────────────────────── */
+/* ── Botones ────────────────────────────────────────────────────── */
 .btn-process, .upload-btn, .btn-integrar, .act-btn-primary, .plat-card-btn-upload {
   background: var(--accent);
-  box-shadow: 0 0 12px var(--accent-glow);
+  box-shadow: 0 0 8px var(--accent-glow);
   transition: box-shadow .2s, transform .12s;
 }
 .btn-process:hover, .upload-btn:hover, .btn-integrar:hover,
 .act-btn-primary:hover, .plat-card-btn-upload:hover {
-  box-shadow: 0 0 22px var(--accent-glow);
+  box-shadow: 0 0 16px var(--accent-glow);
   transform: translateY(-1px);
 }
 
@@ -278,94 +251,47 @@ nav { position: relative; z-index: 1; }
 .chip.active { background: var(--accent); border-color: var(--accent); }
 .t-tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--accent-glow2); }
 .page-btn.active { background: var(--accent); border-color: var(--accent); }
-.nav-link-active, .kpi-link:hover { color: var(--accent); }
+.kpi-link:hover { color: var(--accent); }
 
 /* ── Plataforma cards ───────────────────────────────────────────── */
 .plat-card-active {
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--bg-card) 85%, var(--accent) 15%);
-  box-shadow: 0 0 0 1px var(--accent), 0 4px 20px var(--accent-glow);
+  box-shadow: 0 0 0 1px var(--accent-border), 0 4px 18px var(--accent-glow);
 }
 .plat-card:hover { border-color: var(--accent-border); }
-.plat-card-btn-upload { background: var(--accent); }
 
-/* ── Tabla de plataformas ───────────────────────────────────────── */
-.plat-filter-bar { background: var(--bg-card); border-bottom-color: var(--border); }
+/* ── Tabla plataformas ──────────────────────────────────────────── */
 .plat-filter-bar select:focus,
 .plat-filter-bar input:focus,
-.plat-filter-search:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow2); }
-.ms-trigger:hover { border-color: var(--accent); }
+.plat-filter-search:focus { border-color: var(--accent); }
+.ms-trigger:hover { border-color: var(--accent-border); }
 #plat-table-body tr.plat-row-selected { box-shadow: inset 3px 0 0 var(--accent); background: var(--accent-dim); }
 #plat-table-body tr:hover { background: var(--accent-glow2); }
 .ms-actions a { color: var(--accent); }
 .ms-option input[type="checkbox"] { accent-color: var(--accent); }
 .ms-panel { border-color: var(--accent-border); }
 
-/* ── Scrollbar con color de empresa ────────────────────────────── */
-::-webkit-scrollbar-thumb { background: var(--accent-border); }
-::-webkit-scrollbar-thumb:hover { background: var(--accent); }
-
-/* ── Live dot ───────────────────────────────────────────────────── */
-.live-dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-
-/* ── Upload zone ────────────────────────────────────────────────── */
+/* ── Misc ───────────────────────────────────────────────────────── */
+.live-dot { background: var(--accent); }
 .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: var(--accent-glow2); }
-
-/* ── Steps ──────────────────────────────────────────────────────── */
-.step.done::after   { background: var(--accent); }
-.step.done .step-circle   { background: var(--accent); border-color: var(--accent); }
+.step.done::after { background: var(--accent); }
+.step.done .step-circle { background: var(--accent); border-color: var(--accent); }
 .step.active .step-circle { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow2); }
+.detect-type { color: var(--accent); }
+::-webkit-scrollbar-thumb { background: var(--border2); }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-border); }
 
-/* ── Detect banner ──────────────────────────────────────────────── */
-.detect-banner { border-color: var(--accent-border); }
-.detect-type   { color: var(--accent); }
+table thead tr { background: color-mix(in srgb, var(--bg-card) 94%, var(--accent) 6%); }
+table thead th { color: var(--accent-2); font-size: 10px; letter-spacing: .06em; }
 
-/* ── Empresa badge en topbar ─────────────────────────────────────── */
-#tb-empresa-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: 20px;
-  background: var(--accent-dim);
-  border: 1px solid var(--accent-border);
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .06em;
-  box-shadow: 0 0 8px var(--accent-glow2);
-}
-#tb-empresa-badge::before {
-  content: '';
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 6px var(--accent);
-  display: inline-block;
-}
-
-/* ── Animación de transición al cambiar empresa ─────────────────── */
-@keyframes empresaFadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-body.empresa-transition * {
-  animation: empresaFadeIn .25s ease forwards;
-}
-
-/* ── Glow sutil en tablas thead ─────────────────────────────────── */
-table thead tr {
-  background: color-mix(in srgb, var(--bg-card) 90%, var(--accent) 10%);
-}
-table thead th {
-  color: var(--accent-2);
-  font-size: 10px;
-  letter-spacing: .08em;
-}
-
-/* ── Input focus general ────────────────────────────────────────── */
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--accent) !important;
   box-shadow: 0 0 0 2px var(--accent-glow2);
 }
+
+/* Transición al cambiar empresa */
+@keyframes empresaFadeIn { from{opacity:0} to{opacity:1} }
+body.empresa-transition #sidebar,
+body.empresa-transition #topbar,
+body.empresa-transition #content { animation: empresaFadeIn .22s ease; }
