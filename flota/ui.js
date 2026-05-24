@@ -1011,45 +1011,6 @@ const UI = (() => {
     renderDetalle(num,emp);
   }
 
-
-  function _eliminarUnidadDePlat(num, plat, emp) {
-    if (!confirm(`¿Eliminar la unidad ${num} de la plataforma ${plat}?\n\nLa unidad seguirá existiendo en otras plataformas y en la asignación.`)) return;
-    const platKey = 'ultima_act_' + plat.toLowerCase();
-    DB.upsertUnidad(num, { [platKey]: null, _fuente: 'eliminar_plat' }, emp);
-    if (window.GPS_SB) {
-      GPS_SB._patch('gps_barridos',
-        `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${plat}&num_economico=eq.${encodeURIComponent(num)}`,
-        { activa: false }
-      ).catch(() => {});
-    }
-    toast(`Unidad ${num} eliminada de ${plat}`, 'warn');
-    _refreshPlatTable(plat);
-  }
-
-
-  // Doble clic en fila VOLVO/MOTIVE: pre-llena el form con datos de la unidad
-  function _editarCapturaManuaRow(num, plat) {
-    const emp = DB.getEmpresaActiva();
-    const u = DB.getUnidad(num, emp);
-    if (!u) return;
-    _platDetailUnit = null;
-    if ($('pf-m-num'))    $('pf-m-num').value    = num;
-    if ($('pf-m-base'))   $('pf-m-base').value   = u.base || '';
-    if ($('pf-m-crom'))   $('pf-m-crom').value   = u.cromatica || '';
-    if ($('pf-m-modelo')) $('pf-m-modelo').value = u.modelo || '';
-    if ($('pf-m-id'))     $('pf-m-id').value     = u.placa || '';
-    const eFecha = $('pf-m-fecha');
-    if (eFecha) {
-      const now = new Date();
-      const pad = n => String(n).padStart(2,'0');
-      eFecha.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-      _recalcularDiasManual();
-    }
-    const bar = $('pf-manual-bar');
-    if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    if (eFecha) eFecha.focus();
-  }
-
   function _updatePlatFechaConISO(num,plat,emp,iso){
     const k='ultima_act_'+plat.toLowerCase();
     const u=DB.getUnidad(num,emp);
@@ -1148,18 +1109,8 @@ const UI = (() => {
     };
     DB.registrarFalla(num,emp,fichaFalla);
     // Sincronizar observaciones con el motivo de la falla (local + Supabase)
-    const etiqueta = fichaFalla.esSiniestro ? fichaFalla.motivo : fichaFalla.motivo;
-    DB.upsertUnidad(num, { observaciones: etiqueta, _fuente: 'falla_sync' }, emp);
-    // Actualizar observaciones en gps_barridos de Supabase para todos los navegadores
-    if (window.GPS_SB) {
-      const plataformas = ['CEIBA','SAMSARA','AVL','SCANIA','MAN','VOLVO','MOTIVE'];
-      plataformas.forEach(plat => {
-        GPS_SB._patch('gps_barridos',
-          `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${plat}&num_economico=eq.${encodeURIComponent(num)}`,
-          { datos_raw: { observaciones: etiqueta } }
-        ).catch(()=>{});
-      });
-    }
+    const etiqueta = fichaFalla.motivo || "";
+    DB.upsertUnidad(num, { observaciones: etiqueta, _fuente: "falla_sync" }, emp);
     closeModal();
     toast(`Falla registrada en unidad ${num}${fichaFalla.esSiniestro?' — SINIESTRO':''}`,'warn',5000);
     renderDetalle(num,emp);
@@ -1558,7 +1509,7 @@ const UI = (() => {
   function _renderPlatDetectCards(){
     const el=$('plat-detect-cards');
     if(!el)return;
-    const COLS={CEIBA:'Plate No. | GPS Time | Serial No.',SAMSARA:'Nombre | Última hora de registro | VG/Serie',AVL:'Grouping | Último mensaje',SCANIA:'Vehículo | Hora',MAN:'Dispositivo | VIN | Ultima Conexion',VOLVO:'Vehículo | Tiempo (última actividad)',MOTIVE:'ID Entidad | Última Actividad | Estado | Serie VG | Serie Cam'};
+    const COLS={CEIBA:'Plate No. | GPS Time | Serial No.',SAMSARA:'Nombre | Última hora de registro | VG/Serie',AVL:'Grouping | Último mensaje',SCANIA:'Vehículo | Hora',MAN:'Dispositivo | VIN | Ultima Conexion',VOLVO:'Captura manual',MOTIVE:'ID Entidad | Última Actividad | Estado | Serie VG | Serie Cam'};
     el.innerHTML=ALL_PLATS.map(p=>{
       const d=_barridosPending[p];
       return`<div style="background:var(--bg-panel);border:1px solid ${d?'var(--green-border)':'var(--border)'};border-top:2px solid ${d?'var(--green)':'var(--border)'};border-radius:10px;padding:12px">
@@ -1680,6 +1631,10 @@ const UI = (() => {
       renderPlataformas._syncDone = true;
       App._syncFallasDesdeInicio && App._syncFallasDesdeInicio().then(() => {
         renderPlataformas();
+        // Si hay una plataforma expandida, volver a renderizar su tabla tras el sync
+        if (_platExpandida) {
+          setTimeout(() => _refreshPlatTable(_platExpandida), 100);
+        }
       });
       // Renderizar con datos actuales mientras llega el sync (no bloquear UI)
     }
@@ -1689,8 +1644,9 @@ const UI = (() => {
     const cfg=DB.getConfig();
     const hoy=Date.now();
 
-    // Conteos de tarjetas: solo empresa activa
-    const todasUns = DB.getUnidadesList(emp).filter(u => u.activa);
+    // Para conteos de plataformas: incluir unidades de TODAS las empresas
+    // (MOTIVE/VOLVO pueden tener unidades en empresas distintas a la activa)
+    const todasUns = DB.getEmpresasList().flatMap(e => DB.getUnidadesList(e)).filter(u => u.activa);
 
     // Excluir "Para venta" Y siniestros activos de los conteos operativos de plataformas
     const operativas = todasUns.filter(u =>
@@ -1730,7 +1686,7 @@ const UI = (() => {
         AVL:'Grouping | Último mensaje',
         SCANIA:'Vehículo | Hora',
         MAN:'Dispositivo | VIN | Ultima Conexion',
-        VOLVO:'Vehículo | Tiempo',
+        VOLVO:'Captura manual',
         MOTIVE:'ID Entidad | Última Actividad | Estado | Serie VG | Serie Cam'
       };
       const activa = _platExpandida === p;
@@ -1750,11 +1706,7 @@ const UI = (() => {
         <div class="plat-card-cols">${esc(COLS_MAP[p])}</div>
         <div onclick="event.stopPropagation()">
         ${esManual
-          ? `<label class="plat-card-btn-upload">
-              ↑ Cargar archivo VOLVO
-              <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="UI._cargarArchivoPlat('${p}',this.files[0]);this.value=''">
-            </label>
-            <button class="plat-card-btn-manual" style="margin-top:4px" onclick="UI._abrirCapturaManualPlat('${p}')">+ Captura manual</button>`
+          ? `<button class="plat-card-btn-manual" onclick="UI._abrirCapturaManualPlat('${p}')">+ Captura manual</button>`
           : `<label class="plat-card-btn-upload">
               ↑ Cargar archivo ${p}
               <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="UI._cargarArchivoPlat('${p}',this.files[0]);this.value=''">
@@ -1801,11 +1753,19 @@ const UI = (() => {
     // - Plataformas NO manuales (CEIBA, SAMSARA, AVL, SCANIA, MAN): SOLO unidades que aparecen
     //   en el archivo de esa plataforma (tienen ultima_act_<plat> o fueron cargadas por barrido).
     //   Esto evita que por ejemplo el filtro TAPA muestre unidades sin Samsara.
-    // Scope de unidades: siempre por empresa activa
+    // - Plataformas manuales (VOLVO, MOTIVE): solo las que tienen captura manual (ultima_act_<plat>).
+    // MOTIVE y VOLVO pueden tener unidades en múltiples empresas — cargar de todas
     let scopeUns;
-    scopeUns = DB.getUnidadesList(emp).filter(u =>
-      u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-    );
+    if (plat === 'MOTIVE' || plat === 'VOLVO') {
+      const todasEmpresas = DB.getEmpresasList();
+      scopeUns = todasEmpresas.flatMap(e => DB.getUnidadesList(e)).filter(u =>
+        u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+      );
+    } else {
+      scopeUns = DB.getUnidadesList(emp).filter(u =>
+        u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+      );
+    }
     scopeUns = scopeUns.filter(u => !!u[k]);
 
     // Los selects se pueblan SOLO con valores presentes en el scope (unidades de esta plataforma).
@@ -1915,7 +1875,7 @@ const UI = (() => {
               id: 'pf-est',
               label: 'Estatus',
               allLabel: 'Todos',
-              options: [...new Set(scopeUns.map(u => Parsers.categorizarEstatus(u.estatus)).filter(Boolean))].sort(),
+              options: ['En operación','Fuera de operación'],
               selected: _platTableFilter.est || [],
               onChange: `UI._onPlatFilterChange('${plat}')`
             })}
@@ -2010,13 +1970,18 @@ const UI = (() => {
     // Esto corrige el bug donde filtrar por "TAPA" en Samsara mostraba todas las unidades de
     // TAPA aunque no estuvieran en el archivo de Samsara.
     // Unidades "Para venta" se excluyen de los conteos operativos.
-    let uns = DB.getUnidadesList(emp).filter(u =>
-      u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-    );
+    // VOLVO/MOTIVE son captura manual — pueden tener unidades de cualquier empresa
+    let uns = (plat === 'VOLVO' || plat === 'MOTIVE')
+      ? DB.getEmpresasList().flatMap(e => DB.getUnidadesList(e)).filter(u =>
+          u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+        )
+      : DB.getUnidadesList(emp).filter(u =>
+          u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+        );
     uns = uns.filter(u => !!u[k]);
 
     // Siniestros activos NO aparecen en tabla de Plataformas GPS.
-    // Solo aparecen en Resumen y módulo de Fallas.
+    // Sí aparecen en Resumen y en el módulo de Fallas.
     uns = uns.filter(u => !_tieneSiniestroActivo(u));
 
     const f = _platTableFilter;
@@ -2066,24 +2031,21 @@ const UI = (() => {
       return db - da;
     });
 
+    // Summary: calculado con las unidades ya filtradas (consistente con la tabla)
     const wrap = $('plat-table-wrap');
     if (!wrap) return;
 
-    // Summary: el TOTAL ahora es solo del scope de esta plataforma
     const sum = $('plat-table-summary');
     if (sum) {
-      // Excluir siniestros activos de conteos GPS en plataformas
-      const unsGPS = uns.filter(u => !_tieneSiniestroActivo(u));
-      const enLinea  = unsGPS.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d <= cfg.diasLinea; }).length;
-      const atencion = unsGPS.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasLinea && d <= cfg.diasAtencion; }).length;
-      const fuera    = unsGPS.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasAtencion; }).length;
+      const enLinea  = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d <= cfg.diasLinea; }).length;
+      const atencion = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasLinea && d <= cfg.diasAtencion; }).length;
+      const fuera    = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasAtencion; }).length;
       const sinis    = uns.filter(u => u.siniestro).length;
       sum.innerHTML = `<strong>${uns.length}</strong> unidades en ${plat} · <span style="color:var(--green)">${enLinea} en línea</span> · <span style="color:var(--yellow)">${atencion} atención</span> · <span style="color:var(--red)">${fuera} fuera</span>${sinis?` · <span style="color:#ef4444">🚨 ${sinis} siniestro${sinis>1?'s':''}</span>`:''}`;
     }
 
-    const esManual = plat === 'VOLVO';
-
     if (!uns.length) {
+      const esManual = plat === 'VOLVO';
       const hayFiltros = (f.emp && f.emp.length) || (f.base && f.base.length) ||
                          (f.crom && f.crom.length) || (f.est && f.est.length) ||
                          (f.dias && f.dias.length) || (f.estadoSam && f.estadoSam.length) ||
@@ -2157,24 +2119,7 @@ const UI = (() => {
       const _fallaActiva = (u.fallas||[]).find(f => !f.resuelta);
       const _etiquetaFalla = _fallaActiva ? (_fallaActiva.motivo || _fallaActiva.etiqueta || '') : '';
       const _siniestroLabel = u.siniestro ? (u.siniestroDesc ? `🚨 ${u.siniestroDesc}` : '🚨 SINIESTRO') : '';
-      const _obsRaw = u.observaciones || _siniestroLabel || _etiquetaFalla || '';
-      // Formatear etiquetas conocidas como chips visuales
-      const obsTexto = _obsRaw;
-      const _obsChip = (() => {
-        if (!_obsRaw) return '';
-        const o = _obsRaw.toUpperCase();
-        if (o.includes('SIM BAJA') || o === 'SIM BAJA')
-          return `<span style="background:#7c3aed22;color:#a78bfa;border:1px solid #7c3aed44;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600">📵 SIM BAJA</span>`;
-        if (o.includes('DVR') && (o.includes('DAÑADO') || o.includes('DANADO') || o.includes('MAL')))
-          return `<span style="background:#92400e22;color:#fbbf24;border:1px solid #92400e44;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600">⚠ DVR</span>`;
-        if (o.includes('GPS MAL') || o === 'GPS MAL')
-          return `<span style="background:#78350f22;color:#fb923c;border:1px solid #78350f44;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600">⚠ GPS MAL</span>`;
-        if (o.startsWith('🚨') || o.includes('SINIEST'))
-          return `<span style="background:#7f1d1d22;color:#f87171;border:1px solid #7f1d1d44;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600">🚨 ${_obsRaw.replace(/🚨/g,'').trim()}</span>`;
-        if (o.includes('AFR') || o.includes('FALLA'))
-          return `<span style="background:#78350f22;color:#fb923c;border:1px solid #78350f44;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600">⚠ ${_obsRaw}</span>`;
-        return esc(_obsRaw);
-      })();
+      const obsTexto = u.observaciones || _siniestroLabel || _etiquetaFalla || '';
       const isSelected = _platDetailUnit === u.num;
 
       // Motive: extraer estado y series de datos_raw si los tiene en barrido
@@ -2190,7 +2135,7 @@ const UI = (() => {
         return `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${c}22;color:${c};border:1px solid ${c}44">${motiveEstado||'—'}</span>`;
       })() : '';
 
-      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" ondblclick="event.preventDefault();UI._editarCapturaManuaRow('${esc(u.num)}','${plat}')" style="cursor:pointer;user-select:none;-webkit-user-select:none;-moz-user-select:none" title="${esManual?'Doble clic para editar fecha':''}">
+      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" ondblclick="UI._editarCapturaManuaRow('${esc(u.num)}','${plat}')" style="cursor:pointer" title="${esManual?'Doble clic para editar fecha':''}">
         <td style="font-weight:700">${esc(u.num)}</td>
         <td>${esc(u.base||'—')}</td>
         <td>${esc(u.cromatica||'—')}</td>
@@ -2205,11 +2150,8 @@ const UI = (() => {
           : `<td style="font-family:monospace;font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(idValue)}</td>`
         }
         <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarObsRapido('${esc(u.num)}','${esc(u.empresa||emp)}','${plat}')" title="Click para editar — ${esc(obsTexto||'sin observación')}">
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${_obsChip||'<span style="color:var(--text3);font-style:italic">+ agregar…</span>'}</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${esc(obsTexto)||'<span style="color:var(--text3);font-style:italic">+ agregar…</span>'}</span>
           <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
-        </td>
-        <td style="width:32px;text-align:center" onclick="event.stopPropagation()">
-          <button title="Eliminar unidad de ${plat}" onclick="UI._eliminarUnidadDePlat('${esc(u.num)}','${plat}','${esc(u.empresa||emp)}')" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;padding:2px 4px;border-radius:4px;opacity:0.6" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.6">✕</button>
         </td>
       </tr>`;
     }).join('');
@@ -2217,7 +2159,7 @@ const UI = (() => {
     // Renderizar tabla + detalle inline (si hay unidad enfocada).
     // IMPORTANTE: el detail inline va FUERA del div con scroll, así siempre es visible
     // inmediatamente al hacer click en una fila, sin necesidad de hacer scroll.
-    let html = `<div style="overflow:auto;max-height:55vh"><table style="width:100%;min-width:900px">
+    let html = `<div style="overflow-x:auto"><table style="width:100%;min-width:900px">
       <thead><tr>${th}</tr></thead>
       <tbody id="plat-table-body">${rows}</tbody>
     </table></div>`;
@@ -2565,12 +2507,13 @@ const UI = (() => {
     _platExpandida = plat;
     _platDetailUnit = null;
     renderPlataformas();
+    // Dar foco al input de número y auto-llenar fecha/hora actual
     setTimeout(() => {
       const eNum = $('pf-m-num');
       if (eNum) eNum.focus();
-      // Auto-llenar fecha con hora actual
       const eFecha = $('pf-m-fecha');
       if (eFecha && !eFecha.value) {
+        // datetime-local requiere formato "YYYY-MM-DDTHH:MM"
         const now = new Date();
         const pad = n => String(n).padStart(2,'0');
         eFecha.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
@@ -2634,20 +2577,24 @@ const UI = (() => {
     if (!u || !u.ultima_act || new Date(iso) > new Date(u.ultima_act)) datos.ultima_act = iso;
     DB.upsertUnidad(num, datos, emp);
 
-    // Guardar en Supabase: gps_unidades + gps_barridos
+    // Guardar en Supabase: gps_barridos (para la tabla de Plataformas)
+    // y gps_unidades (para que DB.getUnidadesList la encuentre en cualquier navegador)
     if (window.GPS_SB) {
       const uActual = DB.getUnidad(num, emp) || {};
-      const upsertData = {
+      const raw = { num, fecha: iso, fechaStr: Parsers.fmtDate(iso), plataforma: plat };
+      if (idPlaca) raw.placa = idPlaca;
+
+      // upsert en gps_unidades primero (así la unidad existe antes de upsert en barridos)
+      GPS_SB.upsertUnidad({
         num,
         base:      uActual.base      || $('pf-m-base')?.value   || null,
         cromatica: uActual.cromatica || $('pf-m-crom')?.value   || null,
         modelo:    uActual.modelo    || $('pf-m-modelo')?.value || null,
         placa:     idPlaca           || uActual.placa           || null,
         estatus:   uActual.estatus   || 'EN_OPERACION',
-      };
-      GPS_SB.upsertUnidad(upsertData, emp)
-        .then(() => GPS_SB.saveBarrido(plat, [{ num, fecha: iso, fechaStr: Parsers.fmtDate(iso), plataforma: plat, placa: idPlaca || null }], emp))
-        .catch(e => console.warn('[Captura manual Supabase]', e));
+      }, emp)
+      .then(() => GPS_SB.saveBarrido(plat, [raw], emp))
+      .catch(e => console.warn('[Captura manual] Error guardando en Supabase:', e));
     }
 
     DB.addLog('manual', `${plat}: captura manual unidad ${num} (${Parsers.fmtDate(iso)})`, emp);
@@ -2657,6 +2604,41 @@ const UI = (() => {
     ['pf-m-num','pf-m-base','pf-m-crom','pf-m-modelo','pf-m-id','pf-m-fecha'].forEach(id => { const e = $(id); if (e && e.tagName !== 'DIV') e.value = ''; });
     if ($('pf-m-dias')) $('pf-m-dias').textContent = '—';
     _refreshPlatTable(plat);
+  }
+
+  /**
+   * Doble clic en fila de VOLVO/MOTIVE: pre-llena el formulario de captura manual
+   * con los datos de la unidad para que el usuario solo corrija la fecha.
+   * NO re-renderiza — solo llena los campos del form que ya está visible.
+   */
+  function _editarCapturaManuaRow(num, plat) {
+    const emp = DB.getEmpresaActiva();
+    const u = DB.getUnidad(num, emp);
+    if (!u) return;
+
+    // Limpiar detalle inline si estaba abierto (evita que la tabla desaparezca)
+    _platDetailUnit = null;
+
+    // Pre-llenar campos del form que ya está en el DOM
+    if ($('pf-m-num'))    $('pf-m-num').value    = num;
+    if ($('pf-m-base'))   $('pf-m-base').value   = u.base || '';
+    if ($('pf-m-crom'))   $('pf-m-crom').value   = u.cromatica || '';
+    if ($('pf-m-modelo')) $('pf-m-modelo').value = u.modelo || '';
+    if ($('pf-m-id'))     $('pf-m-id').value     = u.placa || '';
+
+    // Fecha: hora actual del momento del barrido
+    const eFecha = $('pf-m-fecha');
+    if (eFecha) {
+      const now = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      eFecha.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      _recalcularDiasManual();
+    }
+
+    // Scroll suave al formulario y foco en fecha
+    const bar = $('pf-manual-bar');
+    if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (eFecha) eFecha.focus();
   }
 
   function _updatePlatFechaConISO(num, plat, emp, iso) {
@@ -3541,15 +3523,10 @@ const UI = (() => {
     const el = $('graficas-content');
     if (!el) return;
 
-    // Excluir de gráficas: Para venta, siniestros, fuera de operación, desenrolado, fuera de servicio
-    const _estatusExcluidos = new Set(['Para venta','Fuera de operación','Desenrolado','Fuera de servicio','Entregado','Baja','Siniestro']);
-    const uns = DB.getUnidadesList(emp).filter(u => {
-      if (!u.activa) return false;
-      if (_tieneSiniestroActivo(u)) return false;
-      const cat = Parsers.categorizarEstatus(u.estatus);
-      if (_estatusExcluidos.has(cat)) return false;
-      return true;
-    });
+    // Excluir Para venta y siniestros activos de gráficas
+    const uns = DB.getUnidadesList(emp).filter(u =>
+      u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+    );
 
     // LÓGICA CORREGIDA (v7.1):
     // Cada plataforma tiene su PROPIO UNIVERSO (sus dispositivos, no todas las unidades de la empresa).
@@ -3561,21 +3538,12 @@ const UI = (() => {
     const statsByPlat = ALL_PLATS.map(p => {
       const k = 'ultima_act_' + p.toLowerCase();
       const conFecha = uns.filter(u => u[k]);
-      // Unidades con falla AFR activa (no siniestro) cuentan como EN LÍNEA — están en operación
-      const tieneAFR = u => (u.fallas||[]).some(f => !f.resuelta && !f.esSiniestro);
-      const enLinea = conFecha.filter(u => {
-        if (tieneAFR(u)) return true; // AFR activo → en línea
-        return Math.floor((hoy - new Date(u[k]))/86400000) <= cfg.diasLinea;
-      }).length;
+      const enLinea = conFecha.filter(u => Math.floor((hoy - new Date(u[k]))/86400000) <= cfg.diasLinea).length;
       const atencion = conFecha.filter(u => {
-        if (tieneAFR(u)) return false; // AFR no cuenta como atención
         const d = Math.floor((hoy - new Date(u[k]))/86400000);
         return d > cfg.diasLinea && d <= cfg.diasAtencion;
       }).length;
-      const fueraEstricto = conFecha.filter(u => {
-        if (tieneAFR(u)) return false; // AFR no cuenta como fuera
-        return Math.floor((hoy - new Date(u[k]))/86400000) > cfg.diasAtencion;
-      }).length;
+      const fueraEstricto = conFecha.filter(u => Math.floor((hoy - new Date(u[k]))/86400000) > cfg.diasAtencion).length;
       const sinEquipo = uns.length - conFecha.length;           // unidades sin este dispositivo (informativo)
       const totalPlat = conFecha.length;                        // universo REAL de esta plataforma
       const fueraTotal = atencion + fueraEstricto;              // atención cuenta como fuera en la dona
@@ -4823,9 +4791,9 @@ const UI = (() => {
           <span class="plat-filter-lbl">ESTATUS OP.</span>
           <select id="ma-f-est" onchange="UI._onMaestraFilterChange()">
             <option value="">Todos</option>
-            ${[...new Set(uns.map(u => Parsers.categorizarEstatus(u.estatus)).filter(Boolean))].sort().map(e =>
-              `<option value="${esc(e)}" ${f.est===e?'selected':''}>${esc(e)}</option>`
-            ).join('')}
+            <option value="En operación" ${f.est==='En operación'?'selected':''}>En operación</option>
+            <option value="Fuera de operación" ${f.est==='Fuera de operación'?'selected':''}>Fuera de op.</option>
+            <option value="Para venta" ${f.est==='Para venta'?'selected':''}>Para venta</option>
           </select>
         </div>
         <button class="act-btn" onclick="UI._resetMaestraFilters()">↺ Reset</button>
@@ -4910,8 +4878,25 @@ const UI = (() => {
     DB.setEmpresaActiva(name);
     const sel=$('empresa-select');if(sel)sel.value=name;
     const selE=$('filter-emp');if(selE)selE.value=name;
+
+    // Aplicar tema visual de empresa
+    _applyEmpresaTheme(name);
+
     const active=document.querySelector('.panel.active');
     if(active)App.nav(null,active.id);
+  }
+
+  function _applyEmpresaTheme(name) {
+    // Transición suave
+    document.body.classList.add('empresa-transition');
+    setTimeout(() => document.body.classList.remove('empresa-transition'), 300);
+
+    // Aplicar data-empresa al body para activar el tema CSS
+    document.body.setAttribute('data-empresa', name || 'ETN');
+
+    // Actualizar badge en topbar
+    const badge = document.getElementById('tb-empresa-badge');
+    if (badge) badge.textContent = name || 'ETN';
   }
 
   /* ══ EXPORT ═══════════════════════════════════════════ */
@@ -4977,7 +4962,7 @@ const UI = (() => {
     _recalcularDiasManual, _guardarCapturaManualPlat, _editarCapturaManuaRow,
     _updatePlatFechaConISO,
     // v7.1: tabs del detalle inline y guardar observaciones in-situ
-    _cambiarPlatDetailTab, _guardarObsInline, _editarObsRapido, _eliminarUnidadDePlat,
+    _cambiarPlatDetailTab, _guardarObsInline, _editarObsRapido,
     // v7.2: multi-select dropdowns
     _msToggle, _msOnCheck, _msSelectAll, _msFilterOptions,
     // alertas
@@ -5011,7 +4996,7 @@ const UI = (() => {
     handleAsigFile, procesarAsig,
     handleBarridoFiles, integrarBarridos,
     // empresa
-    cambiarEmpresa,
+    cambiarEmpresa, _applyEmpresaTheme,
     // modal
     closeModal,
     // export
