@@ -2088,72 +2088,101 @@ const UI = (() => {
       <th>OBSERVACIONES</th>`;
 
     const rows = uns.map(u => {
-      const fecha = u[k];
-      const d = fecha ? Math.floor((hoy - new Date(fecha))/86400000) : null;
+      try {
+        // Normalizar campos a string para evitar errores en esc()
+        const safeU = {
+          num:         String(u.num         || ''),
+          base:        String(u.base        || ''),
+          cromatica:   String(u.cromatica   || ''),
+          modelo:      String(u.modelo      || ''),
+          placa:       String(u.placa       || ''),
+          serie:       String(u.serie       || ''),
+          empresa:     String(u.empresa     || emp),
+          empresa_asig:String(u.empresa_asig|| emp),
+          observaciones: typeof u.observaciones === 'string' ? u.observaciones : (u.observaciones ? JSON.stringify(u.observaciones) : ''),
+          dvr_ceiba:   String(u.dvr_ceiba   || ''),
+          vin_samsara: String(u.vin_samsara || ''),
+          placa_man:   String(u.placa_man   || ''),
+          placa_scania:String(u.placa_scania|| ''),
+          siniestro:   !!u.siniestro,
+          siniestroDesc: String(u.siniestroDesc || ''),
+          fallas:      Array.isArray(u.fallas) ? u.fallas : [],
+          _motiveRaw:  u._motiveRaw || {},
+          estado_motive: String(u.estado_motive || ''),
+          empresa_motive: String(u.empresa_motive || ''),
+          serie_vg_motive: String(u.serie_vg_motive || ''),
+          serie_cam_motive: String(u.serie_cam_motive || ''),
+          motive_vg:   String(u.motive_vg   || ''),
+          motive_cam:  String(u.motive_cam  || ''),
+        };
+        const fecha = u[k];
+        const d = fecha ? Math.floor((hoy - new Date(fecha))/86400000) : null;
 
-      // Estatus: ON-LINE / ATENCION / FUERA / SIN DATOS
-      let platBadgeColor, platBadgeLabel;
-      if (!fecha)                       { platBadgeColor = 'var(--text3)'; platBadgeLabel = 'SIN DATOS'; }
-      else if (d <= cfg.diasLinea)       { platBadgeColor = 'var(--green)'; platBadgeLabel = 'EN LÍNEA'; }
-      else if (d <= cfg.diasAtencion)    { platBadgeColor = 'var(--yellow)'; platBadgeLabel = 'ATENCIÓN'; }
-      else                               { platBadgeColor = 'var(--red)'; platBadgeLabel = 'FUERA'; }
-      const estatusCell = `<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${platBadgeColor}22;color:${platBadgeColor};border:1px solid ${platBadgeColor}44">${platBadgeLabel}</span>`;
+        // Estatus badge
+        let platBadgeColor, platBadgeLabel;
+        if (!fecha)                    { platBadgeColor = 'var(--text3)'; platBadgeLabel = 'SIN DATOS'; }
+        else if (d <= cfg.diasLinea)   { platBadgeColor = 'var(--green)'; platBadgeLabel = 'EN LÍNEA'; }
+        else if (d <= cfg.diasAtencion){ platBadgeColor = 'var(--yellow)'; platBadgeLabel = 'ATENCIÓN'; }
+        else                           { platBadgeColor = 'var(--red)'; platBadgeLabel = 'FUERA'; }
+        const estatusCell = `<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${platBadgeColor}22;color:${platBadgeColor};border:1px solid ${platBadgeColor}44">${platBadgeLabel}</span>`;
 
-      // Estado adicional para Samsara — VALOR LITERAL del archivo (col E)
-      let estadoSamsaraCell = '';
-      if (incluyeEstadoCol) {
-        const es = _estadoSamsaraDe(u);
-        const cfgEst = {
-          FUNCIONANDO:  { c:'#10b981', bg:'rgba(16,185,129,.15)', br:'rgba(16,185,129,.3)', l:'FUNCIONANDO' },
-          NO_DETECTADO: { c:'#ef4444', bg:'rgba(239,68,68,.15)', br:'rgba(239,68,68,.3)', l:'NO DETECTADO' },
-          SIN_VIN:      { c:'#a78bfa', bg:'rgba(139,92,246,.15)', br:'rgba(139,92,246,.3)', l:'SIN VG' },
-          SIN_PLACA:    { c:'#f59e0b', bg:'rgba(245,158,11,.15)', br:'rgba(245,158,11,.3)', l:'SIN PLACA' }
-        }[es] || { c:'#9ca3af', bg:'rgba(156,163,175,.15)', br:'rgba(156,163,175,.3)', l: es || '—' };
-        estadoSamsaraCell = `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${cfgEst.bg};color:${cfgEst.c};border:1px solid ${cfgEst.br}">${cfgEst.l}</span>`;
-      }
-
-      // Identificador SEGÚN la plataforma (desde el campo específico del barrido)
-      const idValue = _idValorUnidad(u, plat);
-      const selected = _platDetailUnit === u.num ? 'background:rgba(59,130,246,.12)' : '';
-      // obsTexto: primero observaciones manuales, si no la etiqueta de la falla activa
-      const _fallaActiva = (u.fallas||[]).find(f => !f.resuelta);
-      const _etiquetaFalla = _fallaActiva ? (_fallaActiva.motivo || _fallaActiva.etiqueta || '') : '';
-      const _siniestroLabel = u.siniestro ? (u.siniestroDesc ? `🚨 ${u.siniestroDesc}` : '🚨 SINIESTRO') : '';
-      const obsTexto = u.observaciones || _siniestroLabel || _etiquetaFalla || '';
-      const isSelected = _platDetailUnit === u.num;
-
-      // Motive: extraer estado y series de datos_raw si los tiene en barrido
-      const motiveRaw = esMotive ? (u._motiveRaw || {}) : {};
-      const motiveEstado = motiveRaw.estado || u.estado_motive || '';
-      const motiveEmpresa = motiveRaw.empresa || u.empresa_motive || '';
-      const motiveSerieVG  = motiveRaw.serieGateway || u.serie_vg_motive || u.motive_vg || '';
-      const motiveSerieCam = motiveRaw.serieDashcam  || u.serie_cam_motive || u.motive_cam || '';
-      const motiveEstadoCell = esMotive ? (() => {
-        const e = String(motiveEstado).toUpperCase();
-        const isOff = e.includes('POWERED OFF') || e.includes('OFF');
-        const c = isOff ? 'var(--red)' : (e.includes('NORMAL') ? 'var(--green)' : 'var(--text3)');
-        return `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${c}22;color:${c};border:1px solid ${c}44">${motiveEstado||'—'}</span>`;
-      })() : '';
-
-      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" ondblclick="UI._editarCapturaManuaRow('${esc(u.num)}','${plat}')" style="cursor:pointer" title="${esManual?'Doble clic para editar fecha':''}">
-        <td style="font-weight:700">${esc(u.num)}</td>
-        <td>${esc(u.base||'—')}</td>
-        <td>${esc(u.cromatica||'—')}</td>
-        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.modelo||'—')}</td>
-        <td>${estatusCell}</td>
-        ${incluyeEstadoCol ? `<td>${estadoSamsaraCell}</td>` : ''}
-        ${esMotive ? `<td>${motiveEstadoCell}</td><td style="font-size:11px">${esc(motiveEmpresa||'—')}</td>` : ''}
-        <td style="font-size:11px">${fecha?Parsers.fmtDate(fecha):'<span style="color:var(--text3)">Sin datos</span>'}</td>
-        <td>${diasBadge(d)}</td>
-        ${esMotive
-          ? `<td style="font-family:monospace;font-size:10px">${esc(motiveSerieVG||'—')}</td><td style="font-family:monospace;font-size:10px">${esc(motiveSerieCam||'—')}</td>`
-          : `<td style="font-family:monospace;font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(idValue)}</td>`
+        // Estado Samsara
+        let estadoSamsaraCell = '';
+        if (incluyeEstadoCol) {
+          const es = _estadoSamsaraDe(u);
+          const cfgEst = {
+            FUNCIONANDO:  { c:'#10b981', bg:'rgba(16,185,129,.15)', br:'rgba(16,185,129,.3)', l:'FUNCIONANDO' },
+            NO_DETECTADO: { c:'#ef4444', bg:'rgba(239,68,68,.15)', br:'rgba(239,68,68,.3)', l:'NO DETECTADO' },
+            SIN_VIN:      { c:'#a78bfa', bg:'rgba(139,92,246,.15)', br:'rgba(139,92,246,.3)', l:'SIN VG' },
+            SIN_PLACA:    { c:'#f59e0b', bg:'rgba(245,158,11,.15)', br:'rgba(245,158,11,.3)', l:'SIN PLACA' }
+          }[es] || { c:'#9ca3af', bg:'rgba(156,163,175,.15)', br:'rgba(156,163,175,.3)', l: es || '—' };
+          estadoSamsaraCell = `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${cfgEst.bg};color:${cfgEst.c};border:1px solid ${cfgEst.br}">${cfgEst.l}</span>`;
         }
-        <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarObsRapido('${esc(u.num)}','${esc(u.empresa||emp)}','${plat}')" title="Click para editar — ${esc(obsTexto||'sin observación')}">
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${esc(obsTexto)||'<span style="color:var(--text3);font-style:italic">+ agregar…</span>'}</span>
-          <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
-        </td>
-      </tr>`;
+
+        const idValue   = _idValorUnidad(u, plat);
+        const isSelected = _platDetailUnit === safeU.num;
+        const _fallaActiva  = safeU.fallas.find(fa => !fa.resuelta);
+        const _etiquetaFalla = _fallaActiva ? String(_fallaActiva.motivo || _fallaActiva.etiqueta || '') : '';
+        const _siniestroLabel = safeU.siniestro ? (safeU.siniestroDesc ? `🚨 ${safeU.siniestroDesc}` : '🚨 SINIESTRO') : '';
+        const obsTexto = safeU.observaciones || _siniestroLabel || _etiquetaFalla || '';
+
+        // Motive
+        const motiveRaw      = esMotive ? safeU._motiveRaw : {};
+        const motiveEstado   = String(motiveRaw.estado   || safeU.estado_motive   || '');
+        const motiveEmpresa  = String(motiveRaw.empresa  || safeU.empresa_motive  || '');
+        const motiveSerieVG  = String(motiveRaw.serieGateway || safeU.serie_vg_motive  || safeU.motive_vg  || '');
+        const motiveSerieCam = String(motiveRaw.serieDashcam  || safeU.serie_cam_motive || safeU.motive_cam || '');
+        const motiveEstadoCell = esMotive ? (() => {
+          const e = motiveEstado.toUpperCase();
+          const isOff = e.includes('POWERED OFF') || e.includes('OFF');
+          const c = isOff ? 'var(--red)' : (e.includes('NORMAL') ? 'var(--green)' : 'var(--text3)');
+          return `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${c}22;color:${c};border:1px solid ${c}44">${motiveEstado||'—'}</span>`;
+        })() : '';
+
+        const esManualRow = plat === 'VOLVO';
+        return `<tr data-num="${esc(safeU.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(safeU.num)}','${plat}')" ondblclick="UI._editarCapturaManuaRow('${esc(safeU.num)}','${plat}')" style="cursor:pointer" title="${esManualRow?'Doble clic para editar fecha':''}">
+          <td style="font-weight:700">${esc(safeU.num)}</td>
+          <td>${esc(safeU.base||'—')}</td>
+          <td>${esc(safeU.cromatica||'—')}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(safeU.modelo||'—')}</td>
+          <td>${estatusCell}</td>
+          ${incluyeEstadoCol ? `<td>${estadoSamsaraCell}</td>` : ''}
+          ${esMotive ? `<td>${motiveEstadoCell}</td><td style="font-size:11px">${esc(motiveEmpresa||'—')}</td>` : ''}
+          <td style="font-size:11px">${fecha?Parsers.fmtDate(fecha):'<span style="color:var(--text3)">Sin datos</span>'}</td>
+          <td>${diasBadge(d)}</td>
+          ${esMotive
+            ? `<td style="font-family:monospace;font-size:10px">${esc(motiveSerieVG||'—')}</td><td style="font-family:monospace;font-size:10px">${esc(motiveSerieCam||'—')}</td>`
+            : `<td style="font-family:monospace;font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(idValue)}</td>`
+          }
+          <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarObsRapido('${esc(safeU.num)}','${esc(safeU.empresa_asig)}','${plat}')" title="Click para editar — ${esc(obsTexto||'sin observación')}">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${esc(obsTexto)||'<span style="color:var(--text3);font-style:italic">+ agregar…</span>'}</span>
+            <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
+          </td>
+        </tr>`;
+      } catch(rowErr) {
+        console.warn('[PlatTable] Error generando fila para unidad', u && u.num, rowErr);
+        return `<tr><td colspan="9" style="color:var(--text3);font-size:11px;padding:4px 8px">— error fila ${u&&u.num||'?'} —</td></tr>`;
+      }
     }).join('');
 
     // Renderizar tabla + detalle inline (si hay unidad enfocada).
