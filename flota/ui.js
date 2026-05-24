@@ -2137,15 +2137,7 @@ const UI = (() => {
         return `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${c}22;color:${c};border:1px solid ${c}44">${motiveEstado||'—'}</span>`;
       })() : '';
 
-      // Para VOLVO/MOTIVE: doble clic edita la fecha; el click simple se bloquea
-      // si viene de un doble clic (evita que abra el detalle inline al editar)
-      const clickHandler = esManual
-        ? `onclick="if(event.detail===1){this._dblPending=setTimeout(()=>UI._onPlatRowClick('${esc(u.num)}','${plat}'),220)}else{clearTimeout(this._dblPending)}"`
-        : `onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')"`;
-      const dblHandler = esManual
-        ? `ondblclick="event.stopPropagation();clearTimeout(this._dblPending);UI._editarCapturaManuaRow('${esc(u.num)}','${plat}')"`
-        : '';
-      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" ${clickHandler} ${dblHandler} style="cursor:pointer" title="${esManual?'Doble clic para editar fecha':''}" >
+      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" ondblclick="UI._editarCapturaManuaRow('${esc(u.num)}','${plat}')" style="cursor:pointer" title="${esManual?'Doble clic para editar fecha':''}">
         <td style="font-weight:700">${esc(u.num)}</td>
         <td>${esc(u.base||'—')}</td>
         <td>${esc(u.cromatica||'—')}</td>
