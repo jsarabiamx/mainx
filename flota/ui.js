@@ -2128,10 +2128,15 @@ const UI = (() => {
         return `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${c}22;color:${c};border:1px solid ${c}44">${motiveEstado||'—'}</span>`;
       })() : '';
 
+      // Para VOLVO/MOTIVE: doble clic edita la fecha; el click simple se bloquea
+      // si viene de un doble clic (evita que abra el detalle inline al editar)
+      const clickHandler = esManual
+        ? `onclick="if(event.detail===1){this._dblPending=setTimeout(()=>UI._onPlatRowClick('${esc(u.num)}','${plat}'),220)}else{clearTimeout(this._dblPending)}"`
+        : `onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')"`;
       const dblHandler = esManual
-        ? `ondblclick="event.stopPropagation();UI._editarCapturaManuaRow('${esc(u.num)}','${plat}')"`
+        ? `ondblclick="event.stopPropagation();clearTimeout(this._dblPending);UI._editarCapturaManuaRow('${esc(u.num)}','${plat}')"`
         : '';
-      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" ${dblHandler} style="cursor:pointer" title="${esManual?'Doble clic para editar fecha':''}" >
+      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" ${clickHandler} ${dblHandler} style="cursor:pointer" title="${esManual?'Doble clic para editar fecha':''}" >
         <td style="font-weight:700">${esc(u.num)}</td>
         <td>${esc(u.base||'—')}</td>
         <td>${esc(u.cromatica||'—')}</td>
@@ -2595,38 +2600,36 @@ const UI = (() => {
   /**
    * Doble clic en fila de VOLVO/MOTIVE: pre-llena el formulario de captura manual
    * con los datos de la unidad para que el usuario solo corrija la fecha.
+   * NO re-renderiza — solo llena los campos del form que ya está visible.
    */
   function _editarCapturaManuaRow(num, plat) {
     const emp = DB.getEmpresaActiva();
     const u = DB.getUnidad(num, emp);
     if (!u) return;
 
-    // Asegurarse de que el panel de captura manual esté visible
-    _platExpandida = plat;
-    renderPlataformas();
+    // Limpiar detalle inline si estaba abierto (evita que la tabla desaparezca)
+    _platDetailUnit = null;
 
-    setTimeout(() => {
-      // Pre-llenar todos los campos
-      if ($('pf-m-num'))    { $('pf-m-num').value = num; }
-      if ($('pf-m-base'))   { $('pf-m-base').value = u.base || ''; }
-      if ($('pf-m-crom'))   { $('pf-m-crom').value = u.cromatica || ''; }
-      if ($('pf-m-modelo')) { $('pf-m-modelo').value = u.modelo || ''; }
-      if ($('pf-m-id'))     { $('pf-m-id').value = u.placa || ''; }
+    // Pre-llenar campos del form que ya está en el DOM
+    if ($('pf-m-num'))    $('pf-m-num').value    = num;
+    if ($('pf-m-base'))   $('pf-m-base').value   = u.base || '';
+    if ($('pf-m-crom'))   $('pf-m-crom').value   = u.cromatica || '';
+    if ($('pf-m-modelo')) $('pf-m-modelo').value = u.modelo || '';
+    if ($('pf-m-id'))     $('pf-m-id').value     = u.placa || '';
 
-      // Fecha: usar la hora actual (es un barrido del día de hoy)
-      const eFecha = $('pf-m-fecha');
-      if (eFecha) {
-        const now = new Date();
-        const pad = n => String(n).padStart(2,'0');
-        eFecha.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-        _recalcularDiasManual();
-      }
+    // Fecha: hora actual del momento del barrido
+    const eFecha = $('pf-m-fecha');
+    if (eFecha) {
+      const now = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      eFecha.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      _recalcularDiasManual();
+    }
 
-      // Scroll al form y foco en la fecha para que el usuario la corrija si quiere
-      const bar = $('pf-manual-bar');
-      if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      if ($('pf-m-fecha')) $('pf-m-fecha').focus();
-    }, 120);
+    // Scroll suave al formulario y foco en fecha
+    const bar = $('pf-manual-bar');
+    if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (eFecha) eFecha.focus();
   }
 
   function _updatePlatFechaConISO(num, plat, emp, iso) {
