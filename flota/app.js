@@ -450,37 +450,44 @@ const App = (() => {
     document.getElementById('tb-date').textContent = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
 
     // ── Carga desde Supabase ──────────────────────────────────────────────
-    // Solo sincronizar si: (a) no hay datos locales, o (b) los datos tienen >24h sin actualizar
+    // SIEMPRE sincronizar desde Supabase al iniciar.
+    // Esto garantiza que los barridos GPS (ultima_act_<plat>) estén aplicados
+    // en cualquier dispositivo/sesión, sin depender de localStorage previo.
     const hayDatos = DB.getUnidadesList(DB.getEmpresaActiva()).length > 0;
-    const ultimaActLocal = DB.getUltimaActualizacion ? DB.getUltimaActualizacion() : null;
-    const horasDesdeUpdate = ultimaActLocal ? (Date.now() - new Date(ultimaActLocal)) / 3600000 : 999;
-    const datosViejos = horasDesdeUpdate > 24;
 
     if (!hayDatos) {
-      // Sin datos locales: carga completa desde Supabase
+      // Sin datos locales: carga completa bloqueante con banner
       _showSyncBanner('⏳ Cargando datos desde Supabase...');
       DB.initFromSupabase().then(ok => {
         _hideSyncBanner();
         if (ok) { UI.renderResumen(); populateEmpresaSelect(); }
       });
-    } else if (datosViejos) {
-      // Datos muy viejos: sincronizar en background (>24h)
-      console.log('[App] Datos locales de', Math.round(horasDesdeUpdate), 'h — sync Supabase en background');
+    } else {
+      // Hay datos locales: sincronizar en background (no bloquea UI)
+      // Incluye asignaciones + barridos GPS + fallas — siempre frescos desde Supabase
+      console.log('[App] Datos locales detectados — sincronizando barridos GPS desde Supabase en background...');
       setTimeout(() => {
         DB.initFromSupabase().then(ok => {
-          if (ok) UI.renderResumen();
+          if (ok) {
+            UI.renderResumen();
+            // Si el panel de plataformas está abierto, actualizarlo también
+            const panelPlat = document.getElementById('panel-plataformas');
+            if (panelPlat && panelPlat.classList.contains('active')) {
+              UI.renderPlataformas();
+            }
+          }
         });
-      }, 3000);
+      }, 1500);
     }
-    // Si hayDatos y son recientes: NO sync de asignaciones — respetar datos locales
-    // PERO siempre sincronizar fallas activas (siniestros, AFR) desde Supabase
+
+    // Siempre sincronizar fallas activas (siniestros, AFR) desde Supabase
     // Esto garantiza que cualquier dispositivo vea siniestros registrados en otro
     setTimeout(() => {
       _syncFallasDesdeInicio();
-    }, 1500);
+    }, 3000);
 
     // Iniciar sincronización en tiempo real de fallas
-    setTimeout(_startFallasSync, 4000);
+    setTimeout(_startFallasSync, 5000);
   }
 
   function _showSyncBanner(msg) {
