@@ -4887,16 +4887,32 @@ const UI = (() => {
   }
 
   function _applyEmpresaTheme(name) {
-    // Transición suave
     document.body.classList.add('empresa-transition');
-    setTimeout(() => document.body.classList.remove('empresa-transition'), 300);
-
-    // Aplicar data-empresa al body para activar el tema CSS
+    setTimeout(() => document.body.classList.remove('empresa-transition'), 280);
     document.body.setAttribute('data-empresa', name || 'ETN');
-
-    // Actualizar badge en topbar
     const badge = document.getElementById('tb-empresa-badge');
     if (badge) badge.textContent = name || 'ETN';
+  }
+
+  // Estado de grupos colapsados — persiste en memoria durante la sesión
+  const _navCollapsed = {};
+
+  function _toggleNavGroup(group) {
+    const el = document.querySelector(`.nav-group[data-group="${group}"]`);
+    if (!el) return;
+    const isCollapsed = el.classList.toggle('collapsed');
+    _navCollapsed[group] = isCollapsed;
+  }
+
+  // Al inicio, colapsar "Datos" y "Análisis" por defecto para ahorrar espacio
+  function _initNavGroups() {
+    ['datos','sims','analisis','sistema'].forEach(g => {
+      if (_navCollapsed[g] === undefined) _navCollapsed[g] = true;
+      if (_navCollapsed[g]) {
+        const el = document.querySelector(`.nav-group[data-group="${g}"]`);
+        if (el) el.classList.add('collapsed');
+      }
+    });
   }
 
   /* ══ EXPORT ═══════════════════════════════════════════ */
@@ -4996,7 +5012,7 @@ const UI = (() => {
     handleAsigFile, procesarAsig,
     handleBarridoFiles, integrarBarridos,
     // empresa
-    cambiarEmpresa, _applyEmpresaTheme,
+    cambiarEmpresa, _applyEmpresaTheme, _toggleNavGroup, _initNavGroups,
     // modal
     closeModal,
     // export
