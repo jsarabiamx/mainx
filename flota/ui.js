@@ -2031,17 +2031,15 @@ const UI = (() => {
       return db - da;
     });
 
+    // Summary: calculado con las unidades ya filtradas (consistente con la tabla)
     const wrap = $('plat-table-wrap');
     if (!wrap) return;
 
-    // Summary: el TOTAL ahora es solo del scope de esta plataforma
     const sum = $('plat-table-summary');
     if (sum) {
-      // Excluir siniestros activos de conteos GPS en plataformas
-      const unsGPS = uns.filter(u => !_tieneSiniestroActivo(u));
-      const enLinea  = unsGPS.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d <= cfg.diasLinea; }).length;
-      const atencion = unsGPS.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasLinea && d <= cfg.diasAtencion; }).length;
-      const fuera    = unsGPS.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasAtencion; }).length;
+      const enLinea  = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d <= cfg.diasLinea; }).length;
+      const atencion = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasLinea && d <= cfg.diasAtencion; }).length;
+      const fuera    = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasAtencion; }).length;
       const sinis    = uns.filter(u => u.siniestro).length;
       sum.innerHTML = `<strong>${uns.length}</strong> unidades en ${plat} · <span style="color:var(--green)">${enLinea} en línea</span> · <span style="color:var(--yellow)">${atencion} atención</span> · <span style="color:var(--red)">${fuera} fuera</span>${sinis?` · <span style="color:#ef4444">🚨 ${sinis} siniestro${sinis>1?'s':''}</span>`:''}`;
     }
@@ -2161,7 +2159,7 @@ const UI = (() => {
     // Renderizar tabla + detalle inline (si hay unidad enfocada).
     // IMPORTANTE: el detail inline va FUERA del div con scroll, así siempre es visible
     // inmediatamente al hacer click en una fila, sin necesidad de hacer scroll.
-    let html = `<div style="overflow:auto;max-height:55vh"><table style="width:100%;min-width:900px">
+    let html = `<div style="overflow-x:auto"><table style="width:100%;min-width:900px">
       <thead><tr>${th}</tr></thead>
       <tbody id="plat-table-body">${rows}</tbody>
     </table></div>`;
