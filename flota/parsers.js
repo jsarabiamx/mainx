@@ -373,7 +373,7 @@ const Parsers = (() => {
         motor:        String(row[colIdx.motor]        || '').trim(),
         placa:        String(row[colIdx.placa]        || '').trim(),
         asientos:     String(row[colIdx.asientos]     || '').trim(),
-        observaciones:String(row[colIdx.observaciones]|| '').trim(),
+        obs_asig:     String(row[colIdx.observaciones]|| '').trim(), // campo interno de asignación, NO usar como observación de falla
         _duplicate:   isDuplicate,
         _rowIdx:      i + 1
       });
