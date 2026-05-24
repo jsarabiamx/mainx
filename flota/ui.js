@@ -1631,6 +1631,10 @@ const UI = (() => {
       renderPlataformas._syncDone = true;
       App._syncFallasDesdeInicio && App._syncFallasDesdeInicio().then(() => {
         renderPlataformas();
+        // Si hay una plataforma expandida, volver a renderizar su tabla tras el sync
+        if (_platExpandida) {
+          setTimeout(() => _refreshPlatTable(_platExpandida), 100);
+        }
       });
       // Renderizar con datos actuales mientras llega el sync (no bloquear UI)
     }
