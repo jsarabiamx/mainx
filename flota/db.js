@@ -187,18 +187,54 @@ const DB = (() => {
         }
 
         // ── 2. Barridos GPS — actualizar ultima_act por plataforma ─────────
+        // NOTA: Se cargan barridos de TODAS las empresas conocidas para cubrir
+        // el caso de MOTIVE (archivo multi-empresa guardado con empresa_id real).
+        const todasEmpresas = Object.keys(_s.empresas || {});
         const barridoRows = await GPS_SB._getRaw('gps_barridos',
-          `empresa_id=eq.${encodeURIComponent(emp)}&activa=eq.true`
+          `empresa_id=in.(${todasEmpresas.map(e => encodeURIComponent(e)).join(',')})&activa=eq.true`
         );
         if (barridoRows && barridoRows.length > 0) {
           const idFieldByPlat = { CEIBA:'dvr_ceiba', SAMSARA:'vin_samsara', MAN:'placa_man', SCANIA:'placa_scania' };
           barridoRows.forEach(r => {
             const num = String(r.num_economico);
-            const u = (_s.unidades[emp] || {})[num];
-            if (!u) return;
             const plat = (r.plataforma || '').toUpperCase();
             const platKey = 'ultima_act_' + plat.toLowerCase();
             const raw = r.datos_raw || {};
+
+            // Para MOTIVE: la empresa real del registro puede estar en datos_raw.empresa
+            // (el archivo MOTIVE es multi-empresa). Usar la empresa del barrido en Supabase.
+            const empReal = r.empresa_id || emp;
+
+            // Asegurar que el dict de unidades existe para esta empresa
+            if (!_s.unidades[empReal]) _s.unidades[empReal] = {};
+
+            // Obtener unidad existente o crear una mínima para que aparezca en la tabla de plataformas
+            let u = _s.unidades[empReal][num];
+            if (!u) {
+              _s.unidades[empReal][num] = {
+                num,
+                economico:     num,
+                cromatica:     raw.cromatica   || '',
+                estatus:       raw.estatus     || '',
+                modelo:        raw.modelo      || '',
+                rol:           '',
+                base:          raw.base        || '',
+                empresa_asig:  empReal,
+                serie:         raw.serie       || '',
+                placa:         raw.placa       || '',
+                observaciones: r.observaciones || raw.observaciones || '',
+                mes:           '',
+                activa:        true,
+                fallas:        [],
+                historialFallas: [],
+                historial:     [],
+                siniestro:     false,
+                siniestroDesc: '',
+                fallaCount:    0,
+                _fuente:       'supabase_barrido'
+              };
+              u = _s.unidades[empReal][num];
+            }
 
             // Fecha: usar ultima_conexion o fallback a datos_raw.fecha
             const fechaStr = r.ultima_conexion || raw.fecha || null;
