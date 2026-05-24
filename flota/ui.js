@@ -1644,13 +1644,10 @@ const UI = (() => {
     const cfg=DB.getConfig();
     const hoy=Date.now();
 
-    // Para conteos de plataformas: incluir unidades de TODAS las empresas
-    // (MOTIVE/VOLVO pueden tener unidades en empresas distintas a la activa)
-    const todasUns = DB.getEmpresasList().flatMap(e => DB.getUnidadesList(e)).filter(u => u.activa);
-
     // Excluir "Para venta" Y siniestros activos de los conteos operativos de plataformas
-    const operativas = todasUns.filter(u =>
-      Parsers.categorizarEstatus(u.estatus) !== 'Para venta' && !_tieneSiniestroActivo(u)
+    // Solo la empresa activa — MOTIVE/VOLVO manejan multi-empresa dentro de su propia tabla
+    const operativas = DB.getUnidadesList(emp).filter(u =>
+      u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta' && !_tieneSiniestroActivo(u)
     );
 
     // Barra de acciones superior (export + cargar masivo)
