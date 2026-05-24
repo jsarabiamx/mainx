@@ -1703,7 +1703,13 @@ const UI = (() => {
         <div class="plat-card-cols">${esc(COLS_MAP[p])}</div>
         <div onclick="event.stopPropagation()">
         ${esManual
-          ? `<button class="plat-card-btn-manual" onclick="UI._abrirCapturaManualPlat('${p}')">+ Captura manual</button>`
+          ? `<div style="display:flex;flex-direction:column;gap:6px">
+              <label class="plat-card-btn-upload">
+                ↑ Cargar archivo ${p}
+                <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="UI._cargarArchivoPlat('${p}',this.files[0]);this.value=''">
+              </label>
+              <button class="plat-card-btn-manual" onclick="UI._abrirCapturaManualPlat('${p}')">+ Captura manual</button>
+             </div>`
           : `<label class="plat-card-btn-upload">
               ↑ Cargar archivo ${p}
               <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="UI._cargarArchivoPlat('${p}',this.files[0]);this.value=''">
