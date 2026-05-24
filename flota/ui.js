@@ -1915,7 +1915,7 @@ const UI = (() => {
               id: 'pf-est',
               label: 'Estatus',
               allLabel: 'Todos',
-              options: ['En operación','Fuera de operación'],
+              options: [...new Set(scopeUns.map(u => Parsers.categorizarEstatus(u.estatus)).filter(Boolean))].sort(),
               selected: _platTableFilter.est || [],
               onChange: `UI._onPlatFilterChange('${plat}')`
             })}
