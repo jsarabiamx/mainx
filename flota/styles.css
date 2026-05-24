@@ -1,636 +1,621 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/**
+ * app.js v4 — Controlador navegación
+ */
+const App = (() => {
+  const META = {
+    'panel-resumen':    { title:'MESA DE CONTROL', sub:'',                          nav:'nav-resumen'    },
+    'panel-detalle':    { title:'MESA DE CONTROL', sub:'Detalle de Unidad',         nav:null             },
+    'panel-asignacion': { title:'MESA DE CONTROL', sub:'Concentrado de Asignación', nav:'nav-asignacion' },
+    'panel-carga-asig': { title:'MESA DE CONTROL', sub:'Carga de Asignación',       nav:'nav-carga-asig' },
+    'panel-barridos':   { title:'MESA DE CONTROL', sub:'Carga de Barridos GPS',     nav:'nav-barridos'   },
+    'panel-manual':     { title:'MESA DE CONTROL', sub:'Captura Manual',            nav:'nav-manual'     },
+    'panel-reportes':   { title:'MESA DE CONTROL', sub:'Reportes',                  nav:'nav-reportes'   },
+    'panel-maestra':    { title:'MESA DE CONTROL', sub:'Tabla Maestra',             nav:'nav-reportes'   },
+    'panel-historial':  { title:'MESA DE CONTROL', sub:'Historial de Actividad',    nav:'nav-historial'  },
+    'panel-plataformas':{ title:'MESA DE CONTROL', sub:'Plataformas GPS',           nav:'nav-plataformas'},
+    'panel-viajes':     { title:'MESA DE CONTROL', sub:'Programación de Viajes',    nav:'nav-viajes'     },
+    'panel-barrido-manual':{ title:'MESA DE CONTROL', sub:'Barrido Manual',         nav:'nav-barrido-manual'},
+    'panel-graficas':   { title:'MESA DE CONTROL', sub:'Gráficas por Plataforma',   nav:'nav-graficas'   },
+    'panel-fallas':     { title:'MESA DE CONTROL', sub:'Fallas activas',            nav:'nav-fallas-panel'},
+    'panel-alertas':    { title:'MESA DE CONTROL', sub:'Centro de Alertas',         nav:'nav-alertas'    },
+    'panel-config':     { title:'MESA DE CONTROL', sub:'Configuración',             nav:'nav-config'     },
+    'panel-sims':       { title:'MESA DE CONTROL', sub:'Control de SIMs',           nav:'nav-sims'       },
+  };
 
-:root {
-  --bg-base:    #0d1117;
-  --bg-panel:   #161b27;
-  --bg-card:    #1c2333;
-  --bg-card2:   #222c42;
-  --bg-hover:   #243050;
-  --border:     #2a3448;
-  --border2:    #38496a;
-  --text:       #e2e8f0;
-  --text2:      #94a3b8;
-  --text3:      #4a5568;
-  --red:        #ef4444;
-  --red-bg:     rgba(239,68,68,.10);
-  --red-border: rgba(239,68,68,.28);
-  --yellow:     #f59e0b;
-  --warn:       #f59e0b;
-  --yellow-bg:  rgba(245,158,11,.10);
-  --yellow-border: rgba(245,158,11,.28);
-  --green:      #10b981;
-  --green-bg:   rgba(16,185,129,.10);
-  --green-border: rgba(16,185,129,.28);
-  --blue:       #3b82f6;
-  --blue-bg:    rgba(59,130,246,.10);
-  --blue-border:rgba(59,130,246,.28);
-  --purple:     #8b5cf6;
-  --purple-bg:  rgba(139,92,246,.10);
-  --teal:       #06b6d4;
-  --sidebar-w:  232px;
-  --font:       'Inter', sans-serif;
-}
+  function nav(el, panelId, extra) {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    const meta = META[panelId];
+    if (meta?.nav) { const t = document.getElementById(meta.nav); if(t) t.classList.add('active'); }
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; overflow: hidden; }
-body { font-family: var(--font); background: var(--bg-base); color: var(--text); font-size: 13px; line-height: 1.5; }
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    const panel = document.getElementById(panelId);
+    if (panel) panel.classList.add('active');
 
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+    const te = document.getElementById('tb-title');
+    const se = document.getElementById('tb-subtitle');
+    if (te && meta) te.textContent = meta.title;
+    if (se && meta) { se.textContent = meta.sub; se.style.display = meta.sub ? 'block' : 'none'; }
 
-/* ══ LAYOUT ══════════════════════════════════════════ */
-#app { display: flex; height: 100vh; }
-#sidebar { width: var(--sidebar-w); min-width: var(--sidebar-w); background: var(--bg-panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 20; overflow-y: auto; }
-#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+    const sw = document.getElementById('tb-sub-wrap');
+    const tr = document.getElementById('tb-right-wrap');
+    if (sw) sw.style.display = panelId === 'panel-resumen' ? 'flex' : 'none';
+    if (tr) tr.style.display = panelId !== 'panel-resumen' ? 'flex' : 'none';
 
-/* ══ SIDEBAR ══════════════════════════════════════════ */
-.sb-logo { padding: 16px 14px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.sb-logo-icon { width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
-.sb-logo-title { font-size: 13px; font-weight: 700; letter-spacing: -.02em; }
-.sb-logo-sub   { font-size: 10px; color: var(--text3); }
+    switch(panelId) {
+      case 'panel-resumen':    UI.renderResumen();    break;
+      case 'panel-detalle':    if(extra) UI.renderDetalle(extra.num, extra.emp); break;
+      case 'panel-asignacion': UI.renderAsignacion(); break;
+      case 'panel-barridos':   UI.renderBarridos();   break;
+      case 'panel-reportes':   UI.renderReportes();   break;
+      case 'panel-maestra':    UI.renderMaestra();    break;
+      case 'panel-historial':  UI.renderHistorial();  break;
+      case 'panel-plataformas':UI.renderPlataformas();break;
+      case 'panel-viajes':     UI.renderViajes();     break;
+      case 'panel-barrido-manual': UI.renderBarridoManual(); break;
+      case 'panel-graficas':   UI.renderGraficas();   break;
+      case 'panel-fallas':     UI.renderFallasPanel();break;
+      case 'panel-alertas':    UI.renderAlertas();    break;
+      case 'panel-manual':     renderManual();        break;
+      case 'panel-config':     renderConfig();        break;
+      case 'panel-sims':       SimsUI.render();       break;
+      case 'panel-carga-asig':
+        for(let i=1;i<=5;i++){const e=document.getElementById('cstep-'+i);if(e){e.classList.remove('done','active');if(i===1)e.classList.add('active');}}
+        ['asig-det-banner','asig-preview-section'].forEach(id=>{const e=document.getElementById(id);if(e)e.classList.add('hidden');});
+        const bp=document.getElementById('btn-procesar-asig');if(bp)bp.disabled=true;
+        break;
+    }
+  }
 
-.sb-emp { padding: 10px 10px 4px; flex-shrink: 0; }
-.sb-emp-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text3); margin-bottom: 4px; }
-#empresa-select { width: 100%; background: var(--bg-card); border: 1px solid var(--border); border-radius: 7px; padding: 6px 24px 6px 9px; color: var(--text); font-family: var(--font); font-size: 12px; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%234a5568' d='M5 7L0 2h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 7px center; }
+  function renderManual() {
+    const emp = DB.getEmpresaActiva();
+    const uns = DB.getUnidadesList(emp);
+    const activas = uns.filter(u=>u.activa);
+    const sinGps  = activas.filter(u=>!u.ultima_act);
+    const el = document.getElementById('manual-content');
+    if (!el) return;
 
-nav { flex: 1; padding: 4px 6px 8px; overflow-y: auto; }
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+        <div class="kstat"><div class="kstat-n">${activas.length}</div><div class="kstat-l">Unidades activas</div></div>
+        <div class="kstat"><div class="kstat-n" style="color:var(--yellow)">${sinGps.length}</div><div class="kstat-l">Sin GPS</div></div>
+        <div class="kstat"><div class="kstat-n" style="color:var(--red)">${uns.filter(u=>u.siniestro).length}</div><div class="kstat-l">Siniestros</div></div>
+      </div>
+      <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+        <div style="padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <h3 style="font-size:13px;font-weight:600;flex:1">Gestión de unidades — ${emp}</h3>
+          <input id="manual-search" placeholder="🔍 Buscar..." class="search-input" oninput="App._filterManual(this.value)" style="width:200px">
+          <button class="act-btn-primary" onclick="UI.openEditarUnidad(null,'${emp}')">+ Nueva unidad</button>
+        </div>
+        <div style="overflow:auto;max-height:500px">
+          <table>
+            <thead><tr>
+              <th>Unidad</th><th>Base</th><th>Cromática</th><th>Plataforma</th>
+              <th>Última conexión GPS</th><th>Días</th><th>Estatus</th><th>Acciones</th>
+            </tr></thead>
+            <tbody id="manual-tbody">
+              ${_manualRows(uns, emp)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+        <div style="flex:1;background:var(--bg-panel);border:1px solid var(--border);border-radius:10px;padding:12px">
+          <div style="font-size:12px;font-weight:600;margin-bottom:8px">Backup y restauración</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="act-btn" onclick="UI.exportarDatos()">↓ Backup JSON</button>
+            <button class="act-btn" onclick="document.getElementById('import-json').click()">↑ Restaurar</button>
+            <input type="file" id="import-json" accept=".json" style="display:none" onchange="UI.importarDatos(this.files[0]);this.value=''">
+            <button class="act-btn" onclick="UI.exportarCSV()">↓ CSV completo</button>
+          </div>
+        </div>
+      </div>`;
+  }
 
-/* Sección colapsable — header clickeable */
-.nav-section-hdr {
-  display: flex; align-items: center; justify-content: space-between;
-  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
-  color: var(--text3); padding: 10px 6px 4px;
-  cursor: pointer; user-select: none; border-radius: 6px;
-  transition: color .15s;
-}
-.nav-section-hdr:hover { color: var(--text2); }
-.nav-sec-arrow { transition: transform .2s ease; flex-shrink: 0; color: var(--text3); }
+  function _manualRows(uns, emp) {
+    return uns.map(u => {
+      const d = Parsers.diasDesde(u.ultima_act);
+      const db = d===null?`<span class="dbadge dbadge-sin">—</span>`:d<=DB.getConfig().diasLinea?`<span class="dbadge dbadge-ok">${d}d</span>`:d<=DB.getConfig().diasAtencion?`<span class="dbadge dbadge-warn">${d}d</span>`:`<span class="dbadge dbadge-err">${d}d</span>`;
+      const eBadge=u.siniestro?`<span class="ebadge ebadge-siniestro">SINIESTRO</span>`:(u.estatus?`<span class="ebadge ${String(u.estatus).toUpperCase().includes('OPERACI')?'ebadge-op':String(u.estatus).toUpperCase().includes('VENTA')?'ebadge-venta':'ebadge-fuera'}">${u.estatus}</span>`:'-');
+      return `<tr>
+        <td style="font-weight:700">${u.num}${!u.activa?'<span style="font-size:9px;color:var(--text3);margin-left:4px">INACTIVA</span>':''}</td>
+        <td>${u.base||'—'}</td><td>${u.cromatica||'—'}</td><td>${u.plataforma||'—'}</td>
+        <td style="font-size:11px">${u.ultima_act?Parsers.fmtDate(u.ultima_act):'Sin datos'}</td>
+        <td>${db}</td><td>${eBadge}</td>
+        <td style="white-space:nowrap">
+          <button class="act-btn-sm" onclick="UI.openUnitDetail('${u.num}','${emp}')">↗</button>
+          <button class="act-btn-sm" onclick="UI.openEditarUnidad('${u.num}','${emp}')">✎</button>
+          <button class="act-btn-sm" onclick="UI.openDatePicker(${u.ultima_act?`'${u.ultima_act}'`:'null'},iso=>{UI._updateManualFechaConISO('${u.num}','${emp}',iso);App.renderManual&&App.renderManual()},'GPS — ${u.num}')">📡</button>
+          ${!u.activa?`<button class="act-btn-sm" onclick="DB.reactivarUnidad('${u.num}','${emp}');App.nav(null,'panel-manual')">↺</button>`:`<button class="act-btn-sm" style="color:var(--yellow)" onclick="if(confirm('¿Marcar inactiva?')){DB.marcarInactiva('${u.num}','${emp}');App.nav(null,'panel-manual')}">⊖</button>`}
+        </td>
+      </tr>`;
+    }).join('');
+  }
 
-/* Cuerpo de sección — animación suave */
-.nav-section-body { overflow: hidden; transition: max-height .25s ease, opacity .2s ease; max-height: 600px; opacity: 1; }
-.nav-section-body.nav-section-collapsed { max-height: 0; opacity: 0; pointer-events: none; }
+  function _filterManual(q) {
+    const emp = DB.getEmpresaActiva();
+    const uns = DB.getUnidadesList(emp).filter(u => !q || (u.num+'').includes(q) || (u.base||'').toLowerCase().includes(q.toLowerCase()) || (u.cromatica||'').toLowerCase().includes(q.toLowerCase()));
+    const tbody = document.getElementById('manual-tbody');
+    if (tbody) tbody.innerHTML = _manualRows(uns, emp);
+  }
 
-/* Items del menú */
-.nav-item {
-  display: flex; align-items: center; gap: 9px;
-  padding: 7px 9px; border-radius: 7px; cursor: pointer;
-  color: var(--text2); font-size: 12px; font-weight: 500;
-  transition: background .12s, color .12s; user-select: none; white-space: nowrap;
-}
-.nav-item:hover  { background: var(--bg-hover); color: var(--text); }
-.nav-item.active {
-  background: rgba(59,130,246,.13); color: var(--blue);
-  border-left: 2px solid var(--blue); padding-left: 7px;
-}
-/* Iconos SVG */
-.nav-icon { width: 15px; height: 15px; flex-shrink: 0; }
-.nav-badge { margin-left: auto; background: var(--red); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; min-width: 18px; text-align: center; }
-.sb-footer { padding: 10px 12px; border-top: 1px solid var(--border); font-size: 10px; color: var(--text3); flex-shrink: 0; }
+  function renderConfig() {
+    const cfg = DB.getConfig();
+    const el = document.getElementById('config-content');
+    if (!el) return;
+    const empActiva = DB.getEmpresaActiva();
+    const PLATS = ['CEIBA','SAMSARA','AVL','SCANIA','MAN','VOLVO','MOTIVE'];
 
-/* ══ TOPBAR ══════════════════════════════════════════ */
-#topbar { height: 52px; background: var(--bg-panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 10px; flex-shrink: 0; }
-#tb-title { font-size: 17px; font-weight: 700; letter-spacing: -.03em; }
-#tb-subtitle { font-size: 11px; color: var(--text3); margin-top: 1px; }
-#tb-sub-wrap { flex: 1; display: flex; align-items: center; }
-#tb-last-update { font-size: 11px; color: var(--text3); margin-left: 12px; }
-#tb-right-wrap { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
-.tb-btn { display: flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 7px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text2); font-family: var(--font); font-size: 12px; font-weight: 500; cursor: pointer; }
-.tb-icon-btn { width: 34px; height: 34px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 15px; color: var(--text2); transition: background .15s; }
-.tb-icon-btn:hover { background: var(--bg-hover); }
-.tb-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, var(--blue), var(--purple)); display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; }
+    el.innerHTML = `
+      <div style="max-width:640px;display:flex;flex-direction:column;gap:12px">
+        <!-- Umbrales GPS -->
+        <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:16px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:12px">⚙ Umbrales de estado GPS</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Días para "En línea" (≤)</label>
+              <input type="number" id="cfg-linea" value="${cfg.diasLinea}" min="0" max="7" style="width:100%;background:var(--bg-card);border:1px solid var(--border2);border-radius:7px;padding:7px 10px;color:var(--text);font-family:var(--font)">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Días para "Atención" (≤)</label>
+              <input type="number" id="cfg-aten" value="${cfg.diasAtencion}" min="1" max="30" style="width:100%;background:var(--bg-card);border:1px solid var(--border2);border-radius:7px;padding:7px 10px;color:var(--text);font-family:var(--font)">
+            </div>
+          </div>
+          <button class="act-btn-primary" onclick="
+            const l=parseInt(document.getElementById('cfg-linea').value);
+            const a=parseInt(document.getElementById('cfg-aten').value);
+            if(l>=0&&a>l){DB.setConfig({diasLinea:l,diasAtencion:a});UI.toast('Configuración guardada','success');}
+            else{UI.toast('Valores inválidos','error');}">Guardar configuración</button>
+        </div>
 
-/* ══ CONTENT ══════════════════════════════════════════ */
-#content { flex: 1; overflow-y: auto; padding: 16px 18px; background: var(--bg-base); }
-.panel { display: none; animation: fadeIn .15s ease; }
-.panel.active { display: block; }
-@keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+        <!-- Gestión de empresas (editar, agregar, eliminar, seleccionar) -->
+        <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:16px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:12px">🏢 Gestión de empresas</div>
+          ${DB.getEmpresasList().map(e=>{
+            const isActive = e === empActiva;
+            const nUnidades = DB.getUnidadesList(e).length;
+            return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+              <span style="flex:1;font-size:13px;font-weight:500;min-width:120px">${e}</span>
+              <span style="font-size:11px;color:var(--text3);min-width:80px">${nUnidades} unidades</span>
+              ${isActive?`<span class="ebadge ebadge-op" style="font-size:10px">ACTIVA</span>`:
+                `<button class="act-btn-sm" onclick="UI.cambiarEmpresa('${e}');App.nav(null,'panel-config')">Seleccionar</button>`}
+              <button class="act-btn-sm" onclick="App._editarEmpresa('${e}')" title="Renombrar">✎</button>
+              ${!isActive?`<button class="act-btn-sm" style="color:var(--red)" onclick="App._eliminarEmpresa('${e}')" title="Eliminar">✕</button>`:''}
+            </div>`;
+          }).join('')}
+          <button class="act-btn" style="margin-top:10px" onclick="App._nuevaEmpresa()">+ Nueva empresa</button>
+        </div>
 
-/* ══ KPI ROW ══════════════════════════════════════════ */
-.kpi-grid { display: grid; grid-template-columns: repeat(4,1fr) 1.4fr; gap: 10px; margin-bottom: 14px; }
-.kpi-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; cursor: pointer; transition: border-color .2s; }
-.kpi-card:hover { border-color: var(--border2); }
-.kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; display: flex; align-items: center; gap: 5px; margin-bottom: 6px; }
-.kpi-value { font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: -.03em; margin-bottom: 3px; }
-.kpi-value.red    { color: var(--red); }
-.kpi-value.yellow { color: var(--yellow); }
-.kpi-value.green  { color: var(--green); }
-.kpi-value.blue   { color: var(--blue); }
-.kpi-sparkline    { height: 32px; margin: 5px 0 3px; }
-.kpi-link { font-size: 11px; color: var(--text2); cursor: pointer; }
-.kpi-link:hover   { color: var(--blue); }
-.kpi-estado { display: flex; flex-direction: column; }
-.kpi-estado-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text2); margin-bottom: 7px; }
-.kpi-donut-row    { display: flex; align-items: center; gap: 12px; flex: 1; }
-.kpi-legend       { flex: 1; }
-.kpi-legend-item  { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 4px; }
-.kpi-legend-dot   { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.kpi-legend-pct   { margin-left: auto; color: var(--text2); font-weight: 600; font-size: 11px; }
+        <!-- Gestión de asignaciones -->
+        <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:16px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">📋 Historial de asignaciones</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Historial de cargas mensuales de ${empActiva}: ${DB.getAsignaciones(empActiva).length} registros</div>
+          <button class="act-btn" style="color:var(--yellow)" onclick="App._eliminarHistorialAsignaciones()">🗑 Eliminar historial de asignaciones</button>
+          <div style="font-size:10px;color:var(--text3);margin-top:5px">(Esto NO elimina las unidades, solo el log del historial)</div>
+        </div>
 
-/* ══ FILTER BAR ══════════════════════════════════════ */
-.filter-bar { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; padding: 9px 13px; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.filter-group { display: flex; align-items: center; gap: 5px; }
-.filter-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text3); white-space: nowrap; }
-.filter-chips { display: flex; gap: 3px; flex-wrap: wrap; }
-.chip { padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--bg-card); color: var(--text2); transition: all .15s; white-space: nowrap; }
-.chip:hover  { border-color: var(--border2); color: var(--text); }
-.chip.active { background: var(--blue); border-color: var(--blue); color: #fff; }
-.filter-select { background: var(--bg-card); border: 1px solid var(--border); border-radius: 7px; padding: 5px 22px 5px 8px; color: var(--text); font-family: var(--font); font-size: 11px; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%234a5568' d='M5 7L0 2h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; min-width: 90px; }
+        <!-- Eliminar datos por plataforma (doble confirmación) -->
+        <div style="background:var(--bg-panel);border:1px solid var(--yellow-border);border-radius:12px;padding:16px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--yellow)">📡 Eliminar datos de plataforma GPS</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Borra todas las fechas de conexión registradas para la plataforma seleccionada en ${empActiva}. Las unidades se mantienen.</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="cfg-plat-del" style="background:var(--bg-card);border:1px solid var(--border2);border-radius:7px;padding:7px 10px;color:var(--text);font-family:var(--font);font-size:12px">
+              ${PLATS.map(p=>`<option value="${p}">${p}</option>`).join('')}
+            </select>
+            <button class="act-btn" style="color:var(--yellow)" onclick="App._eliminarDatosPlataforma(document.getElementById('cfg-plat-del').value)">🗑 Eliminar datos de esta plataforma</button>
+          </div>
+        </div>
 
-/* ══ SECTION HEADER ══════════════════════════════════ */
-.section-hdr { display: flex; align-items: center; gap: 10px; margin-bottom: 11px; }
-.section-hdr h2 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
-.count-badge { background: var(--red-bg); border: 1px solid var(--red-border); color: var(--red); font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 20px; }
-.order-select { margin-left: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 7px; padding: 4px 22px 4px 8px; color: var(--text2); font-family: var(--font); font-size: 11px; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%234a5568' d='M5 7L0 2h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; }
+        <!-- Zona de peligro -->
+        <div style="background:var(--bg-panel);border:1px solid var(--red-border);border-radius:12px;padding:16px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--red)">⚠ Zona de peligro</div>
+          <button class="act-btn" style="color:var(--red)" onclick="App._borrarEmpresa('${empActiva}')">🗑 Borrar todos los datos de ${empActiva}</button>
+        </div>
+      </div>`;
+  }
 
-/* ══ UNIT LIST ══════════════════════════════════════ */
-.unit-list { display: flex; flex-direction: column; gap: 6px; }
-.units-cols { display: grid; grid-template-columns: 1fr 260px; gap: 12px; }
-.side-panels { display: flex; flex-direction: column; gap: 10px; }
-.side-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
-.side-card-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text2); margin-bottom: 9px; }
+  /* ─── ACCIONES CONFIG ─────────────────────────────── */
+  function _editarEmpresa(key) {
+    const nuevo = prompt(`Renombrar empresa "${key}":\n(el nombre se guarda en mayúsculas)`, key);
+    if (!nuevo || nuevo.trim() === key) return;
+    const nuevaKey = DB.renombrarEmpresa(key, nuevo.trim());
+    if (nuevaKey) {
+      UI.toast(`Empresa renombrada: ${nuevaKey}`,'success');
+      populateEmpresaSelect();
+      nav(null, 'panel-config');
+    } else {
+      UI.toast('No se pudo renombrar (nombre ya existe)','error');
+    }
+  }
 
-/* ══ TABLE ══════════════════════════════════════════ */
-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-thead th { padding: 7px 10px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text3); border-bottom: 1px solid var(--border); white-space: nowrap; }
-tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
-tbody tr:last-child { border-bottom: none; }
-tbody tr:hover { background: var(--bg-card); }
-tbody td { padding: 8px 10px; white-space: nowrap; }
+  function _eliminarEmpresa(key) {
+    if (!confirm(`¿Eliminar empresa "${key}"?\nSe borrarán TODOS sus datos (unidades, barridos, asignaciones, viajes).\n\nEsta acción NO se puede deshacer.`)) return;
+    if (!confirm(`CONFIRMACIÓN FINAL\n\nEstás a punto de eliminar permanentemente la empresa "${key}".\n¿Continuar?`)) return;
+    if (DB.removeEmpresa(key)) {
+      UI.toast(`Empresa ${key} eliminada`,'error');
+      populateEmpresaSelect();
+      nav(null, 'panel-config');
+    } else {
+      UI.toast('No se puede eliminar la única empresa','warn');
+    }
+  }
 
-/* ══ PAGINATION ══════════════════════════════════════ */
-.pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
-.pagination-info { font-size: 11px; color: var(--text3); }
-.page-btns { display: flex; gap: 3px; }
-.page-btn { width: 28px; height: 28px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text2); font-size: 12px; font-weight: 500; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all .15s; font-family: var(--font); }
-.page-btn:hover  { background: var(--bg-hover); color: var(--text); }
-.page-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
-.page-btn:disabled { opacity: .3; cursor: not-allowed; }
+  function _nuevaEmpresa() {
+    const nombre = prompt('Nombre de la nueva empresa:');
+    if (!nombre || !nombre.trim()) return;
+    const k = DB.addEmpresa(nombre);
+    UI.toast(`Empresa "${k}" creada`,'success');
+    populateEmpresaSelect();
+    nav(null, 'panel-config');
+  }
 
-/* ══ UPLOAD ZONE ══════════════════════════════════════ */
-.upload-zone { border: 2px dashed var(--border2); border-radius: 12px; padding: 32px 20px; text-align: center; cursor: pointer; background: var(--bg-card); transition: all .2s; margin-bottom: 12px; }
-.upload-zone:hover, .upload-zone.drag { border-color: var(--blue); background: var(--blue-bg); }
-.upload-zone-icon  { font-size: 36px; margin-bottom: 8px; }
-.upload-zone-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
-.upload-zone-sub   { font-size: 12px; color: var(--text3); }
-.upload-btn { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 8px 16px; border-radius: 8px; background: var(--blue); color: #fff; font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer; border: none; }
-.upload-btn:hover { background: #2563eb; }
+  function _eliminarHistorialAsignaciones() {
+    const emp = DB.getEmpresaActiva();
+    const n = DB.getAsignaciones(emp).length;
+    if (n === 0) { UI.toast('No hay historial que eliminar','info'); return; }
+    if (!confirm(`¿Eliminar el historial de ${n} asignaciones de ${emp}?\n\nLas unidades se mantendrán intactas, solo se borra el log.`)) return;
+    DB.eliminarTodasAsignaciones(emp);
+    // Borrar también en Supabase
+    if (window.GPS_SB && GPS_SB._delete) {
+      GPS_SB._delete('gps_asignaciones', `empresa_id=eq.${encodeURIComponent(emp)}`)
+        .catch(e => console.warn('[Supabase] Error borrando historial asignaciones:', e));
+    }
+    UI.toast('Historial de asignaciones eliminado','info');
+    nav(null, 'panel-config');
+  }
 
-/* ══ STEPPER ══════════════════════════════════════════ */
-.stepper { display: flex; align-items: flex-start; gap: 0; }
-.step { display: flex; flex-direction: column; align-items: center; flex: 1; position: relative; }
-.step:not(:last-child)::after { content: ''; position: absolute; top: 13px; left: 50%; width: 100%; height: 2px; background: var(--border2); z-index: 0; }
-.step.done::after   { background: var(--blue); }
-.step-circle { width: 26px; height: 26px; border-radius: 50%; background: var(--bg-card); border: 2px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--text3); z-index: 1; transition: all .3s; position: relative; }
-.step.done .step-circle   { background: var(--blue); border-color: var(--blue); color: #fff; }
-.step.active .step-circle { background: var(--bg-card); border-color: var(--blue); color: var(--blue); box-shadow: 0 0 0 3px rgba(59,130,246,.2); }
-.step-label { font-size: 9px; color: var(--text3); margin-top: 5px; font-weight: 600; text-align: center; }
-.step.done .step-label, .step.active .step-label { color: var(--text2); }
+  function _eliminarDatosPlataforma(plataforma) {
+    const emp = DB.getEmpresaActiva();
+    if (!confirm(`¿Eliminar TODOS los datos GPS de la plataforma ${plataforma} en ${emp}?\n\nSe borrarán todas las fechas de última conexión registradas para esta plataforma.`)) return;
+    if (!confirm(`CONFIRMACIÓN FINAL\n\nEsta acción NO se puede deshacer.\n¿Estás completamente seguro de eliminar los datos de ${plataforma}?`)) return;
+    const afectadas = DB.eliminarDatosPlataforma(plataforma, emp);
+    // Borrar también en Supabase (gps_barridos)
+    if (window.GPS_SB && GPS_SB._delete) {
+      GPS_SB._delete('gps_barridos',
+        `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${plataforma}`
+      ).catch(e => console.warn('[Supabase] Error borrando barridos:', e));
+    }
+    UI.toast(`${afectadas} unidades actualizadas. Datos de ${plataforma} eliminados.`,'warn', 4500);
+    nav(null, 'panel-config');
+  }
 
-/* ══ DETECT BANNER ══════════════════════════════════ */
-.detect-banner { background: var(--bg-card); border: 1px solid var(--green-border); border-radius: 10px; padding: 12px 14px; display: flex; gap: 12px; align-items: center; }
-.detect-type { font-size: 14px; font-weight: 700; color: var(--green); }
-.preview-title { padding: 9px 13px; font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--text2); border-bottom: 1px solid var(--border); letter-spacing: .07em; }
+  function _borrarEmpresa(emp) {
+    if (!confirm(`¿BORRAR TODOS los datos de ${emp}?\n\nEsto incluye unidades, barridos, asignaciones y viajes.`)) return;
+    if (!confirm(`CONFIRMACIÓN FINAL\n\nEsta acción NO se puede deshacer.\n¿Seguro que deseas borrar toda la información de ${emp}?`)) return;
+    DB.resetEmpresa();
+    UI.toast('Datos eliminados','error');
+    nav(null, 'panel-resumen');
+  }
 
-/* ══ ASIGNACION PANEL ══════════════════════════════ */
-.asig-kpi-row  { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin-bottom: 12px; }
-.asig-kpi { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; align-items: center; gap: 10px; }
-.asig-kpi-icon { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
-.asig-kpi-num   { font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
-.asig-kpi-label { font-size: 10px; color: var(--text3); }
-.charts-row     { display: grid; grid-template-columns: repeat(4,1fr); gap: 9px; margin-bottom: 12px; }
-.chart-card     { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
-.chart-card-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text2); margin-bottom: 9px; }
-.asig-table-wrap { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-.asig-table-hdr  { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.asig-table-hdr h3 { font-size: 12px; font-weight: 600; }
-.asig-table-total { font-size: 11px; color: var(--text3); }
-.export-btn { display: flex; align-items: center; gap: 5px; padding: 5px 9px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text2); font-family: var(--font); font-size: 11px; font-weight: 500; cursor: pointer; }
-.export-btn:hover { background: var(--bg-hover); color: var(--text); }
+  function populateEmpresaSelect() {
+    const sel = document.getElementById('empresa-select');
+    if (!sel) return;
+    sel.innerHTML = DB.getEmpresasList().map(e => `<option value="${e}" ${e===DB.getEmpresaActiva()?'selected':''}>${e}</option>`).join('');
+  }
 
-/* ══ BARRIDOS ══════════════════════════════════════ */
-.barridos-cols { display: grid; grid-template-columns: 1fr 260px; gap: 12px; }
-.recents-box { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-.recents-hdr { padding: 9px 13px; border-bottom: 1px solid var(--border); display: flex; align-items: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text2); }
-.recents-hdr a { margin-left: auto; font-size: 11px; color: var(--blue); cursor: pointer; font-weight: 400; text-transform: none; }
-.log-box   { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-.log-hdr   { padding: 8px 13px; border-bottom: 1px solid var(--border); font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--text2); }
-.log-list  { padding: 7px 11px; height: 230px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.6; }
-.plat-detect-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin: 10px 0; }
-.barridos-resumen { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; gap: 14px; margin-top: 10px; flex-wrap: wrap; }
-.br-stat { text-align: center; }
-.br-stat-num { font-size: 21px; font-weight: 700; letter-spacing: -.02em; }
-.br-stat-label { font-size: 10px; color: var(--text3); font-weight: 600; text-transform: uppercase; }
-.br-sep { width: 1px; height: 34px; background: var(--border); }
-.btn-integrar { padding: 9px 18px; border-radius: 8px; border: none; background: var(--blue); color: #fff; font-family: var(--font); font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; }
-.btn-integrar:hover { background: #2563eb; }
+  // ── Sincronización en tiempo real de fallas desde Supabase ───────────────
+  let _fallasSyncTimer = null;
+  let _fallasSyncHash = '';
 
-/* ══ REPORTES ══════════════════════════════════════ */
-.rep-kpi-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 9px; margin-bottom: 12px; }
-.rep-kpi { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; padding: 13px; text-align: center; cursor: pointer; transition: border-color .2s; }
-.rep-kpi:hover { border-color: var(--border2); }
-.rep-kpi-n { font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
-.rep-kpi-l { font-size: 11px; color: var(--text3); margin-top: 3px; }
-.table-wrap { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-.table-hdr  { padding: 10px 13px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.table-hdr h3 { font-size: 13px; font-weight: 600; flex: 1; }
-.table-scroll { overflow-x: auto; max-height: 420px; overflow-y: auto; }
-.table-tabs   { display: flex; gap: 4px; padding: 9px 13px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.t-tab { padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer; color: var(--text2); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s; border-radius: 7px 7px 0 0; white-space: nowrap; }
-.t-tab:hover  { color: var(--text); }
-.t-tab.active { color: var(--blue); border-bottom-color: var(--blue); background: rgba(59,130,246,.06); }
+  async function _syncFallasFromSupabase() {
+    if (!window.GPS_SB) return;
+    try {
+      const emp = DB.getEmpresaActiva();
+      if (!emp) return;
+      const rows = await GPS_SB.getFallasActivas(emp);
+      if (!rows || !rows.length) return;
 
-/* ══ PLATAFORMAS ══════════════════════════════════ */
-/* El contenedor del panel es flujo normal (block) — sus hijos son:
-   topBar, hintBar, .plat-cards-row y #plat-detail-box. El grid vive en
-   .plat-cards-row, NO en el contenedor padre. */
-#plataformas-grid { display: block; }
+      // Hash simple para detectar cambios
+      const hash = rows.map(r => r.id + ':' + r.activa + ':' + r.resuelta).join('|');
+      if (hash === _fallasSyncHash) return;
+      _fallasSyncHash = hash;
 
-/* ══ MISC BUTTONS ══════════════════════════════════ */
-.btn-cancel  { padding: 7px 16px; border-radius: 7px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text2); font-family: var(--font); font-size: 12px; font-weight: 500; cursor: pointer; }
-.btn-process { padding: 8px 18px; border-radius: 8px; background: var(--blue); border: none; color: #fff; font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
-.btn-process:hover { background: #2563eb; }
-.btn-process:disabled { opacity: .4; cursor: not-allowed; }
+      // Sincronizar cada falla al estado local
+      let huboNuevas = false;
+      rows.forEach(row => {
+        const num = row.num_economico;
+        let u = DB.getUnidad(num, emp);
+        // Si la unidad no existe local, crear stub para que el siniestro sea visible
+        if (!u) {
+          DB.upsertUnidad(num, {
+            activa: true, siniestro: false, fallas: [], _fuente: 'supabase_falla_sync'
+          }, emp);
+          u = DB.getUnidad(num, emp);
+          if (!u) return;
+        }
 
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); display: inline-block; animation: pulse 2s infinite; }
+        u.fallas = u.fallas || [];
+        const existe = u.fallas.find(f => f._sbId === row.id || String(f.id) === String(row.datos_extra?.id));
+        const esSiniestro = row.tipo === 'SINIESTRO';
 
-/* ══ RESPONSIVE ══════════════════════════════════════ */
-@media(max-width:1100px){
-  .units-cols{grid-template-columns:1fr!important}
-  .charts-row{grid-template-columns:repeat(2,1fr)!important}
-  .kpi-grid{grid-template-columns:repeat(2,1fr)!important}
-  .barridos-cols{grid-template-columns:1fr!important}
-}
-@media(max-width:760px){
-  .asig-kpi-row{grid-template-columns:repeat(2,1fr)!important}
-  .plat-detect-grid{grid-template-columns:repeat(2,1fr)!important}
-  .rep-kpi-row{grid-template-columns:repeat(2,1fr)!important}
-}
-@media(max-width:600px){
-  #sidebar{width:52px!important;min-width:52px!important}
-  .sb-logo-title,.sb-logo-sub,.nav-badge,.sb-emp,.nav-section-hdr span,.sb-footer{display:none!important}
-  .nav-section-hdr{justify-content:center!important;padding:6px 0!important}
-  .nav-sec-arrow{display:none!important}
-  .nav-item{justify-content:center!important;padding:10px!important}
-  .nav-item.active{border-left:none!important;padding:10px!important}
-  .nav-item{justify-content:center!important;padding:10px!important}
-  .kpi-grid{grid-template-columns:1fr 1fr!important}
-  #content{padding:10px 10px!important}
-}
+        if (!existe) {
+          // Falla nueva desde otro dispositivo
+          const falla = {
+            ...(row.datos_extra || {}),
+            id: row.datos_extra?.id || Date.now(),
+            _sbId: row.id,
+            motivo: row.etiqueta || row.datos_extra?.motivo || '',
+            descripcion: row.descripcion || row.datos_extra?.descripcion || '',
+            esSiniestro,
+            resuelta: false,
+            fecha: row.created_at
+          };
+          u.fallas.push(falla);
+          if (esSiniestro) { u.siniestro = true; u.siniestroDesc = falla.motivo; }
+          huboNuevas = true;
+        } else {
+          // Falla ya existe — asegurar que _sbId y siniestro estén actualizados
+          if (!existe._sbId) { existe._sbId = row.id; }
+          // CRÍTICO: si la falla es siniestro pero la unidad no tiene el flag, corregirlo
+          if (esSiniestro && !u.siniestro) {
+            u.siniestro = true;
+            u.siniestroDesc = existe.motivo || row.etiqueta || '';
+            huboNuevas = true;
+          }
+          if (row.resuelta && !existe.resuelta) {
+            existe.resuelta = true;
+            existe.fechaResolucion = row.updated_at;
+            // Si se resolvió el siniestro, limpiar flag si no quedan más siniestros activos
+            if (esSiniestro) {
+              const quedanSiniestros = u.fallas.some(f => f.esSiniestro && !f.resuelta);
+              if (!quedanSiniestros) { u.siniestro = false; u.siniestroDesc = ''; }
+            }
+            huboNuevas = true;
+          }
+        }
+      });
 
-/* ══════════════════════════════════════════════════════
-   PLATAFORMAS v8 — Layout definitivo
-   ══════════════════════════════════════════════════════
-   Estructura del panel (block flow):
-     [topBar]                ← acciones, export, cargar masivo
-     [hintBar]               ← texto de ayuda
-     [.plat-cards-row]       ← las 7 tarjetas en grid (fila)
-     [#plat-detail-box]      ← tabla full-width al estilo Maestra
-═══════════════════════════════════════════════════════ */
+      if (huboNuevas) {
+        DB.save && DB.save();
+        // Re-renderizar la vista activa para reflejar cambios de siniestro
+        if (typeof UI !== 'undefined') {
+          UI.renderResumen && UI.renderResumen();
+          // Si Plataformas está visible, también refrescarla
+          const platGrid = document.getElementById('plataformas-grid');
+          if (platGrid) UI.renderPlataformas && UI.renderPlataformas();
+        }
+      }
+    } catch(e) {
+      console.debug('[FallaSync]', e.message);
+    }
+  }
 
-/* ─── Fila de tarjetas ────────────────────────────────── */
-.plat-cards-row {
-  display: grid;
-  /* Por defecto 7 columnas iguales en desktop (lo que pidió el usuario) */
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 14px;
-}
+  // Sincronización inicial de fallas — siempre corre al inicio aunque haya datos locales
+  async function _syncFallasDesdeInicio() {
+    if (!window.GPS_SB) return;
+    try {
+      const empresas = DB.getEmpresasList();
+      let huboNuevas = false;
 
-/* Breakpoints claros: el sidebar ocupa 232px, así que el #content tiene
-   aprox (viewport - 232). Ajustamos los saltos basándonos en eso. */
-@media (max-width: 1500px) {
-  .plat-cards-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
-@media (max-width: 1100px) {
-  .plat-cards-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-@media (max-width: 820px) {
-  .plat-cards-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 520px) {
-  .plat-cards-row { grid-template-columns: 1fr; }
-}
+      for (const emp of empresas) {
+        const rows = await GPS_SB.getFallasActivas(emp);
+        if (!rows || !rows.length) continue;
 
-/* ─── Tarjeta de plataforma ──────────────────────────── */
-.plat-card {
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 12px 10px;
-  cursor: pointer;
-  transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease, background .15s ease;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  min-width: 0;           /* permite que el contenido se ajuste al ancho */
-  overflow: hidden;       /* evita overflow de textos largos */
-}
-.plat-card:hover {
-  border-color: var(--border2);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0,0,0,.28);
-}
-.plat-card-active {
-  border-color: var(--blue);
-  background: rgba(59,130,246,.08);
-  box-shadow: 0 0 0 1px var(--blue), 0 4px 16px rgba(59,130,246,.2);
-}
+        rows.forEach(row => {
+          const num = String(row.num_economico);
+          let u = DB.getUnidad(num, emp);
 
-/* Cabecera (icono + nombre + subtítulo) */
-.plat-card-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.plat-card-head > div:last-child { min-width: 0; flex: 1; }
-.plat-card-head > div:last-child > div:first-child {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: -.01em;
-  line-height: 1.2;
-}
-.plat-card-head > div:last-child > div:last-child {
-  font-size: 9px;
-  color: var(--text3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 1px;
-}
+          // Crear stub si la unidad no existe
+          if (!u) {
+            DB.upsertUnidad(num, { activa: true, siniestro: false, fallas: [], _fuente: 'supabase_falla_init' }, emp);
+            u = DB.getUnidad(num, emp);
+            if (!u) return;
+          }
 
-/* Stats (con datos / en línea / fuera) */
-.plat-card-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-}
-.plat-stat {
-  background: var(--bg-card);
-  border-radius: 6px;
-  padding: 6px 4px;
-  text-align: center;
-  min-width: 0;
-}
-.plat-stat-n {
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -.02em;
-}
-.plat-stat-l {
-  font-size: 8px;
-  color: var(--text3);
-  margin-top: 2px;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+          u.fallas = u.fallas || [];
+          const esSiniestro = row.tipo === 'SINIESTRO';
+          const existe = u.fallas.find(f => f._sbId === row.id);
 
-/* Descripción de columnas de origen */
-.plat-card-cols {
-  font-size: 9px;
-  color: var(--text2);
-  background: var(--bg-card);
-  border-radius: 5px;
-  padding: 5px 7px;
-  font-family: 'Courier New', monospace;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.3;
-}
+          if (!existe) {
+            const extra = row.datos_extra || {};
+            const falla = {
+              id: extra.id || row.id,
+              _sbId: row.id,
+              motivo: row.etiqueta || extra.motivo || '',
+              descripcion: row.descripcion || extra.descripcion || '',
+              ubicacion: extra.ubicacion || '',
+              esSiniestro,
+              resuelta: false,
+              fecha: row.created_at,
+              fechaOcurrencia: extra.fechaOcurrencia || row.created_at
+            };
+            u.fallas.push(falla);
+            u.fallaCount = u.fallas.length;
+            huboNuevas = true;
+          }
 
-/* Botones de acción dentro de la card */
-.plat-card-btn-manual,
-.plat-card-btn-upload {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-  padding: 7px 6px;
-  border-radius: 6px;
-  font-size: 10.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background .15s, color .15s;
-  border: none;
-  font-family: var(--font);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.plat-card-btn-upload { background: var(--blue); color: #fff; }
-.plat-card-btn-upload:hover { background: #2563eb; }
-.plat-card-btn-manual {
-  background: var(--bg-card);
-  color: var(--text2);
-  border: 1px solid var(--border);
-}
-.plat-card-btn-manual:hover { background: var(--bg-hover); color: var(--text); }
+          // SIEMPRE corregir el flag de siniestro si corresponde
+          if (esSiniestro && !u.siniestro) {
+            u.siniestro = true;
+            u.siniestroDesc = row.etiqueta || '';
+            huboNuevas = true;
+          }
+          // Si tenía siniestro marcado pero ya no hay falla activa de tipo SINIESTRO, limpiarlo
+          if (!esSiniestro && u.siniestro) {
+            const tieneSiniestroActivo = u.fallas.some(f => f.esSiniestro && !f.resuelta);
+            if (!tieneSiniestroActivo) { u.siniestro = false; u.siniestroDesc = ''; huboNuevas = true; }
+          }
+        });
+      }
 
-/* ─── Animaciones ─────────────────────────────────────── */
-@keyframes slideIn {
-  from { transform: translateY(-6px); opacity: 0; }
-  to   { transform: translateY(0); opacity: 1; }
-}
+      if (huboNuevas) {
+        DB.save && DB.save();
+        // Re-renderizar todo para reflejar siniestros
+        UI.renderResumen && UI.renderResumen();
+        const platGrid = document.getElementById('plataformas-grid');
+        if (platGrid) UI.renderPlataformas && UI.renderPlataformas();
+      }
+    } catch(e) {
+      console.warn('[FallaInit]', e.message);
+    }
+  }
 
-/* Transiciones suaves para botones globales */
-.act-btn, .act-btn-sm, .act-btn-primary, .act-btn-ok, .act-btn-danger-soft, .export-btn {
-  transition: all .15s ease !important;
-}
-.act-btn:hover:not(:disabled),
-.act-btn-sm:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
+  function _startFallasSync() {
+    _syncFallasFromSupabase();
+    _fallasSyncTimer = setInterval(_syncFallasFromSupabase, 15000); // cada 15 seg
+  }
 
-/* Unit-cards con transición al hover */
-.unit-card { transition: all .15s ease; }
-.unit-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0,0,0,.25);
-}
+  function init() {
+    populateEmpresaSelect();
+    injectStyles();
+    // Aplicar tema de empresa activa al cargar
+    document.body.setAttribute('data-empresa', DB.getEmpresaActiva() || '');
+    UI.renderResumen();
+    document.getElementById('tb-date').textContent = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
 
-/* KPI cards con hover */
-.kpi-card { transition: all .2s ease; }
-.kpi-card:hover { transform: translateY(-2px); }
+    // ── Carga desde Supabase ──────────────────────────────────────────────
+    // Solo sincronizar si: (a) no hay datos locales, o (b) los datos tienen >24h sin actualizar
+    const hayDatos = DB.getUnidadesList(DB.getEmpresaActiva()).length > 0;
+    const ultimaActLocal = DB.getUltimaActualizacion ? DB.getUltimaActualizacion() : null;
+    const horasDesdeUpdate = ultimaActLocal ? (Date.now() - new Date(ultimaActLocal)) / 3600000 : 999;
+    const datosViejos = horasDesdeUpdate > 24;
 
-/* ─── Tabla detalle de plataforma (full-width, al estilo Maestra) ── */
-#plat-detail-box {
-  width: 100%;
-}
-#plat-detail-box > div {        /* panel contenedor */
-  animation: slideIn .2s ease;
-}
+    if (!hayDatos) {
+      // Sin datos locales: carga completa desde Supabase
+      _showSyncBanner('⏳ Cargando datos desde Supabase...');
+      DB.initFromSupabase().then(ok => {
+        _hideSyncBanner();
+        if (ok) { UI.renderResumen(); populateEmpresaSelect(); }
+      });
+    } else if (datosViejos) {
+      // Datos muy viejos: sincronizar en background (>24h)
+      console.log('[App] Datos locales de', Math.round(horasDesdeUpdate), 'h — sync Supabase en background');
+      setTimeout(() => {
+        DB.initFromSupabase().then(ok => {
+          if (ok) UI.renderResumen();
+        });
+      }, 3000);
+    }
+    // Si hayDatos y son recientes: NO sync de asignaciones — respetar datos locales
+    // PERO siempre sincronizar fallas activas (siniestros, AFR) desde Supabase
+    // Esto garantiza que cualquier dispositivo vea siniestros registrados en otro
+    setTimeout(() => {
+      _syncFallasDesdeInicio();
+    }, 1500);
 
-/* Barra de filtros dentro de la tabla de plataformas */
-.plat-filter-bar {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  padding: 10px 14px;
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border);
-}
-.plat-filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.plat-filter-lbl {
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .07em;
-  color: var(--text3);
-}
-.plat-filter-bar select,
-.plat-filter-bar input[type="datetime-local"],
-.plat-filter-bar input[type="text"] {
-  background: var(--bg-base);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 5px 8px;
-  color: var(--text);
-  font-family: var(--font);
-  font-size: 11px;
-  min-width: 110px;
-}
-.plat-filter-bar select:focus,
-.plat-filter-bar input:focus { outline: none; border-color: var(--blue); }
+    // Iniciar sincronización en tiempo real de fallas
+    setTimeout(_startFallasSync, 4000);
+  }
 
-.plat-filter-search {
-  background: var(--bg-base);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 10px;
-  color: var(--text);
-  font-family: var(--font);
-  font-size: 12px;
-  min-width: 220px;
-  flex: 1;
-}
-.plat-filter-search:focus { outline: none; border-color: var(--blue); }
+  function _showSyncBanner(msg) {
+    let b = document.getElementById('sync-banner');
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'sync-banner';
+      b.style.cssText = 'position:fixed;top:44px;left:0;right:0;background:#1d4ed8;color:#fff;text-align:center;font-size:12px;padding:6px;z-index:9999;font-family:var(--font,sans-serif)';
+      document.body.appendChild(b);
+    }
+    b.textContent = msg;
+    b.style.display = 'block';
+  }
 
-/* Filas de tabla con hover y feedback visual de click */
-#plat-table-body tr { cursor: pointer; transition: background .1s; }
-#plat-table-body tr:hover { background: rgba(59, 130, 246, .06); }
-#plat-table-body tr.plat-row-active,
-#plat-table-body tr.plat-row-selected {
-  background: rgba(59, 130, 246, .14);
-  box-shadow: inset 3px 0 0 var(--blue);
-}
+  function _hideSyncBanner() {
+    const b = document.getElementById('sync-banner');
+    if (b) b.style.display = 'none';
+  }
 
-/* Celda de observaciones editable — mostrar pencil al hover */
-.plat-obs-cell { cursor: text; transition: background .1s; }
-.plat-obs-cell:hover { background: rgba(245, 158, 11, .08); }
-.plat-obs-cell:hover .plat-obs-pencil { opacity: 1 !important; color: var(--yellow); }
+  function injectStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
+      .ebadge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+      .ebadge-op{background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.25)}
+      .ebadge-venta{background:rgba(139,92,246,.12);color:#a78bfa;border:1px solid rgba(139,92,246,.25)}
+      .ebadge-fuera{background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.25)}
+      .ebadge-siniestro{background:rgba(239,68,68,.2);color:#ef4444;border:1px solid rgba(239,68,68,.5);animation:pulse 2s infinite}
+      .ebadge-baja{background:rgba(107,114,128,.12);color:#9ca3af;border:1px solid rgba(107,114,128,.25)}
+      .ebadge-other{background:rgba(59,130,246,.12);color:#60a5fa;border:1px solid rgba(59,130,246,.25)}
+      .dbadge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;font-family:monospace}
+      .dbadge-ok{background:rgba(16,185,129,.12);color:#10b981}
+      .dbadge-warn{background:rgba(245,158,11,.12);color:#f59e0b}
+      .dbadge-err{background:rgba(239,68,68,.12);color:#ef4444}
+      .dbadge-sin{color:var(--text3)}
+      .bc-link{cursor:pointer;color:var(--text2)}.bc-link:hover{color:var(--blue)}
+      .leg-row{display:flex;align-items:center;gap:5px;font-size:11px;padding:2px 0}
+      .leg-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+      .leg-name{flex:1;white-space:nowrap}
+      .leg-num{font-weight:600;color:var(--text2)}
+      .leg-pct{color:var(--text3);font-size:10px}
+      .empty-state{text-align:center;padding:40px;color:var(--text3);font-size:13px}
+      .kstat{background:var(--bg-panel);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center}
+      .kstat-n{font-size:26px;font-weight:700;line-height:1}
+      .kstat-l{font-size:11px;color:var(--text3);margin-top:4px}
+      .search-input{background:var(--bg-card);border:1px solid var(--border);border-radius:7px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px}
+      .search-input:focus{outline:none;border-color:var(--blue)}
+      .search-input::placeholder{color:var(--text3)}
+      .act-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:7px;background:var(--bg-card);border:1px solid var(--border2);color:var(--text2);font-family:var(--font);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap}
+      .act-btn:hover{background:var(--bg-hover);color:var(--text)}
+      .act-btn:disabled{opacity:.4;cursor:not-allowed}
+      .act-btn-primary{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:7px;background:var(--blue);border:none;color:#fff;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:background .15s}
+      .act-btn-primary:hover{background:#2563eb}
+      .act-btn-ok{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981;display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:7px;font-family:var(--font);font-size:12px;font-weight:500;cursor:pointer}
+      .act-btn-danger-soft{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#ef4444;display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:7px;font-family:var(--font);font-size:12px;font-weight:500;cursor:pointer}
+      .act-btn-sm{padding:3px 8px;border-radius:5px;background:var(--bg-card);border:1px solid var(--border);color:var(--text2);font-family:var(--font);font-size:11px;cursor:pointer;transition:all .15s}
+      .act-btn-sm:hover{background:var(--bg-hover);color:var(--text)}
+      .unit-card{display:flex;align-items:center;gap:12px;background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;cursor:pointer;transition:all .15s}
+      .unit-card:hover{border-color:var(--border2);background:var(--bg-card)}
+      .unit-card.critico{border-left:3px solid var(--red)}
+      .unit-card.atencion{border-left:3px solid var(--yellow)}
+      .unit-card.enlinea{border-left:3px solid var(--green)}
+      .unit-card.sin{border-left:3px solid var(--text3)}
+      .unit-card-status{display:flex;flex-direction:column;align-items:center;min-width:72px;flex-shrink:0}
+      .unit-num{font-size:20px;font-weight:700;letter-spacing:-.03em;line-height:1}
+      .unit-stlabel{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+      .unit-card-info{flex:1;min-width:0}
+      .uf-row{display:flex;gap:14px;flex-wrap:wrap}
+      .uf{display:flex;flex-direction:column;gap:1px}
+      .uf-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)}
+      .uf-val{font-size:12px;font-weight:500}
+      .unit-card-conn{text-align:right;flex-shrink:0;min-width:100px}
+      .detail-header{background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;align-items:flex-start;gap:14px;margin-bottom:12px;flex-wrap:wrap}
+      .det-icon-wrap{width:50px;height:50px;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+      .det-num{font-size:26px;font-weight:700;letter-spacing:-.03em}
+      .det-badge{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:3px 10px;border-radius:5px;margin-top:3px}
+      .det-fields{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 16px;flex:1;min-width:0}
+      .det-flbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:2px}
+      .det-fval{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .det-dias-box{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;text-align:right;flex-shrink:0;min-width:150px}
+      .det-dias-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:3px}
+      .det-dias-num{font-size:34px;font-weight:700;line-height:1}
+      .det-dias-sub{font-size:10px;color:var(--text3)}
+      .plat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+      .det-bottom-grid{display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:10px}
+      .det-box{background:var(--bg-panel);border:1px solid var(--border);border-radius:10px;padding:12px}
+      .det-box-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);margin-bottom:9px}
+      .breadcrumb{font-size:12px;color:var(--text3);margin-bottom:11px}
+      .tabs-bar{display:flex;border-bottom:1px solid var(--border);margin-bottom:12px;flex-wrap:wrap}
+      .tab{padding:8px 14px;font-size:12px;font-weight:500;cursor:pointer;color:var(--text2);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;white-space:nowrap}
+      .tab:hover{color:var(--text)}
+      .tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+      .hidden{display:none!important}
+      input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue)!important}
+      @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+      /* Responsive */
+      @media(max-width:900px){
+        .plat-grid{grid-template-columns:repeat(2,1fr)!important}
+        .det-bottom-grid{grid-template-columns:1fr!important}
+        .det-fields{grid-template-columns:repeat(2,1fr)!important}
+        .kpi-grid{grid-template-columns:repeat(2,1fr)!important}
+        .charts-row{grid-template-columns:repeat(2,1fr)!important}
+        .asig-kpi-row{grid-template-columns:repeat(2,1fr)!important}
+        .units-cols{grid-template-columns:1fr!important}
+      }
+      @media(max-width:600px){
+        #sidebar{width:56px;min-width:56px}
+        .sb-logo-title,.sb-logo-sub,.nav-item span:not(.nav-icon),.nav-badge,.sb-emp,.nav-section,.sb-footer{display:none}
+        .nav-item{justify-content:center;padding:10px}
+        .plat-grid{grid-template-columns:1fr!important}
+        .det-fields{grid-template-columns:1fr 1fr!important}
+        .kpi-grid{grid-template-columns:1fr 1fr!important}
+      }
+    `;
+    document.head.appendChild(style);
+  }
 
-/* ═══════════════════════════════════════════════════════════
-   MULTI-SELECT DROPDOWN (chips con checkboxes) — v7.2
-═══════════════════════════════════════════════════════════ */
-.ms-root {
-  position: relative;
-  display: inline-block;
-  min-width: 140px;
-  font-family: var(--font);
-}
-.ms-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 5px 8px;
-  background: var(--bg-card);
-  border: 1px solid var(--border2);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 12px;
-  cursor: pointer;
-  min-height: 28px;
-  transition: border-color .1s;
-}
-.ms-trigger:hover { border-color: var(--blue); }
-.ms-trigger-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-.ms-trigger-text.ms-trigger-placeholder { color: var(--text2); }
-.ms-trigger-chev { font-size: 10px; color: var(--text3); flex-shrink: 0; }
-.ms-panel {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  min-width: 100%;
-  max-width: 260px;
-  z-index: 2000;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
-  padding: 6px;
-  display: none;
-  max-height: 320px;
-  overflow: hidden;
-  flex-direction: column;
-}
-.ms-panel.open { display: flex; }
-.ms-search input {
-  width: 100%;
-  padding: 5px 8px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text);
-  font-family: var(--font);
-  font-size: 11px;
-  margin-bottom: 4px;
-}
-.ms-search input:focus { outline: none; border-color: var(--blue); }
-.ms-actions {
-  display: flex;
-  gap: 8px;
-  padding: 4px 6px 6px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
-}
-.ms-actions a {
-  font-size: 10px;
-  color: var(--blue);
-  cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-}
-.ms-actions a:hover { text-decoration: underline; }
-.ms-options {
-  overflow-y: auto;
-  flex: 1;
-  max-height: 220px;
-}
-.ms-option {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 8px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--text2);
-  user-select: none;
-}
-.ms-option:hover { background: rgba(59, 130, 246, .08); color: var(--text); }
-.ms-option input[type="checkbox"] {
-  accent-color: var(--blue);
-  cursor: pointer;
-  margin: 0;
-}
-.ms-option span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  document.addEventListener('DOMContentLoaded', init);
+
+  return {
+    nav, populateEmpresaSelect, renderManual, renderConfig, _filterManual, _syncFallasDesdeInicio,
+    _editarEmpresa, _eliminarEmpresa, _nuevaEmpresa,
+    _eliminarHistorialAsignaciones, _eliminarDatosPlataforma, _borrarEmpresa
+  };
+})();
