@@ -22,27 +22,57 @@
     <div class="sb-emp-label">Empresa activa</div>
     <select id="empresa-select" onchange="UI.cambiarEmpresa(this.value)"></select>
   </div>
-  <nav>
-    <div class="nav-section">Principal</div>
-    <div class="nav-item active" id="nav-resumen"     onclick="App.nav(this,'panel-resumen')"><span class="nav-icon">▦</span> Resumen</div>
-    <div class="nav-item" id="nav-plataformas"        onclick="App.nav(this,'panel-plataformas')"><span class="nav-icon">📡</span> Plataformas</div>
-    <div class="nav-section">Datos</div>
-    <div class="nav-item" id="nav-asignacion"         onclick="App.nav(this,'panel-asignacion')"><span class="nav-icon">📋</span> Asignación</div>
-    <div class="nav-item" id="nav-carga-asig"         onclick="App.nav(this,'panel-carga-asig')"><span class="nav-icon">↑</span> Cargar Asignación</div>
-    <div class="nav-item" id="nav-barridos"           onclick="App.nav(this,'panel-barridos')"><span class="nav-icon">📂</span> Barridos GPS</div>
-    <div class="nav-item" id="nav-manual"             onclick="App.nav(this,'panel-manual')"><span class="nav-icon">✎</span> Captura Manual</div>
-    <div class="nav-item" id="nav-viajes"             onclick="App.nav(this,'panel-viajes')"><span class="nav-icon">🚐</span> Viajes</div>
-    <div class="nav-item" id="nav-barrido-manual"      onclick="App.nav(this,'panel-barrido-manual')"><span class="nav-icon">📝</span> Barrido Manual</div>
-    <div class="nav-section">Sims</div>
-    <div class="nav-item" id="nav-sims"               onclick="App.nav(this,'panel-sims')"><span class="nav-icon">📶</span> Control de SIMs</div>
-    <div class="nav-section">Análisis</div>
-    <div class="nav-item" id="nav-reportes"           onclick="App.nav(this,'panel-maestra')"><span class="nav-icon">📊</span> Maestra</div>
-    <div class="nav-item" id="nav-graficas"           onclick="App.nav(this,'panel-graficas')"><span class="nav-icon">📈</span> Gráficas</div>
-    <div class="nav-item" id="nav-fallas-panel"       onclick="App.nav(this,'panel-fallas')"><span class="nav-icon">⚠</span> Fallas</div>
-    <div class="nav-item" id="nav-historial"          onclick="App.nav(this,'panel-historial')"><span class="nav-icon">🕐</span> Historial</div>
-    <div class="nav-section">Sistema</div>
-    <div class="nav-item" id="nav-alertas"            onclick="App.nav(this,'panel-alertas')"><span class="nav-icon">🔔</span> Alertas <span class="nav-badge" id="nav-alertas-badge">0</span></div>
-    <div class="nav-item" id="nav-config"             onclick="App.nav(this,'panel-config')"><span class="nav-icon">⚙</span> Configuración</div>
+  <nav id="sidebar-nav">
+    <div class="nav-group" data-group="principal">
+      <div class="nav-section nav-section-toggle" onclick="UI._toggleNavGroup('principal')">
+        <span>Principal</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="nav-group-items">
+        <div class="nav-item active" id="nav-resumen"     onclick="App.nav(this,'panel-resumen')"><span class="nav-icon">▦</span> Resumen</div>
+        <div class="nav-item" id="nav-plataformas"        onclick="App.nav(this,'panel-plataformas')"><span class="nav-icon">📡</span> Plataformas</div>
+      </div>
+    </div>
+    <div class="nav-group" data-group="datos">
+      <div class="nav-section nav-section-toggle" onclick="UI._toggleNavGroup('datos')">
+        <span>Datos</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="nav-group-items">
+        <div class="nav-item" id="nav-asignacion"         onclick="App.nav(this,'panel-asignacion')"><span class="nav-icon">📋</span> Asignación</div>
+        <div class="nav-item" id="nav-carga-asig"         onclick="App.nav(this,'panel-carga-asig')"><span class="nav-icon">↑</span> Cargar Asignación</div>
+        <div class="nav-item" id="nav-barridos"           onclick="App.nav(this,'panel-barridos')"><span class="nav-icon">📂</span> Barridos GPS</div>
+        <div class="nav-item" id="nav-manual"             onclick="App.nav(this,'panel-manual')"><span class="nav-icon">✎</span> Captura Manual</div>
+        <div class="nav-item" id="nav-viajes"             onclick="App.nav(this,'panel-viajes')"><span class="nav-icon">🚐</span> Viajes</div>
+        <div class="nav-item" id="nav-barrido-manual"      onclick="App.nav(this,'panel-barrido-manual')"><span class="nav-icon">📝</span> Barrido Manual</div>
+      </div>
+    </div>
+    <div class="nav-group" data-group="sims">
+      <div class="nav-section nav-section-toggle" onclick="UI._toggleNavGroup('sims')">
+        <span>Sims</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="nav-group-items">
+        <div class="nav-item" id="nav-sims"               onclick="App.nav(this,'panel-sims')"><span class="nav-icon">📶</span> Control de SIMs</div>
+      </div>
+    </div>
+    <div class="nav-group" data-group="analisis">
+      <div class="nav-section nav-section-toggle" onclick="UI._toggleNavGroup('analisis')">
+        <span>Análisis</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="nav-group-items">
+        <div class="nav-item" id="nav-reportes"           onclick="App.nav(this,'panel-maestra')"><span class="nav-icon">📊</span> Maestra</div>
+        <div class="nav-item" id="nav-graficas"           onclick="App.nav(this,'panel-graficas')"><span class="nav-icon">📈</span> Gráficas</div>
+        <div class="nav-item" id="nav-fallas-panel"       onclick="App.nav(this,'panel-fallas')"><span class="nav-icon">⚠</span> Fallas</div>
+        <div class="nav-item" id="nav-historial"          onclick="App.nav(this,'panel-historial')"><span class="nav-icon">🕐</span> Historial</div>
+      </div>
+    </div>
+    <div class="nav-group" data-group="sistema">
+      <div class="nav-section nav-section-toggle" onclick="UI._toggleNavGroup('sistema')">
+        <span>Sistema</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="nav-group-items">
+        <div class="nav-item" id="nav-alertas"            onclick="App.nav(this,'panel-alertas')"><span class="nav-icon">🔔</span> Alertas <span class="nav-badge" id="nav-alertas-badge">0</span></div>
+        <div class="nav-item" id="nav-config"             onclick="App.nav(this,'panel-config')"><span class="nav-icon">⚙</span> Configuración</div>
+      </div>
+    </div>
   </nav>
   <div class="sb-footer">v4.0 · localStorage</div>
 </aside>
