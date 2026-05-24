@@ -186,7 +186,46 @@ const DB = (() => {
           }
         }
 
-        // ── 2. (barridos aplicados en paso separado fuera del loop) ─────────
+        // ── 2. Barridos GPS — actualizar ultima_act por plataforma ─────────
+        const barridoRows = await GPS_SB._getRaw('gps_barridos',
+          `empresa_id=eq.${encodeURIComponent(emp)}&activa=eq.true`
+        );
+        if (barridoRows && barridoRows.length > 0) {
+          const idFieldByPlat = { CEIBA:'dvr_ceiba', SAMSARA:'vin_samsara', MAN:'placa_man', SCANIA:'placa_scania' };
+          barridoRows.forEach(r => {
+            const num = String(r.num_economico);
+            const u = (_s.unidades[emp] || {})[num];
+            if (!u) return;
+            const plat = (r.plataforma || '').toUpperCase();
+            const platKey = 'ultima_act_' + plat.toLowerCase();
+            const raw = r.datos_raw || {};
+
+            // Fecha: usar ultima_conexion o fallback a datos_raw.fecha
+            const fechaStr = r.ultima_conexion || raw.fecha || null;
+            if (fechaStr) {
+              if (!u[platKey] || new Date(fechaStr) > new Date(u[platKey])) {
+                u[platKey] = fechaStr;
+              }
+              if (!u.ultima_act || new Date(fechaStr) > new Date(u.ultima_act)) {
+                u.ultima_act = fechaStr;
+              }
+            }
+
+            const idField = idFieldByPlat[plat];
+            if (idField && raw.serie && !u[idField]) u[idField] = raw.serie;
+            // observaciones: columna dedicada tiene prioridad sobre datos_raw legacy
+            const obsBarrido = r.observaciones || raw.observaciones || null;
+            if (obsBarrido && !u.observaciones) u.observaciones = obsBarrido;
+            if (plat === 'SAMSARA' && raw.estadoSamsara) u.estado_samsara = raw.estadoSamsara;
+            if (plat === 'MOTIVE') {
+              if (raw.serieGateway) u.motive_vg = raw.serieGateway;
+              if (raw.serieDashcam) u.motive_cam = raw.serieDashcam;
+              if (raw.estado) u.estado_motive = raw.estado;
+              if (raw.empresa) u.empresa_motive = raw.empresa;
+              u._motiveRaw = raw;
+            }
+          });
+        }
 
         // ── 3. Fallas activas ─────────────────────────────────────────────
         const fallaRows = await GPS_SB._getRaw('gps_fallas',
@@ -253,46 +292,6 @@ const DB = (() => {
           });
         }
       }
-
-      // ── PASO 2 (fuera del loop): Barridos GPS — una sola carga para todas las empresas ──
-      // Se ejecuta después de que todas las asignaciones ya están cargadas.
-      // Aplica ultima_act_<plat> solo a unidades que existen en asignaciones.
-      // No crea unidades huérfanas — solo enriquece las que ya están.
-      try {
-        const barridoRows = await GPS_SB._getRaw('gps_barridos', 'activa=eq.true');
-        if (barridoRows && barridoRows.length > 0) {
-          const idFieldByPlat = { CEIBA:'dvr_ceiba', SAMSARA:'vin_samsara', MAN:'placa_man', SCANIA:'placa_scania' };
-          barridoRows.forEach(r => {
-            const num = String(r.num_economico);
-            const empR = String(r.empresa_id || '');
-            const plat = (r.plataforma || '').toUpperCase();
-            const platKey = 'ultima_act_' + plat.toLowerCase();
-            const raw = r.datos_raw || {};
-
-            if (!_s.unidades[empR]) return;
-            const u = _s.unidades[empR][num];
-            if (!u) return;
-
-            const fechaStr = r.ultima_conexion || raw.fecha || null;
-            if (fechaStr) {
-              if (!u[platKey] || new Date(fechaStr) > new Date(u[platKey])) u[platKey] = fechaStr;
-              if (!u.ultima_act || new Date(fechaStr) > new Date(u.ultima_act)) u.ultima_act = fechaStr;
-            }
-            const idField = idFieldByPlat[plat];
-            if (idField && raw.serie && !u[idField]) u[idField] = raw.serie;
-            const obsBarrido = r.observaciones || raw.observaciones || null;
-            if (obsBarrido && !u.observaciones) u.observaciones = obsBarrido;
-            if (plat === 'SAMSARA' && raw.estadoSamsara) u.estado_samsara = raw.estadoSamsara;
-            if (plat === 'MOTIVE') {
-              if (raw.serieGateway) u.motive_vg = raw.serieGateway;
-              if (raw.serieDashcam) u.motive_cam = raw.serieDashcam;
-              if (raw.estado) u.estado_motive = raw.estado;
-              if (raw.empresa) u.empresa_motive = raw.empresa;
-              u._motiveRaw = raw;
-            }
-          });
-        }
-      } catch(eb) { console.warn('[DB] initFromSupabase barridos:', eb); }
 
       save();
       console.log('[DB] initFromSupabase: carga completa');
@@ -373,6 +372,13 @@ const DB = (() => {
           } else if (f === 'siniestro' || f === 'notas' || f === 'fallas') {
             // Campos críticos: nunca sobreescribir con valor vacío
             if (datos[f]) store[k][f] = datos[f];
+          } else if (f === 'observaciones') {
+            // observaciones es exclusivo de fallas/etiquetas — solo actualizar si viene
+            // de fuente que no sea asignación, o si hay un valor explícito de falla
+            const fuente = datos._fuente || '';
+            if (!fuente.includes('asignacion') && datos[f] !== '') {
+              store[k][f] = datos[f];
+            }
           } else if (datos[f] !== '') {
             store[k][f] = datos[f];
           }
@@ -1060,7 +1066,8 @@ const DB = (() => {
         motor:        f.motor,
         placa:        f.placa,
         asientos:     f.asientos,
-        observaciones:f.observaciones,
+        obs_asig:     f.obs_asig || f.observaciones || '',  // dato interno de asignación
+        // NO copiar a u.observaciones — ese campo es exclusivo de fallas/etiquetas
         mes:          mesLabel,
         activa:       true,
         _fuente:      'asignacion'
