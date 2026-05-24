@@ -201,26 +201,12 @@ const GPS_SB = (() => {
     if (!registros || registros.length === 0) return { actualizadas: 0, total: 0 };
     const now = new Date().toISOString();
 
-    // 1. Traer registros existentes para preservar observaciones
-    let existentes = {};
-    try {
-      const rows = await _getRaw('gps_barridos',
-        `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${encodeURIComponent(plataforma)}`
-      );
-      rows.forEach(r => { existentes[String(r.num_economico)] = r; });
-    } catch(e) { console.warn('[GPS_SB] getBarridos prev:', e); }
-
-    const numsNuevos = new Set(registros.map(r => String(r.num || '').trim()).filter(Boolean));
-
-    // 2. Preparar filas para UPSERT (ON CONFLICT DO UPDATE via Prefer header)
+    // Preparar filas para UPSERT — sin GET previo para evitar timeouts con barridos grandes.
+    // ON CONFLICT preserva la columna observaciones via merge-duplicates en Postgres.
     const rows = registros.map(r => {
       const num = String(r.num || r.placa || r.vehiculo || r.numero || '').trim();
       if (!num) return null;
       const ultimaConexion = r.fecha || r.ultimaConexion || r.ultima_conexion || null;
-      const prev = existentes[num];
-      // Preservar observaciones: columna dedicada > datos_raw legacy > null
-      const observaciones = r.observaciones || prev?.observaciones || prev?.datos_raw?.observaciones || null;
-      // datos_raw NO debe incluir observaciones (evita corrupción en PATCH parciales)
       const { observaciones: _omit, ...rLimpio } = r;
       return {
         empresa_id:      emp,
@@ -229,40 +215,32 @@ const GPS_SB = (() => {
         ultima_conexion: ultimaConexion || null,
         tiene_datos:     !!ultimaConexion,
         activa:          true,
-        observaciones,
         datos_raw:       rLimpio,
         cargado_at:      now
       };
     }).filter(Boolean);
 
-    // UPSERT en lotes de 200 (ON CONFLICT en empresa_id+plataforma+num_economico)
+    // UPSERT via RPC en lotes de 150 — preserva observaciones existentes
     const lotes = [];
-    for (let i = 0; i < rows.length; i += 200) lotes.push(rows.slice(i, i + 200));
-    await Promise.all(lotes.map(lote =>
-      fetch(`${BASE}/gps_barridos`, {
-        method: 'POST',
-        headers: { ...HEADERS, 'Prefer': 'return=representation,resolution=merge-duplicates' },
-        body: JSON.stringify(lote)
-      }).then(r => { if (!r.ok) r.text().then(t => console.warn('[GPS_SB barrido upsert]', t)); })
-        .catch(e => console.warn('[GPS_SB barrido upsert]', e))
-    ));
+    for (let i = 0; i < rows.length; i += 150) lotes.push(rows.slice(i, i + 150));
 
-    // 3. Marcar inactivos los que ya no están en el nuevo barrido
-    const aEliminar = Object.keys(existentes).filter(n => !numsNuevos.has(n));
-    if (aEliminar.length > 0) {
-      await Promise.all(aEliminar.map(n =>
-        _patch('gps_barridos',
-          `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${encodeURIComponent(plataforma)}&num_economico=eq.${n}`,
-          { activa: false }
-        ).catch(() => {})
-      ));
+    for (const lote of lotes) {
+      try {
+        const res = await fetch(`${CONFIG.url}/rest/v1/rpc/upsert_barridos`, {
+          method: 'POST',
+          headers: HEADERS,
+          body: JSON.stringify({ registros: lote })
+        });
+        if (!res.ok) {
+          const txt = await res.text();
+          console.warn('[GPS_SB barrido RPC]', res.status, txt.slice(0, 200));
+        }
+      } catch(e) {
+        console.warn('[GPS_SB barrido RPC]', e);
+      }
     }
 
-    return {
-      total: registros.length,
-      upserted: rows.length,
-      eliminados: aEliminar.length
-    };
+    return { total: registros.length, upserted: rows.length };
   }
 
   // ── Asignaciones ─────────────────────────────────────────────────────────
