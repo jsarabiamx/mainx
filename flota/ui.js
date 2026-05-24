@@ -1641,7 +1641,6 @@ const UI = (() => {
       renderPlataformas._syncDone = true;
       App._syncFallasDesdeInicio && App._syncFallasDesdeInicio().then(() => {
         renderPlataformas();
-        if (_platExpandida) setTimeout(() => _refreshPlatTable(_platExpandida), 100);
       });
       // Renderizar con datos actuales mientras llega el sync (no bloquear UI)
     }
@@ -1982,9 +1981,6 @@ const UI = (() => {
     );
     uns = uns.filter(u => !!u[k]);
 
-    // Siniestros activos NO aparecen en tabla de Plataformas GPS
-    uns = uns.filter(u => !_tieneSiniestroActivo(u));
-
     const f = _platTableFilter;
 
     // Filtros multi-selección: cada filtro es un ARRAY.
@@ -2139,7 +2135,7 @@ const UI = (() => {
         return `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${c}22;color:${c};border:1px solid ${c}44">${motiveEstado||'—'}</span>`;
       })() : '';
 
-      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" ondblclick="UI._editarCapturaManuaRow('${esc(u.num)}','${plat}')" style="cursor:pointer" title="${esManual?'Doble clic para editar fecha':''}">
+      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" style="cursor:pointer">
         <td style="font-weight:700">${esc(u.num)}</td>
         <td>${esc(u.base||'—')}</td>
         <td>${esc(u.cromatica||'—')}</td>
@@ -2511,17 +2507,8 @@ const UI = (() => {
     _platExpandida = plat;
     _platDetailUnit = null;
     renderPlataformas();
-    setTimeout(() => {
-      const eNum = $('pf-m-num');
-      if (eNum) eNum.focus();
-      const eFecha = $('pf-m-fecha');
-      if (eFecha && !eFecha.value) {
-        const now = new Date();
-        const pad = n => String(n).padStart(2,'0');
-        eFecha.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-        _recalcularDiasManual();
-      }
-    }, 150);
+    // Dar foco al input de número
+    setTimeout(() => { const e = $('pf-m-num'); if (e) e.focus(); }, 150);
   }
 
   function _autocompletarCapturaManual(plat) {
@@ -2574,23 +2561,9 @@ const UI = (() => {
     }
     const iso = new Date(fecha).toISOString();
     const platKey = 'ultima_act_' + plat.toLowerCase();
-    const idPlaca = ($('pf-m-id')?.value || '').trim();
     const datos = { [platKey]: iso, plataforma: plat, _fuente: 'captura_manual_' + plat };
     if (!u || !u.ultima_act || new Date(iso) > new Date(u.ultima_act)) datos.ultima_act = iso;
     DB.upsertUnidad(num, datos, emp);
-    // Guardar en Supabase: gps_unidades + gps_barridos
-    if (window.GPS_SB) {
-      const uActual = DB.getUnidad(num, emp) || {};
-      GPS_SB.upsertUnidad({
-        num, base: uActual.base || '', cromatica: uActual.cromatica || '',
-        modelo: uActual.modelo || '', placa: idPlaca || uActual.placa || '',
-        estatus: uActual.estatus || 'EN_OPERACION',
-      }, emp).then(() => {
-        const raw = { num, fecha: iso, fechaStr: Parsers.fmtDate(iso), plataforma: plat };
-        if (idPlaca) raw.placa = idPlaca;
-        return GPS_SB.saveBarrido(plat, [raw], emp);
-      }).catch(e => console.warn('[Captura manual Supabase]', e));
-    }
     DB.addLog('manual', `${plat}: captura manual unidad ${num} (${Parsers.fmtDate(iso)})`, emp);
     toast(`✓ ${plat}: unidad ${num} guardada`, 'success');
 
@@ -4901,7 +4874,7 @@ const UI = (() => {
     // plataformas v7: detalle inline, búsqueda multi-token, captura manual
     _onPlatRowClick, _cerrarPlatDetailInline,
     _abrirCapturaManualPlat, _autocompletarCapturaManual,
-    _recalcularDiasManual, _guardarCapturaManualPlat, _editarCapturaManuaRow,
+    _recalcularDiasManual, _guardarCapturaManualPlat,
     _updatePlatFechaConISO,
     // v7.1: tabs del detalle inline y guardar observaciones in-situ
     _cambiarPlatDetailTab, _guardarObsInline, _editarObsRapido,
