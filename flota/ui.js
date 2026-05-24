@@ -1650,9 +1650,8 @@ const UI = (() => {
     const cfg=DB.getConfig();
     const hoy=Date.now();
 
-    // Para conteos de plataformas: incluir unidades de TODAS las empresas
-    // (MOTIVE/VOLVO pueden tener unidades en empresas distintas a la activa)
-    const todasUns = DB.getEmpresasList().flatMap(e => DB.getUnidadesList(e)).filter(u => u.activa);
+    // Conteos de tarjetas: solo empresa activa
+    const todasUns = DB.getUnidadesList(emp).filter(u => u.activa);
 
     // Excluir "Para venta" Y siniestros activos de los conteos operativos de plataformas
     const operativas = todasUns.filter(u =>
