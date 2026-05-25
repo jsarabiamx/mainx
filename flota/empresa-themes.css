@@ -29,12 +29,12 @@ body[data-empresa="ETN"] {
 
 /* ── GHO · Verde pizarra oscuro ─────────────────────────────────── */
 body[data-empresa="GHO"] {
-  --accent:        #279965;
-  --accent-2:      #3db87c;
-  --accent-glow:   rgba(39,153,101,.10);
-  --accent-glow2:  rgba(39,153,101,.04);
-  --accent-border: rgba(39,153,101,.22);
-  --accent-dim:    rgba(39,153,101,.06);
+  --accent:        #1d7a50;
+  --accent-2:      #268f60;
+  --accent-glow:   rgba(29,122,80,.08);
+  --accent-glow2:  rgba(29,122,80,.03);
+  --accent-border: rgba(29,122,80,.16);
+  --accent-dim:    rgba(29,122,80,.05);
   --bg-base:       #060c09;
   --bg-panel:      #091410;
   --bg-card:       #0d1c16;
@@ -53,12 +53,12 @@ body[data-empresa="GHO"] {
 
 /* ── AERS · Bronce / ocre oscuro ────────────────────────────────── */
 body[data-empresa="AERS"] {
-  --accent:        #b87d10;
-  --accent-2:      #d09830;
-  --accent-glow:   rgba(184,125,16,.10);
-  --accent-glow2:  rgba(184,125,16,.04);
-  --accent-border: rgba(184,125,16,.22);
-  --accent-dim:    rgba(184,125,16,.06);
+  --accent:        #8a5e0a;
+  --accent-2:      #a87220;
+  --accent-glow:   rgba(138,94,10,.08);
+  --accent-glow2:  rgba(138,94,10,.03);
+  --accent-border: rgba(138,94,10,.18);
+  --accent-dim:    rgba(138,94,10,.05);
   --bg-base:       #0c0a06;
   --bg-panel:      #14100a;
   --bg-card:       #1c1810;
