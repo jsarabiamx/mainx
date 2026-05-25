@@ -164,8 +164,8 @@ const UI = (() => {
 
   /* ══ PLATFORM STYLES ══════════════════════════════════ */
   const PLAT_STYLE = {
-    CEIBA:   { bg:'#1a3a2a', color:'#34d399', label:'C'  },
-    SAMSARA: { bg:'#3a2a1a', color:'#f59e0b', label:'S'  },
+    CEIBA:   { bg:'#1a3a2a', color:'#2db882', label:'C'  },
+    SAMSARA: { bg:'#3a2a1a', color:'#c07d10', label:'S'  },
     AVL:     { bg:'#1a2a3a', color:'#60a5fa', label:'A'  },
     SCANIA:  { bg:'#3a1a1a', color:'#f87171', label:'Sc' },
     MAN:     { bg:'#2a2a3a', color:'#a78bfa', label:'M'  },
@@ -245,7 +245,7 @@ const UI = (() => {
 
     // Etiqueta de SINIESTRO (prioridad máxima, siempre visible)
     if (u.siniestro) {
-      pills.push(`<span style="${pillStyle};background:rgba(239,68,68,.14);color:#ef4444;border:1px solid rgba(239,68,68,.35)" title="${esc(u.siniestroDesc||'Siniestro')}">SINIESTRO${u.siniestroDesc?': '+esc(u.siniestroDesc):''}</span>`);
+      pills.push(`<span style="${pillStyle};background:rgba(192,57,43,.14);color:#c0392b;border:1px solid rgba(192,57,43,.35)" title="${esc(u.siniestroDesc||'Siniestro')}">SINIESTRO${u.siniestroDesc?': '+esc(u.siniestroDesc):''}</span>`);
     }
 
     // Etiqueta de viaje activo (icono de ruta)
@@ -261,9 +261,9 @@ const UI = (() => {
       const f = fallasActivas[fallasActivas.length - 1]; // más reciente
       // Cambia de color según antigüedad: verde recién creada (<1d), amarillo/naranja >1d
       const horas = (Date.now() - new Date(f.fecha).getTime()) / 3600000;
-      const col = horas < 24 ? '#10b981' : '#f59e0b';
-      const bg  = horas < 24 ? 'rgba(16,185,129,.14)' : 'rgba(245,158,11,.14)';
-      const br  = horas < 24 ? 'rgba(16,185,129,.35)' : 'rgba(245,158,11,.35)';
+      const col = horas < 24 ? '#1a9e6e' : '#c07d10';
+      const bg  = horas < 24 ? 'rgba(26,158,110,.14)' : 'rgba(192,125,16,.14)';
+      const br  = horas < 24 ? 'rgba(26,158,110,.35)' : 'rgba(192,125,16,.35)';
       pills.push(`<span style="${pillStyle};background:${bg};color:${col};border:1px solid ${br}" title="Falla: ${esc(f.motivo)}">⚠ ${esc((f.motivo||'FALLA').substring(0,22))}</span>`);
     }
 
@@ -288,7 +288,7 @@ const UI = (() => {
   function toast(msg, type='info', dur=3500) {
     let el = $('toast-container');
     if (!el) { el = document.createElement('div'); el.id='toast-container'; el.style.cssText='position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:380px;pointer-events:none'; document.body.appendChild(el); }
-    const colors={success:'#10b981',error:'#ef4444',info:'#3b82f6',warn:'#f59e0b'};
+    const colors={success:'#1a9e6e',error:'#c0392b',info:'#3b82f6',warn:'#c07d10'};
     const icons={success:'✓',error:'✕',info:'ℹ',warn:'⚠'};
     const t=document.createElement('div');
     t.style.cssText=`pointer-events:all;background:#1c2333;border:1px solid ${colors[type]}44;border-left:3px solid ${colors[type]};border-radius:9px;padding:10px 14px;font-size:12px;color:#e2e8f0;display:flex;align-items:flex-start;gap:8px;animation:slideIn .2s ease;box-shadow:0 4px 20px rgba(0,0,0,.4)`;
@@ -407,9 +407,9 @@ const UI = (() => {
 
     // Sparklines (ilustrativos, basados en totales de la empresa)
     const rnd=(b,n=8)=>Array.from({length:n},(_,i)=>Math.max(0,b+Math.round(Math.sin(i)*2+(Math.random()-.5)*3)));
-    Charts.sparkline('spark-fuera',    rnd(st.fuera+st.sinDatos),'#ef4444');
-    Charts.sparkline('spark-atencion', rnd(st.atencion),         '#f59e0b');
-    Charts.sparkline('spark-enlinea',  rnd(st.enLinea),          '#10b981');
+    Charts.sparkline('spark-fuera',    rnd(st.fuera+st.sinDatos),'#c0392b');
+    Charts.sparkline('spark-atencion', rnd(st.atencion),         '#c07d10');
+    Charts.sparkline('spark-enlinea',  rnd(st.enLinea),          '#1a9e6e');
     Charts.bar('spark-total',null,rnd(st.activas),'#3b82f6');
 
     const totalAlertas=st.sinVIN+st.sinPlaca+st.sinDatos+st.siniestros;
@@ -510,9 +510,9 @@ const UI = (() => {
           return sims.find(s => s.unidad === String(u.num)) || null;
         })();
         const _simColor = _simInfo ? {
-          'SIM INSTALADA':    { text:'#10b981', bg:'rgba(16,185,129,.13)' },
-          'SIM RETIRADA':     { text:'#ef4444', bg:'rgba(239,68,68,.13)' },
-          'SIM SIN ASIGNAR':  { text:'#f59e0b', bg:'rgba(245,158,11,.13)' },
+          'SIM INSTALADA':    { text:'#1a9e6e', bg:'rgba(26,158,110,.13)' },
+          'SIM RETIRADA':     { text:'#c0392b', bg:'rgba(192,57,43,.13)' },
+          'SIM SIN ASIGNAR':  { text:'#c07d10', bg:'rgba(192,125,16,.13)' },
           'SIM PARA INSTALAR':{ text:'#60a5fa', bg:'rgba(59,130,246,.13)' }
         }[_simInfo.estado] || { text:'#a78bfa', bg:'rgba(139,92,246,.13)' } : null;
 
@@ -591,13 +591,13 @@ const UI = (() => {
     if($('kpi-total'))    $('kpi-total').textContent    =unsFiltradas.length;
 
     if(unsFiltradas.length>0){
-      Charts.donut('donut-estado',['Fuera','Atención','En línea'],[fuera+sinDatos,atencion,enLinea],['#ef4444','#f59e0b','#10b981']);
+      Charts.donut('donut-estado',['Fuera','Atención','En línea'],[fuera+sinDatos,atencion,enLinea],['#c0392b','#c07d10','#1a9e6e']);
     }
     if($('pct-fuera'))    $('pct-fuera').textContent    =Math.round((fuera+sinDatos)/total*100)+'%';
     if($('pct-atencion')) $('pct-atencion').textContent =Math.round(atencion/total*100)+'%';
     if($('pct-enlinea'))  $('pct-enlinea').textContent  =Math.round(enLinea/total*100)+'%';
 
-    const COLORS=['#3b82f6','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899'];
+    const COLORS=['#3b82f6','#c07d10','#1a9e6e','#c0392b','#8b5cf6','#06b6d4','#c06010','#ec4899'];
 
     const bE=Object.entries(porBase).sort((a,b)=>b[1]-a[1]);
     if(bE.length && $('donut-bases')){
@@ -934,9 +934,9 @@ const UI = (() => {
     }
 
     if (labels.length > 0) {
-      Charts.lineChart('chart-histdias', labels, vals, '#ef4444');
+      Charts.lineChart('chart-histdias', labels, vals, '#c0392b');
     } else {
-      Charts.sparkline('chart-histdias', [0, 0], '#ef4444');
+      Charts.sparkline('chart-histdias', [0, 0], '#c0392b');
     }
   }
 
@@ -1031,8 +1031,8 @@ const UI = (() => {
     if (fallasActivas.length > 0) {
       const f = fallasActivas[fallasActivas.length - 1];
       const color = f.esSiniestro ? 'var(--red)' : 'var(--yellow)';
-      const borderC = f.esSiniestro ? 'rgba(239,68,68,.5)' : 'rgba(245,158,11,.4)';
-      const bgC = f.esSiniestro ? 'rgba(239,68,68,.08)' : 'rgba(245,158,11,.08)';
+      const borderC = f.esSiniestro ? 'rgba(192,57,43,.5)' : 'rgba(192,125,16,.4)';
+      const bgC = f.esSiniestro ? 'rgba(192,57,43,.08)' : 'rgba(192,125,16,.08)';
       const icon = f.esSiniestro ? '🚨' : '⚠';
       const titulo = f.esSiniestro ? 'SINIESTRO ACTIVO' : 'FALLA ACTIVA';
       openModal(`
@@ -1335,7 +1335,7 @@ const UI = (() => {
   let _asigPending=null;
 
   function _setStep(prefix,n){for(let i=1;i<=5;i++){const el=$(prefix+i);if(!el)continue;el.classList.remove('done','active');if(i<n)el.classList.add('done');else if(i===n)el.classList.add('active');}}
-  function _alertCarga(id,msg,type){const el=$(id);if(!el)return;const c={success:'#10b981',error:'#ef4444',info:'#3b82f6',warn:'#f59e0b'}[type]||'#3b82f6';el.innerHTML=`<div style="padding:9px 13px;border-radius:7px;font-size:12px;background:${c}18;color:${c};border:1px solid ${c}44;display:flex;align-items:center;gap:8px">${{success:'✓',error:'✕',info:'ℹ',warn:'⚠'}[type]||'ℹ'} ${esc(msg)}</div>`;}
+  function _alertCarga(id,msg,type){const el=$(id);if(!el)return;const c={success:'#1a9e6e',error:'#c0392b',info:'#3b82f6',warn:'#c07d10'}[type]||'#3b82f6';el.innerHTML=`<div style="padding:9px 13px;border-radius:7px;font-size:12px;background:${c}18;color:${c};border:1px solid ${c}44;display:flex;align-items:center;gap:8px">${{success:'✓',error:'✕',info:'ℹ',warn:'⚠'}[type]||'ℹ'} ${esc(msg)}</div>`;}
 
   async function handleAsigFile(file){
     if(!file)return;
@@ -1444,7 +1444,7 @@ const UI = (() => {
     const hist=DB.getHistorialGlobal(40);
     if(!hist.length){el.innerHTML='<div style="color:var(--text3);font-size:11px">Sistema listo.</div>';return;}
     el.innerHTML=hist.map(h=>{
-      const c=h.tipo==='error'?'#ef4444':h.tipo==='barrido'?'#10b981':h.tipo==='asignacion'?'#3b82f6':h.tipo==='manual'?'#a78bfa':'#9ca3af';
+      const c=h.tipo==='error'?'#c0392b':h.tipo==='barrido'?'#1a9e6e':h.tipo==='asignacion'?'#3b82f6':h.tipo==='manual'?'#a78bfa':'#9ca3af';
       return`<div style="padding:1px 0"><span style="color:var(--text3);font-size:10px">${Parsers.fmtTime(h.fecha)} </span><span style="color:${c};font-size:11px">${esc(h.mensaje)}</span></div>`;
     }).join('');
     el.scrollTop=el.scrollHeight;
@@ -2044,7 +2044,7 @@ const UI = (() => {
       const atencion = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasLinea && d <= cfg.diasAtencion; }).length;
       const fuera    = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasAtencion; }).length;
       const sinis    = uns.filter(u => u.siniestro).length;
-      sum.innerHTML = `<strong>${uns.length}</strong> unidades en ${plat} · <span style="color:var(--green)">${enLinea} en línea</span> · <span style="color:var(--yellow)">${atencion} atención</span> · <span style="color:var(--red)">${fuera} fuera</span>${sinis?` · <span style="color:#ef4444">🚨 ${sinis} siniestro${sinis>1?'s':''}</span>`:''}`;
+      sum.innerHTML = `<strong>${uns.length}</strong> unidades en ${plat} · <span style="color:var(--green)">${enLinea} en línea</span> · <span style="color:var(--yellow)">${atencion} atención</span> · <span style="color:var(--red)">${fuera} fuera</span>${sinis?` · <span style="color:#c0392b">🚨 ${sinis} siniestro${sinis>1?'s':''}</span>`:''}`;
     }
 
     if (!uns.length) {
@@ -2134,10 +2134,10 @@ const UI = (() => {
         if (incluyeEstadoCol) {
           const es = _estadoSamsaraDe(u);
           const cfgEst = {
-            FUNCIONANDO:  { c:'#10b981', bg:'rgba(16,185,129,.15)', br:'rgba(16,185,129,.3)', l:'FUNCIONANDO' },
-            NO_DETECTADO: { c:'#ef4444', bg:'rgba(239,68,68,.15)', br:'rgba(239,68,68,.3)', l:'NO DETECTADO' },
+            FUNCIONANDO:  { c:'#1a9e6e', bg:'rgba(26,158,110,.15)', br:'rgba(26,158,110,.3)', l:'FUNCIONANDO' },
+            NO_DETECTADO: { c:'#c0392b', bg:'rgba(192,57,43,.15)', br:'rgba(192,57,43,.3)', l:'NO DETECTADO' },
             SIN_VIN:      { c:'#a78bfa', bg:'rgba(139,92,246,.15)', br:'rgba(139,92,246,.3)', l:'SIN VG' },
-            SIN_PLACA:    { c:'#f59e0b', bg:'rgba(245,158,11,.15)', br:'rgba(245,158,11,.3)', l:'SIN PLACA' }
+            SIN_PLACA:    { c:'#c07d10', bg:'rgba(192,125,16,.15)', br:'rgba(192,125,16,.3)', l:'SIN PLACA' }
           }[es] || { c:'#9ca3af', bg:'rgba(156,163,175,.15)', br:'rgba(156,163,175,.3)', l: es || '—' };
           estadoSamsaraCell = `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${cfgEst.bg};color:${cfgEst.c};border:1px solid ${cfgEst.br}">${cfgEst.l}</span>`;
         }
@@ -2797,7 +2797,7 @@ const UI = (() => {
     const st=DB.getStats(emp);
     const uns=DB.getUnidadesList(emp);
     const act=uns.filter(u=>u.activa);
-    const COLORS=['#3b82f6','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#f97316'];
+    const COLORS=['#3b82f6','#c07d10','#1a9e6e','#c0392b','#8b5cf6','#06b6d4','#c06010'];
     const total=act.length||1;
 
     if($('asig-total'))  $('asig-total').textContent =act.length;
@@ -2819,9 +2819,9 @@ const UI = (() => {
       if($('asig-crom-legend')) $('asig-crom-legend').innerHTML=cE.slice(0,5).map(([k,v],i)=>
         `<div class="leg-row"><span class="leg-dot" style="background:${COLORS[i%COLORS.length]}"></span><span class="leg-name" style="max-width:80px;overflow:hidden;text-overflow:ellipsis">${esc(k)}</span><span class="leg-num">${v}</span></div>`).join('');}
 
-    if(eE.length){ Charts.donut('asig-donut-est',eE.map(e=>e[0]),eE.map(e=>e[1]),['#10b981','#ef4444','#f59e0b','#3b82f6','#9ca3af']);
+    if(eE.length){ Charts.donut('asig-donut-est',eE.map(e=>e[0]),eE.map(e=>e[1]),['#1a9e6e','#c0392b','#c07d10','#3b82f6','#9ca3af']);
       if($('asig-est-legend')) $('asig-est-legend').innerHTML=eE.map(([k,v],i)=>
-        `<div class="leg-row"><span class="leg-dot" style="background:${['#10b981','#ef4444','#f59e0b','#3b82f6','#9ca3af'][i]||COLORS[i%COLORS.length]}"></span><span class="leg-name">${esc(k)}</span><span class="leg-num">${v}</span><span class="leg-pct">(${Math.round(v/total*100)}%)</span></div>`).join('');}
+        `<div class="leg-row"><span class="leg-dot" style="background:${['#1a9e6e','#c0392b','#c07d10','#3b82f6','#9ca3af'][i]||COLORS[i%COLORS.length]}"></span><span class="leg-name">${esc(k)}</span><span class="leg-num">${v}</span><span class="leg-pct">(${Math.round(v/total*100)}%)</span></div>`).join('');}
 
     // Empresa bars
     if($('asig-emp-bars')) $('asig-emp-bars').innerHTML=Object.entries(st.porEmpresa).sort((a,b)=>b[1]-a[1]).map(([k,v],i)=>
@@ -3261,7 +3261,7 @@ const UI = (() => {
         .vj-obs-empty{color:var(--text3)}
         .vj-obs-editor{background:var(--bg-card);border:1px solid var(--blue);border-radius:5px;padding:4px;width:280px;max-width:100%}
         .vj-obs-editor textarea{width:100%;background:var(--bg-base);border:1px solid var(--border);border-radius:4px;padding:5px 7px;color:var(--text);font-family:var(--font);font-size:11px;resize:vertical;min-height:50px}
-        .vj-row-saved{background:rgba(16,185,129,.04)}
+        .vj-row-saved{background:rgba(26,158,110,.04)}
       </style>
     `;
   }
@@ -3646,7 +3646,7 @@ const UI = (() => {
     setTimeout(() => {
       statsByPlat.forEach(s => {
         if (s.totalPlat > 0) {
-          Charts.donut('gplat-'+s.plat, ['En línea','Fuera'], [s.enLinea, s.fueraTotal], ['#10b981','#ef4444']);
+          Charts.donut('gplat-'+s.plat, ['En línea','Fuera'], [s.enLinea, s.fueraTotal], ['#1a9e6e','#c0392b']);
         } else {
           // Sin dispositivos: dona vacía gris
           Charts.donut('gplat-'+s.plat, ['Sin dispositivos'], [1], ['#374151']);
@@ -3893,8 +3893,8 @@ const UI = (() => {
       const dias = Math.floor(horas / 24);
       const tiempo = dias > 0 ? `${dias}d ${Math.round(horas%24)}h` : `${Math.round(horas)}h`;
       const tipoStyle = f.esSiniestro
-        ? 'background:rgba(239,68,68,.15);color:#ef4444'
-        : 'background:rgba(245,158,11,.15);color:#f59e0b';
+        ? 'background:rgba(192,57,43,.15);color:#c0392b'
+        : 'background:rgba(192,125,16,.15);color:#c07d10';
       const tipoLabel = f.esSiniestro ? '🚨 SINIESTRO' : '⚠ AFR/FALLA';
       return `<div style="background:var(--bg-card);border-radius:7px;padding:8px 10px;margin-bottom:5px">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
@@ -3937,7 +3937,7 @@ const UI = (() => {
       const col = h.tipo === 'SINIESTRO' ? 'var(--red)' : 'var(--yellow)';
       const ico = h.tipo === 'SINIESTRO' ? '🚨' : '⚠';
       return `<div class="fal-hist-row">
-        <div class="fal-hist-icon" style="background:${h.tipo==='SINIESTRO'?'rgba(239,68,68,.15)':'rgba(245,158,11,.15)'}">${ico}</div>
+        <div class="fal-hist-icon" style="background:${h.tipo==='SINIESTRO'?'rgba(192,57,43,.15)':'rgba(192,125,16,.15)'}">${ico}</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:11px;font-weight:600;color:${col}">${esc(h.tipo)} — ${esc(h.motivo||'Sin motivo')}</div>
           <div style="font-size:10px;color:var(--text3)">${fechaI} → ${fechaL} · ${dias} en falla</div>
@@ -3959,8 +3959,8 @@ const UI = (() => {
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:4px">
-        ${u.siniestroCount>0?`<span style="font-size:10px;background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.25);border-radius:4px;padding:2px 7px">🚨 ${u.siniestroCount} siniestro${u.siniestroCount!==1?'s':''}</span>`:''}
-        ${u.afrCount>0?`<span style="font-size:10px;background:rgba(245,158,11,.1);color:var(--yellow);border:1px solid rgba(245,158,11,.25);border-radius:4px;padding:2px 7px">⚠ ${u.afrCount} AFR</span>`:''}
+        ${u.siniestroCount>0?`<span style="font-size:10px;background:rgba(192,57,43,.1);color:var(--red);border:1px solid rgba(192,57,43,.25);border-radius:4px;padding:2px 7px">🚨 ${u.siniestroCount} siniestro${u.siniestroCount!==1?'s':''}</span>`:''}
+        ${u.afrCount>0?`<span style="font-size:10px;background:rgba(192,125,16,.1);color:var(--yellow);border:1px solid rgba(192,125,16,.25);border-radius:4px;padding:2px 7px">⚠ ${u.afrCount} AFR</span>`:''}
       </div>
       ${hist.length > 0 ? `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:5px">Historial (${hist.length} eventos)</div>${histHtml}` : ''}
       ${hist.length > 3 ? `<div style="font-size:10px;color:var(--text3);margin-top:4px">+ ${hist.length-3} eventos más</div>` : ''}
@@ -4016,7 +4016,7 @@ const UI = (() => {
         <h3 style="font-size:14px;font-weight:600;flex:1">Registrar falla</h3>
         <button onclick="UI.closeModal()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
       </div>
-      <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+      <div style="background:rgba(192,125,16,.08);border:1px solid rgba(192,125,16,.2);border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px">
         <input type="checkbox" id="f-es-siniestro" style="width:16px;height:16px;accent-color:var(--red)">
         <span style="font-size:13px;font-weight:600;color:var(--red)">🚨 Es un siniestro</span>
       </div>
@@ -4353,10 +4353,10 @@ const UI = (() => {
                 const u = DB.getUnidad(f.num, emp);
                 const fechaSalida = _fechaSalidaBarridoManual(f);
                 const dias = _diasFechaBarridoManual(fechaSalida);
-                const colorEt = f.etiqueta === 'SINIESTRO' ? '#ef4444'
+                const colorEt = f.etiqueta === 'SINIESTRO' ? '#c0392b'
                               : f.etiqueta === 'ALINEACION' ? '#3b82f6'
-                              : f.etiqueta === 'AFR' ? '#f59e0b'
-                              : f.etiqueta === 'SIN_ENERGIA' ? '#ef4444'
+                              : f.etiqueta === 'AFR' ? '#c07d10'
+                              : f.etiqueta === 'SIN_ENERGIA' ? '#c0392b'
                               : f.etiqueta === 'TALLER' ? '#8b5cf6'
                               : f.etiqueta === 'CANDADO' ? '#6b7280'
                               : f.etiqueta ? '#a78bfa' : 'var(--text3)';
