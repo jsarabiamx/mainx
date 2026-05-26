@@ -4954,9 +4954,9 @@ const UI = (() => {
     let lista = uns;
     if (f.base) lista = lista.filter(u => u.base === f.base);
     if (f.crom) lista = lista.filter(u => u.cromatica === f.crom);
-    if (f.est)  lista = lista.filter(u => Parsers.categorizarEstatus(u.estatus) === f.est);
+    if (f.est)  lista = lista.filter(u => Parsers.normalizarEstatus(u.estatus) === f.est);
 
-    // Conteo por plataforma (SI / NO tienen datos)
+    // Conteo por plataforma (con equipo / sin equipo)
     const conteos = {};
     ALL_PLATS.forEach(p => {
       const k = 'ultima_act_' + p.toLowerCase();
@@ -4969,7 +4969,7 @@ const UI = (() => {
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
         <div>
           <h2 style="font-size:14px;font-weight:700">TABLA MAESTRA</h2>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">Unidades con matriz de plataformas (SÍ/NO) · Filtra y exporta en CSV</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Unidades con matriz de plataformas · Muestra el ID del equipo por plataforma · Filtra y exporta en CSV</div>
         </div>
         <button class="export-btn" onclick="UI._exportarMaestra()">↓ Exportar CSV</button>
       </div>
@@ -4980,8 +4980,8 @@ const UI = (() => {
           <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px">
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">${platIcon(p,18)}<div style="font-size:12px;font-weight:700">${p}</div></div>
             <div style="display:flex;gap:8px;font-size:11px">
-              <div><span style="color:var(--green);font-weight:700">${conteos[p].con}</span> <span style="color:var(--text3)">sí</span></div>
-              <div><span style="color:var(--red);font-weight:700">${conteos[p].sin}</span> <span style="color:var(--text3)">no</span></div>
+              <div><span style="color:var(--green);font-weight:700">${conteos[p].con}</span> <span style="color:var(--text3)">con equipo</span></div>
+              <div><span style="color:var(--text3);font-weight:600">${conteos[p].sin}</span> <span style="color:var(--text3)">sin equipo</span></div>
             </div>
           </div>`).join('')}
       </div>
@@ -5006,9 +5006,8 @@ const UI = (() => {
           <span class="plat-filter-lbl">ESTATUS OP.</span>
           <select id="ma-f-est" onchange="UI._onMaestraFilterChange()">
             <option value="">Todos</option>
-            <option value="En operación" ${f.est==='En operación'?'selected':''}>En operación</option>
-            <option value="Fuera de operación" ${f.est==='Fuera de operación'?'selected':''}>Fuera de op.</option>
-            <option value="Para venta" ${f.est==='Para venta'?'selected':''}>Para venta</option>
+            ${[...new Set(uns.map(u => Parsers.normalizarEstatus(u.estatus)).filter(Boolean))].sort()
+              .map(e => `<option value="${esc(e)}" ${f.est===e?'selected':''}>${esc(e)}</option>`).join('')}
           </select>
         </div>
         <button class="act-btn" onclick="UI._resetMaestraFilters()">↺ Reset</button>
@@ -5036,7 +5035,34 @@ const UI = (() => {
                 ${ALL_PLATS.map(p => {
                   const k = 'ultima_act_' + p.toLowerCase();
                   const tiene = !!u[k];
-                  return `<td style="text-align:center;color:${tiene?'var(--green)':'var(--red)'};font-weight:700">${tiene?'SÍ':'NO'}</td>`;
+                  // Identificador específico por plataforma
+                  const idMap = {
+                    CEIBA:   u.dvr_ceiba   || '',
+                    SAMSARA: u.vin_samsara  || '',
+                    MAN:     u.placa_man    || '',
+                    SCANIA:  u.placa_scania || '',
+                    AVL:     '',
+                    VOLVO:   '',
+                    MOTIVE:  u.motive_vg   || ''
+                  };
+                  const idVal = idMap[p] || '';
+                  if (tiene) {
+                    const desK = 'desinstalacion_' + p.toLowerCase();
+                    const esDes = !!u[desK];
+                    if (esDes) {
+                      return `<td style="text-align:center">
+                        <span style="font-size:9px;font-weight:700;color:#888;background:rgba(100,100,100,.15);padding:1px 5px;border-radius:3px" title="Desinstalado">DESINSTAL.</span>
+                      </td>`;
+                    }
+                    return `<td style="text-align:center">
+                      ${idVal
+                        ? `<span style="font-family:monospace;font-size:10px;font-weight:700;color:var(--green)" title="${esc(idVal)}">${esc(idVal.length>10?idVal.substring(0,10)+'…':idVal)}</span>`
+                        : `<span style="font-size:11px;font-weight:700;color:var(--green)">✓ Con equipo</span>`
+                      }
+                    </td>`;
+                  } else {
+                    return `<td style="text-align:center;color:var(--text3);font-size:10px">Sin equipo</td>`;
+                  }
                 }).join('')}
               </tr>`).join('')}
             </tbody>
