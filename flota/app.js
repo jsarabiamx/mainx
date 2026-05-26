@@ -492,6 +492,80 @@ const App = (() => {
 
     // Iniciar sincronización en tiempo real de fallas
     setTimeout(_startFallasSync, 5000);
+
+    // Polling de desinstalaciones — sync entre navegadores cada 30s
+    setTimeout(_startDesinstalacionesSync, 8000);
+  }
+
+  async function _syncDesinstalaciones() {
+    if (!window.GPS_SB) return;
+    try {
+      const rows = await GPS_SB._getRaw('gps_barridos', 'desinstalado=eq.true');
+      if (!rows || !rows.length) {
+        // Si no hay desinstalados en Supabase, limpiar los locales que no estén en SB
+        _limpiarDesinstalacionesLocales([]);
+        return;
+      }
+      let cambio = false;
+      rows.forEach(r => {
+        const emp = String(r.empresa_id || '');
+        const num = String(r.num_economico || '');
+        const plat = String(r.plataforma || '').toLowerCase();
+        const desKey = 'desinstalacion_' + plat;
+        const u = DB.getUnidad(num, emp);
+        if (!u) return;
+        const nuevoVal = {
+          fecha:      r.desinstalacion_fecha      || null,
+          comentario: r.desinstalacion_comentario || '',
+          ts:         r.desinstalacion_ts         || null
+        };
+        const actual = u[desKey];
+        if (!actual || actual.fecha !== nuevoVal.fecha || actual.comentario !== nuevoVal.comentario) {
+          DB.upsertUnidad(num, { [desKey]: nuevoVal }, emp);
+          cambio = true;
+        }
+      });
+      // También limpiar las que fueron liberadas en Supabase
+      _limpiarDesinstalacionesLocales(rows);
+      if (cambio) {
+        // Refrescar UI si hay paneles activos
+        const panelPlat = document.getElementById('panel-plataformas');
+        if (panelPlat && panelPlat.classList.contains('active') && UI._platExpandida) {
+          UI._refreshPlatTable(UI._platExpandida);
+        }
+        const panelDetalle = document.getElementById('panel-detalle');
+        if (panelDetalle && panelDetalle.classList.contains('active')) {
+          // Re-renderizar solo si hay cambio en la unidad actual
+          const numActual = panelDetalle.querySelector('[data-num]')?.dataset?.num;
+          if (numActual) UI.renderDetalle(numActual, DB.getEmpresaActiva());
+        }
+      }
+    } catch(e) { /* silencioso */ }
+  }
+
+  function _limpiarDesinstalacionesLocales(rowsDesinstalados) {
+    // Quita desinstalacion_* de unidades locales que ya no están desinstaladas en Supabase
+    const sbSet = new Set(rowsDesinstalados.map(r => `${r.empresa_id}|${r.num_economico}|${r.plataforma?.toLowerCase()}`));
+    const ALL_P = ['ceiba','samsara','avl','scania','man','volvo','motive'];
+    DB.getEmpresasList().forEach(emp => {
+      DB.getUnidadesList(emp).forEach(u => {
+        ALL_P.forEach(p => {
+          const desKey = 'desinstalacion_' + p;
+          if (u[desKey]) {
+            const key = `${emp}|${u.num}|${p}`;
+            if (!sbSet.has(key)) {
+              delete u[desKey];
+              DB.upsertUnidad(u.num, { updatedAt: new Date().toISOString() }, emp);
+            }
+          }
+        });
+      });
+    });
+  }
+
+  function _startDesinstalacionesSync() {
+    _syncDesinstalaciones();
+    setInterval(_syncDesinstalaciones, 30000);
   }
 
   function _showSyncBanner(msg) {
