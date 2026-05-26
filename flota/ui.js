@@ -248,6 +248,16 @@ const UI = (() => {
       pills.push(`<span style="${pillStyle};background:rgba(192,57,43,.14);color:#c0392b;border:1px solid rgba(192,57,43,.35)" title="${esc(u.siniestroDesc||'Siniestro')}">SINIESTRO${u.siniestroDesc?': '+esc(u.siniestroDesc):''}</span>`);
     }
 
+    // Etiquetas de DESINSTALACIÓN por plataforma
+    const ALL_P = ['CEIBA','SAMSARA','AVL','SCANIA','MAN','VOLVO','MOTIVE'];
+    ALL_P.forEach(p => {
+      const desK = 'desinstalacion_' + p.toLowerCase();
+      if (u[desK]) {
+        const desI = u[desK];
+        pills.push(`<span style="${pillStyle};background:rgba(90,90,90,.18);color:#909090;border:1px solid rgba(100,100,100,.35)" title="Equipo ${p} desinstalado el ${desI.fecha||'?'}: ${desI.comentario||''}">🔧 ${p} DESINSTAL.</span>`);
+      }
+    });
+
     // Etiqueta de viaje activo (icono de ruta)
     const viaje = DB.getViajeActivoDe ? DB.getViajeActivoDe(u.num, u.empresa) : null;
     if (viaje) {
@@ -706,12 +716,16 @@ const UI = (() => {
       <!-- MINI CARDS PLATAFORMAS (ORDENADAS: con datos primero) -->
       <div class="plat-quick-row" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
         ${platStatus.map(({p,f,d,tiene})=>{
-          const pc=!tiene?'var(--border)':(d!==null&&d<=cfg.diasLinea)?'var(--green)':(d!==null&&d<=cfg.diasAtencion)?'var(--yellow)':'var(--red)';
-          return `<div style="display:flex;align-items:center;gap:5px;padding:5px 8px;border-radius:7px;background:var(--bg-card);border:1px solid ${pc}33;min-width:0;cursor:${tiene?'pointer':'default'}" ${tiene?`onclick="UI._filtrarTimelinePlat('${p}','${esc(num)}','${esc(emp)}')" title="Click para filtrar línea de tiempo"`:''}>
+          const desK = 'desinstalacion_' + p.toLowerCase();
+          const esDes = !!u[desK];
+          const pc = esDes ? '#555' : (!tiene?'var(--border)':(d!==null&&d<=cfg.diasLinea)?'var(--green)':(d!==null&&d<=cfg.diasAtencion)?'var(--yellow)':'var(--red)');
+          const subLabel = esDes ? 'DESINSTAL.' : (tiene ? Parsers.fmtDateShort(f) : 'Sin datos');
+          const subColor = esDes ? '#666' : 'var(--text3)';
+          return `<div style="display:flex;align-items:center;gap:5px;padding:5px 8px;border-radius:7px;background:var(--bg-card);border:1px solid ${pc}44;min-width:0;cursor:${tiene&&!esDes?'pointer':'default'}${esDes?';opacity:.6;filter:grayscale(.6)':''}" ${tiene&&!esDes?`onclick="UI._filtrarTimelinePlat('${p}','${esc(num)}','${esc(emp)}')" title="Click para filtrar línea de tiempo"`:''}>
             ${platIcon(p,18)}
             <div style="min-width:0">
               <div style="font-size:10px;font-weight:700;color:${pc}">${p}</div>
-              <div style="font-size:9px;color:var(--text3)">${tiene?Parsers.fmtDateShort(f):'Sin datos'}</div>
+              <div style="font-size:9px;color:${subColor}">${subLabel}</div>
             </div>
           </div>`;
         }).join('')}
