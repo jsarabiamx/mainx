@@ -475,29 +475,13 @@ const App = (() => {
         DB.initFromSupabase().then(ok => {
           if (ok) {
             UI.renderResumen();
-            // Si el panel de plataformas está abierto, refrescar solo la tabla activa
-            // sin reconstruir todo el panel (evita que se borre la tabla visible)
             const panelPlat = document.getElementById('panel-plataformas');
             if (panelPlat && panelPlat.classList.contains('active')) {
-              // Actualizar conteos de tarjetas sin destruir la tabla abierta
-              const platCardsRow = document.getElementById('plat-cards-row');
-              if (platCardsRow) {
-                // Solo re-render completo si no hay tabla abierta
-                const platDetailBox = document.getElementById('plat-detail-box');
-                const hayTablaAbierta = platDetailBox && platDetailBox.innerHTML.trim().length > 0;
-                if (!hayTablaAbierta) {
-                  UI.renderPlataformas();
-                } else {
-                  // Refrescar solo la tabla activa preservando el estado
-                  if (UI._platExpandida) UI._refreshPlatTable(UI._platExpandida);
-                }
-              } else {
-                UI.renderPlataformas();
-              }
+              UI.renderPlataformas();
             }
           }
         });
-      }, 1500);
+      }, 500);
     }
 
     // Siempre sincronizar fallas activas (siniestros, AFR) desde Supabase
