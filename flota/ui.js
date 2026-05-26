@@ -2121,6 +2121,11 @@ const UI = (() => {
         const fecha = u[k];
         const d = fecha ? Math.floor((hoy - new Date(fecha))/86400000) : null;
 
+        // ── Desinstalación ────────────────────────────────────────────────
+        const desKey = 'desinstalacion_' + plat.toLowerCase();
+        const desInfo = u[desKey]; // { fecha, comentario, ts }
+        const estaDesinstalada = !!desInfo;
+
         // Estatus badge
         let platBadgeColor, platBadgeLabel;
         if (!fecha)                    { platBadgeColor = 'var(--text3)'; platBadgeLabel = 'SIN DATOS'; }
@@ -2163,8 +2168,14 @@ const UI = (() => {
         })() : '';
 
         const esManualRow = plat === 'VOLVO';
-        return `<tr data-num="${esc(safeU.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(safeU.num)}','${plat}')" ondblclick="UI._editarCapturaManuaRow('${esc(safeU.num)}','${plat}')" style="cursor:pointer" title="${esManualRow?'Doble clic para editar fecha':''}">
-          <td style="font-weight:700">${esc(safeU.num)}</td>
+        const rowStyle = estaDesinstalada
+          ? 'cursor:pointer;opacity:.55;filter:grayscale(.8);background:rgba(80,80,80,.08)'
+          : 'cursor:pointer';
+        const desBadge = estaDesinstalada
+          ? `<span style="display:inline-block;margin-left:4px;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;background:rgba(120,120,120,.25);color:#999;border:1px solid #555" title="Desinstalado el ${desInfo.fecha||'?'}">DESINSTAL.</span>`
+          : '';
+        return `<tr data-num="${esc(safeU.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(safeU.num)}','${plat}')" ondblclick="UI._editarCapturaManuaRow('${esc(safeU.num)}','${plat}')" style="${rowStyle}" title="${esManualRow?'Doble clic para editar fecha':''}">
+          <td style="font-weight:700">${esc(safeU.num)}${desBadge}</td>
           <td>${esc(safeU.base||'—')}</td>
           <td>${esc(safeU.cromatica||'—')}</td>
           <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(safeU.modelo||'—')}</td>
@@ -2263,16 +2274,26 @@ const UI = (() => {
       const style = PLAT_STYLE[p] || {};
       const fondoHeader = fe ? `background:${style.bg}` : 'background:var(--bg-panel)';
 
+      const desKeyD = 'desinstalacion_' + p.toLowerCase();
+      const desInfoD = u[desKeyD];
+      const estaDesD = !!desInfoD;
+
       if (!fe) {
         // Sin datos → muestra "Ingresar fecha"
-        return `<div class="plat-inline-card" style="border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        return `<div class="plat-inline-card" style="border:1px solid var(--border);border-radius:8px;overflow:hidden${estaDesD?';opacity:.5;filter:grayscale(.7)':''}">
           <div style="padding:8px 10px;${fondoHeader};display:flex;align-items:center;gap:6px">
             ${platIcon(p, 16)}
             <div style="font-size:11px;font-weight:700;color:${style.color||'var(--text2)'}">${p}</div>
+            ${estaDesD?`<span style="margin-left:auto;font-size:9px;background:rgba(120,120,120,.3);color:#aaa;padding:1px 5px;border-radius:3px;font-weight:700">DESINSTAL.</span>`:''}
           </div>
           <div style="padding:10px;display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;min-height:70px">
             <div style="font-size:10px;color:var(--text3)">Sin datos registrados</div>
-            <button class="act-btn-sm" style="font-size:10px;padding:4px 8px" onclick="event.stopPropagation();UI.openDatePicker(null,iso=>{UI._updatePlatFechaConISO('${esc(u.num)}','${p}','${esc(emp)}',iso);UI._refreshPlatTable('${plat}')},'${p} — Ingresar fecha')">+ Ingresar fecha</button>
+            ${estaDesD
+              ? `<div style="font-size:9px;color:#888;text-align:center">Desinstalado: ${desInfoD.fecha||'?'}<br><span style="color:#666">${desInfoD.comentario||''}</span></div>
+                 <button class="act-btn-sm" style="font-size:9px;padding:3px 7px;background:rgba(80,80,80,.3);border-color:#555;color:#aaa;margin-top:2px" onclick="event.stopPropagation();UI._liberarDesinstalacion('${esc(u.num)}','${p}','${esc(emp)}','${esc(plat)}')">↩ Liberar equipo</button>`
+              : `<button class="act-btn-sm" style="font-size:10px;padding:4px 8px" onclick="event.stopPropagation();UI.openDatePicker(null,iso=>{UI._updatePlatFechaConISO('${esc(u.num)}','${p}','${esc(emp)}',iso);UI._refreshPlatTable('${plat}')},'${p} — Ingresar fecha')">+ Ingresar fecha</button>
+                 <button class="act-btn-sm" style="font-size:9px;padding:3px 7px;background:rgba(160,60,40,.18);border-color:rgba(160,60,40,.4);color:#c07060;margin-top:2px" onclick="event.stopPropagation();UI._modalDesinstalacion('${esc(u.num)}','${p}','${esc(emp)}','${esc(plat)}')">🔧 Desinstalación</button>`
+            }
           </div>
         </div>`;
       }
@@ -2280,16 +2301,24 @@ const UI = (() => {
       const dd = Math.floor((hoy - new Date(fe))/86400000);
       const ddCls = dd <= cfg.diasLinea ? 'var(--green)' : dd <= cfg.diasAtencion ? 'var(--yellow)' : 'var(--red)';
       const ddLabel = dd <= cfg.diasLinea ? 'EN LÍNEA' : dd <= cfg.diasAtencion ? 'ATENCIÓN' : 'FUERA DE LÍNEA';
-      return `<div class="plat-inline-card" style="border:1px solid ${ddCls}66;border-radius:8px;overflow:hidden;background:var(--bg-panel)">
+      return `<div class="plat-inline-card" style="border:1px solid ${estaDesD?'#555':ddCls+'66'};border-radius:8px;overflow:hidden;background:var(--bg-panel)${estaDesD?';opacity:.5;filter:grayscale(.7)':''}">
         <div style="padding:8px 10px;${fondoHeader};display:flex;align-items:center;gap:6px">
           ${platIcon(p, 16)}
           <div style="font-size:11px;font-weight:700;color:${style.color||'var(--text2)'}">${p}</div>
+          ${estaDesD?`<span style="margin-left:auto;font-size:9px;background:rgba(120,120,120,.3);color:#aaa;padding:1px 5px;border-radius:3px;font-weight:700">DESINSTAL.</span>`:''}
         </div>
         <div style="padding:10px">
           <div style="font-size:11px;color:var(--text);margin-bottom:2px">${Parsers.fmtDate(fe)}</div>
-          <div style="font-size:9px;font-weight:700;color:${ddCls};margin-bottom:4px">${ddLabel}</div>
-          <div style="font-size:18px;font-weight:700;color:${ddCls};line-height:1">${dd}<span style="font-size:10px;margin-left:3px;color:var(--text3)">días</span></div>
-          <button class="act-btn-sm" style="font-size:10px;padding:3px 7px;margin-top:6px;width:100%" onclick="event.stopPropagation();UI.openDatePicker('${fe}',iso=>{UI._updatePlatFechaConISO('${esc(u.num)}','${p}','${esc(emp)}',iso);UI._refreshPlatTable('${plat}')},'${p} — Actualizar conexión')">↻ Actualizar</button>
+          <div style="font-size:9px;font-weight:700;color:${estaDesD?'#888':ddCls};margin-bottom:4px">${estaDesD?'DESINSTALADO':ddLabel}</div>
+          <div style="font-size:18px;font-weight:700;color:${estaDesD?'#888':ddCls};line-height:1">${dd}<span style="font-size:10px;margin-left:3px;color:var(--text3)">días</span></div>
+          ${estaDesD
+            ? `<div style="font-size:9px;color:#666;margin-top:4px">${desInfoD.comentario||''}</div>
+               <button class="act-btn-sm" style="font-size:9px;padding:3px 7px;background:rgba(80,80,80,.3);border-color:#555;color:#aaa;margin-top:6px;width:100%" onclick="event.stopPropagation();UI._liberarDesinstalacion('${esc(u.num)}','${p}','${esc(emp)}','${esc(plat)}')">↩ Liberar equipo</button>`
+            : `<div style="display:flex;gap:4px;margin-top:6px">
+                <button class="act-btn-sm" style="font-size:10px;padding:3px 7px;flex:1" onclick="event.stopPropagation();UI.openDatePicker('${fe}',iso=>{UI._updatePlatFechaConISO('${esc(u.num)}','${p}','${esc(emp)}',iso);UI._refreshPlatTable('${plat}')},'${p} — Actualizar conexión')">↻ Actualizar</button>
+                <button class="act-btn-sm" style="font-size:9px;padding:3px 6px;background:rgba(160,60,40,.18);border-color:rgba(160,60,40,.4);color:#c07060" title="Registrar desinstalación" onclick="event.stopPropagation();UI._modalDesinstalacion('${esc(u.num)}','${p}','${esc(emp)}','${esc(plat)}')">🔧</button>
+               </div>`
+          }
         </div>
       </div>`;
     }).join('');
@@ -2463,6 +2492,95 @@ const UI = (() => {
    * Se abre un prompt simple (sin re-renderizar toda la tabla mientras se escribe,
    * para no perder foco). Al guardar actualiza la unidad y refresca la tabla.
    */
+
+  // ══════════════════════════════════════════════════════════════════
+  //  DESINSTALACIÓN DE EQUIPO GPS
+  // ══════════════════════════════════════════════════════════════════
+  function _modalDesinstalacion(num, platDes, emp, platTabla) {
+    const prev = document.getElementById('modal-desinstalacion');
+    if (prev) prev.remove();
+    const u = DB.getUnidad(num, emp);
+    if (!u) return;
+    const desKey = 'desinstalacion_' + platDes.toLowerCase();
+    const existing = u[desKey] || {};
+    const fechaDefault = existing.fecha || new Date().toISOString().slice(0,10);
+    const comentDefault = existing.comentario || '';
+    const modal = document.createElement('div');
+    modal.id = 'modal-desinstalacion';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9999;display:flex;align-items:center;justify-content:center';
+    modal.innerHTML = `
+      <div style="background:var(--bg-card);border:1px solid var(--border2);border-radius:12px;padding:24px;width:360px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.6)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+          <span style="font-size:20px">🔧</span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text)">Desinstalación de equipo</div>
+            <div style="font-size:11px;color:var(--text3)">Unidad ${esc(num)} · Plataforma ${esc(platDes)}</div>
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">Fecha de desinstalación</label>
+          <input id="des-fecha" type="date" value="${fechaDefault}" style="width:100%;background:var(--bg-base);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;color:var(--text);font-size:13px">
+        </div>
+        <div style="margin-bottom:18px">
+          <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">Comentario / motivo</label>
+          <textarea id="des-comentario" rows="3" placeholder="Ej: Equipo retirado por falla, enviado a taller..." style="width:100%;background:var(--bg-base);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;resize:vertical">${esc(comentDefault)}</textarea>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button onclick="document.getElementById('modal-desinstalacion').remove()" style="padding:7px 14px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px">Cancelar</button>
+          <button id="des-guardar-btn" style="padding:7px 16px;border-radius:6px;border:none;background:#7a2810;color:#fff;cursor:pointer;font-size:12px;font-weight:600">Registrar desinstalación</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    document.getElementById('des-guardar-btn').onclick = () => {
+      const fecha = document.getElementById('des-fecha').value;
+      const comentario = document.getElementById('des-comentario').value.trim();
+      if (!fecha) { toast('Selecciona una fecha','warn'); return; }
+      const datos = {};
+      datos[desKey] = { fecha, comentario, ts: new Date().toISOString() };
+      const uObj = DB.getUnidad(num, emp);
+      if (uObj) {
+        uObj.historial = uObj.historial || [];
+        uObj.historial.push({ fecha: new Date().toISOString(), tipo: 'desinstalacion', motivo: `${platDes}: ${comentario||'sin comentario'}`, fuente: 'manual' });
+      }
+      DB.upsertUnidad(num, datos, emp);
+      // Sincronizar a Supabase
+      if (window.GPS_SB) {
+        GPS_SB.patchDesinstalacionBarrido(num, emp, platDes, { fecha, comentario, ts: new Date().toISOString() })
+          .catch(() => {});
+      }
+      modal.remove();
+      toast(`Desinstalación registrada en ${platDes}`, 'warn');
+      if (platTabla) _refreshPlatTable(platTabla);
+      if (_platDetailUnit === num && _platExpandida) {
+        const uUp = DB.getUnidad(num, emp);
+        if (uUp) { const box = document.getElementById('plat-inline-detail'); if (box) box.outerHTML = _renderPlatDetailInline(uUp, platTabla || _platExpandida); }
+      }
+    };
+  }
+
+  function _liberarDesinstalacion(num, platDes, emp, platTabla) {
+    const u = DB.getUnidad(num, emp);
+    if (!u) return;
+    const desKey = 'desinstalacion_' + platDes.toLowerCase();
+    if (u[desKey]) {
+      delete u[desKey];
+      u.historial = u.historial || [];
+      u.historial.push({ fecha: new Date().toISOString(), tipo: 'reactivacion', motivo: `Equipo liberado en ${platDes}`, fuente: 'manual' });
+      DB.upsertUnidad(num, { updatedAt: new Date().toISOString() }, emp);
+      // Sincronizar a Supabase — liberar (null)
+      if (window.GPS_SB) {
+        GPS_SB.patchDesinstalacionBarrido(num, emp, platDes, null).catch(() => {});
+      }
+    }
+    toast(`Equipo ${num} liberado en ${platDes}`, 'success');
+    if (platTabla) _refreshPlatTable(platTabla);
+    if (_platDetailUnit === num && _platExpandida) {
+      const uUp = DB.getUnidad(num, emp);
+      if (uUp) { const box = document.getElementById('plat-inline-detail'); if (box) box.outerHTML = _renderPlatDetailInline(uUp, platTabla || _platExpandida); }
+    }
+  }
+
   function _editarObsRapido(num, emp, plat) {
     const u = DB.getUnidad(num, emp);
     if (!u) { toast('Unidad no encontrada','error'); return; }
@@ -5008,6 +5126,7 @@ const UI = (() => {
     _onPlatRowClick, _cerrarPlatDetailInline,
     _abrirCapturaManualPlat, _autocompletarCapturaManual,
     _recalcularDiasManual, _guardarCapturaManualPlat, _editarCapturaManuaRow,
+    _modalDesinstalacion, _liberarDesinstalacion,
     _updatePlatFechaConISO,
     // v7.1: tabs del detalle inline y guardar observaciones in-situ
     _cambiarPlatDetailTab, _guardarObsInline, _editarObsRapido,
