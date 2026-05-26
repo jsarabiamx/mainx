@@ -2579,6 +2579,12 @@ const UI = (() => {
       }
       modal.remove();
       toast(`Desinstalación registrada en ${platDes}`, 'warn');
+      // Refrescar vista completa
+      const panelDetalle = document.getElementById('panel-detalle');
+      if (panelDetalle && panelDetalle.classList.contains('active')) {
+        renderDetalle(num, emp);
+        return;
+      }
       if (platTabla) _refreshPlatTable(platTabla);
       if (_platDetailUnit === num && _platExpandida) {
         const uUp = DB.getUnidad(num, emp);
@@ -2596,12 +2602,18 @@ const UI = (() => {
       u.historial = u.historial || [];
       u.historial.push({ fecha: new Date().toISOString(), tipo: 'reactivacion', motivo: `Equipo liberado en ${platDes}`, fuente: 'manual' });
       DB.upsertUnidad(num, { updatedAt: new Date().toISOString() }, emp);
-      // Sincronizar a Supabase — liberar (null)
       if (window.GPS_SB) {
         GPS_SB.patchDesinstalacionBarrido(num, emp, platDes, null).catch(() => {});
       }
     }
     toast(`Equipo ${num} liberado en ${platDes}`, 'success');
+    // Refrescar la vista completa del detalle de unidad
+    const panelDetalle = document.getElementById('panel-detalle');
+    if (panelDetalle && panelDetalle.classList.contains('active')) {
+      renderDetalle(num, emp);
+      return;
+    }
+    // Si está en la tabla de plataformas (detalle inline)
     if (platTabla) _refreshPlatTable(platTabla);
     if (_platDetailUnit === num && _platExpandida) {
       const uUp = DB.getUnidad(num, emp);
