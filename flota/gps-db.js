@@ -201,12 +201,26 @@ const GPS_SB = (() => {
     if (!registros || registros.length === 0) return { actualizadas: 0, total: 0 };
     const now = new Date().toISOString();
 
-    // Preparar filas para UPSERT — sin GET previo para evitar timeouts con barridos grandes.
-    // ON CONFLICT preserva la columna observaciones via merge-duplicates en Postgres.
+    // 1. Traer registros existentes para preservar observaciones
+    let existentes = {};
+    try {
+      const rows = await _getRaw('gps_barridos',
+        `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${encodeURIComponent(plataforma)}`
+      );
+      rows.forEach(r => { existentes[String(r.num_economico)] = r; });
+    } catch(e) { console.warn('[GPS_SB] getBarridos prev:', e); }
+
+    const numsNuevos = new Set(registros.map(r => String(r.num || '').trim()).filter(Boolean));
+
+    // 2. Preparar filas para UPSERT (ON CONFLICT DO UPDATE via Prefer header)
     const rows = registros.map(r => {
       const num = String(r.num || r.placa || r.vehiculo || r.numero || '').trim();
       if (!num) return null;
       const ultimaConexion = r.fecha || r.ultimaConexion || r.ultima_conexion || null;
+      const prev = existentes[num];
+      // Preservar observaciones: columna dedicada > datos_raw legacy > null
+      const observaciones = r.observaciones || prev?.observaciones || prev?.datos_raw?.observaciones || null;
+      // datos_raw NO debe incluir observaciones (evita corrupción en PATCH parciales)
       const { observaciones: _omit, ...rLimpio } = r;
       return {
         empresa_id:      emp,
@@ -215,32 +229,40 @@ const GPS_SB = (() => {
         ultima_conexion: ultimaConexion || null,
         tiene_datos:     !!ultimaConexion,
         activa:          true,
+        observaciones,
         datos_raw:       rLimpio,
         cargado_at:      now
       };
     }).filter(Boolean);
 
-    // UPSERT via RPC en lotes de 150 — preserva observaciones existentes
+    // UPSERT en lotes de 200 (ON CONFLICT en empresa_id+plataforma+num_economico)
     const lotes = [];
-    for (let i = 0; i < rows.length; i += 150) lotes.push(rows.slice(i, i + 150));
+    for (let i = 0; i < rows.length; i += 200) lotes.push(rows.slice(i, i + 200));
+    await Promise.all(lotes.map(lote =>
+      fetch(`${BASE}/gps_barridos`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Prefer': 'return=representation,resolution=merge-duplicates' },
+        body: JSON.stringify(lote)
+      }).then(r => { if (!r.ok) r.text().then(t => console.warn('[GPS_SB barrido upsert]', t)); })
+        .catch(e => console.warn('[GPS_SB barrido upsert]', e))
+    ));
 
-    for (const lote of lotes) {
-      try {
-        const res = await fetch(`${CONFIG.url}/rest/v1/rpc/upsert_barridos`, {
-          method: 'POST',
-          headers: HEADERS,
-          body: JSON.stringify({ registros: lote })
-        });
-        if (!res.ok) {
-          const txt = await res.text();
-          console.warn('[GPS_SB barrido RPC]', res.status, txt.slice(0, 200));
-        }
-      } catch(e) {
-        console.warn('[GPS_SB barrido RPC]', e);
-      }
+    // 3. Marcar inactivos los que ya no están en el nuevo barrido
+    const aEliminar = Object.keys(existentes).filter(n => !numsNuevos.has(n));
+    if (aEliminar.length > 0) {
+      await Promise.all(aEliminar.map(n =>
+        _patch('gps_barridos',
+          `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${encodeURIComponent(plataforma)}&num_economico=eq.${n}`,
+          { activa: false }
+        ).catch(() => {})
+      ));
     }
 
-    return { total: registros.length, upserted: rows.length };
+    return {
+      total: registros.length,
+      upserted: rows.length,
+      eliminados: aEliminar.length
+    };
   }
 
   // ── Asignaciones ─────────────────────────────────────────────────────────
@@ -357,6 +379,29 @@ const GPS_SB = (() => {
    * Actualiza el campo `observaciones` en gps_barridos para TODAS las plataformas
    * de una unidad. Usa la columna dedicada (no datos_raw) para evitar corrupción.
    */
+  async function patchDesinstalacionBarrido(num, emp, plat, datos) {
+    // datos = { desinstalado, desinstalacion_fecha, desinstalacion_comentario, desinstalacion_ts }
+    // o null/undefined para liberar (resetear a false/null)
+    const payload = datos
+      ? {
+          desinstalado:               true,
+          desinstalacion_fecha:       datos.fecha       || null,
+          desinstalacion_comentario:  datos.comentario  || null,
+          desinstalacion_ts:          datos.ts          || new Date().toISOString()
+        }
+      : {
+          desinstalado:               false,
+          desinstalacion_fecha:       null,
+          desinstalacion_comentario:  null,
+          desinstalacion_ts:          null
+        };
+    await _patch(
+      'gps_barridos',
+      `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${encodeURIComponent(plat)}&num_economico=eq.${encodeURIComponent(num)}`,
+      payload
+    ).catch(err => console.warn('[GPS_SB] patchDesinstalacionBarrido:', err));
+  }
+
   async function patchObservacionesBarrido(num, emp, texto) {
     const plataformas = ["CEIBA","SAMSARA","AVL","SCANIA","MAN","VOLVO","MOTIVE"];
     await Promise.all(plataformas.map(plat =>
@@ -404,10 +449,10 @@ const GPS_SB = (() => {
     getFallas, getFallasActivas, registrarFalla, resolverFalla, eliminarFallaDB,
     // SIMs
     getSims, saveSim, deleteSim,
-    // Barridos — observaciones
-    patchObservacionesBarrido,
+    // Barridos — observaciones y desinstalación
+    patchObservacionesBarrido, patchDesinstalacionBarrido,
     // Helper: saber si Supabase está disponible
-    _getRaw, _patch, _delete,
+    _getRaw, _patch,
     isAvailable: () => true,
     // Save dummy (compatibilidad — Supabase no necesita save() manual)
     save: () => true
