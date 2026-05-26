@@ -380,13 +380,19 @@ const DB = (() => {
         store[k].historial.push({ fecha: now, tipo: 'actualizacion', cambios });
       }
       Object.keys(datos).forEach(f => {
-        if (datos[f] !== undefined && datos[f] !== null) {
+        if (datos[f] !== undefined) {
           if (f.startsWith('ultima_act_') || f === 'ultima_act') {
             if (datos[f]) store[k][f] = datos[f];
+          } else if (f.startsWith('desinstalacion_')) {
+            // Desinstalación: guardar objeto completo o null para liberar
+            if (datos[f] === null) {
+              delete store[k][f];
+            } else {
+              store[k][f] = datos[f];
+            }
           } else if (f === 'siniestro' || f === 'notas' || f === 'fallas') {
-            // Campos críticos: nunca sobreescribir con valor vacío
             if (datos[f]) store[k][f] = datos[f];
-          } else if (datos[f] !== '') {
+          } else if (datos[f] !== null && datos[f] !== '') {
             store[k][f] = datos[f];
           }
         }
