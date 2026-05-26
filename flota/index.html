@@ -167,13 +167,13 @@
       <select class="filter-select" id="filter-crom" onchange="UI._rf={...UI._rf,crom:this.value,page:1};UI.renderUnitList()"></select>
     </div>
     <div class="filter-group"><span class="filter-label">Estado</span>
-      <select class="filter-select" onchange="UI._rf={...UI._rf,est:this.value,page:1};UI.renderUnitList()">
-        <option value="">Todos</option><option value="op">En operación</option><option value="fuera">Fuera de op.</option><option value="venta">Para venta</option>
+      <select class="filter-select" id="filter-est" onchange="UI._rf={...UI._rf,est:this.value,page:1};UI.renderUnitList()">
+        <option value="">Todos</option>
       </select>
     </div>
     <div class="filter-group"><span class="filter-label">Días GPS</span>
       <select class="filter-select" onchange="UI._rf={...UI._rf,dias:this.value,page:1};UI.renderUnitList()">
-        <option value="">Todos</option><option value="enlinea">En línea</option><option value="atencion">Atención</option><option value="fuera">Fuera</option>
+        <option value="">Todos</option><option value="enlinea">En línea (&lt;2d)</option><option value="atencion">Atención (2-4d)</option><option value="fuera">Fuera de línea</option>
       </select>
     </div>
     <input class="filter-select" style="min-width:170px;padding:5px 8px" placeholder="🔍 Buscar (separa espacios: 2280 2275)..." oninput="UI._debounceResumenSearch(this.value)">
