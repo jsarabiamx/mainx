@@ -740,21 +740,35 @@ const UI = (() => {
       <div id="dtab-conexiones">
         <div class="plat-grid">
           ${ALL_PLATS.map(p=>{
-            const k='ultima_act_'+p.toLowerCase();
-            const f=u[k];
+            const kp='ultima_act_'+p.toLowerCase();
+            const f=u[kp];
             const pd=Parsers.diasDesde(f);
             const pc=!f?'var(--border)':pd<=DB.getConfig().diasLinea?'var(--green)':pd<=DB.getConfig().diasAtencion?'var(--yellow)':'var(--red)';
             const label=!f?'SIN DATOS':pd<=DB.getConfig().diasLinea?'EN LÍNEA':'FUERA DE LÍNEA';
-            return`<div style="background:var(--bg-panel);border:1px solid var(--border);border-top:2px solid ${pc};border-radius:10px;padding:12px">
-              <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">${platIcon(p,22)}<span style="font-size:12px;font-weight:700">${p}</span></div>
+            const desKeyP='desinstalacion_'+p.toLowerCase();
+            const desInfoP=u[desKeyP];
+            const estaDesP=!!desInfoP;
+            return`<div style="background:var(--bg-panel);border:1px solid ${estaDesP?'#444':'var(--border)'};border-top:2px solid ${estaDesP?'#555':pc};border-radius:10px;padding:12px${estaDesP?';opacity:.55;filter:grayscale(.7)':''}">
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+                ${platIcon(p,22)}
+                <span style="font-size:12px;font-weight:700">${p}</span>
+                ${estaDesP?`<span style="margin-left:auto;font-size:9px;background:rgba(120,120,120,.3);color:#aaa;padding:1px 5px;border-radius:3px;font-weight:700">DESINSTAL.</span>`:''}
+              </div>
               ${f?`<div style="font-size:15px;font-weight:700">${Parsers.fmtDateShort(f)}</div>
                 <div style="font-size:11px;color:var(--text2)">${Parsers.fmtTime(f)}</div>
-                <div style="font-size:10px;font-weight:700;text-transform:uppercase;margin:5px 0 2px;color:${pc}">${label}</div>
-                <div style="font-size:20px;font-weight:700;color:${pc}">${pd} días</div>`
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;margin:5px 0 2px;color:${estaDesP?'#888':pc}">${estaDesP?'DESINSTALADO':label}</div>
+                <div style="font-size:20px;font-weight:700;color:${estaDesP?'#888':pc}">${pd} días</div>`
               :`<div style="color:var(--text3);font-size:12px;margin:8px 0">Sin datos registrados</div>`}
-              <button class="act-btn-sm" style="margin-top:6px;width:100%" onclick="UI.openDatePicker('${f||''}',iso=>{UI._updatePlatFechaConISO('${esc(num)}','${p}','${esc(emp)}',iso)},'${p} — Actualizar conexión')">
-                ${f?'↻ Actualizar':'+ Ingresar fecha'}
-              </button>
+              ${estaDesP
+                ? `<div style="font-size:10px;color:#666;margin:4px 0">${esc(desInfoP.fecha||'')} ${desInfoP.comentario?'· '+esc(desInfoP.comentario):''}</div>
+                   <button class="act-btn-sm" style="margin-top:6px;width:100%;background:rgba(80,80,80,.3);border-color:#555;color:#999" onclick="UI._liberarDesinstalacion('${esc(num)}','${p}','${esc(emp)}','')">↩ Liberar equipo</button>`
+                : `<div style="display:flex;gap:4px;margin-top:6px">
+                    <button class="act-btn-sm" style="flex:1" onclick="UI.openDatePicker('${f||''}',iso=>{UI._updatePlatFechaConISO('${esc(num)}','${p}','${esc(emp)}',iso)},'${p} — Actualizar conexión')">
+                      ${f?'↻ Actualizar':'+ Ingresar fecha'}
+                    </button>
+                    <button class="act-btn-sm" style="padding:4px 7px;background:rgba(130,50,30,.2);border-color:rgba(160,60,40,.35);color:#b06050" title="Registrar desinstalación de equipo" onclick="UI._modalDesinstalacion('${esc(num)}','${p}','${esc(emp)}','')">🔧</button>
+                  </div>`
+              }
             </div>`;
           }).join('')}
         </div>
