@@ -438,6 +438,19 @@ const UI = (() => {
     if(selC){const c=selC.value,croms=[...new Set(uns.map(u=>u.cromatica).filter(Boolean))].sort();selC.innerHTML=`<option value="">Todos</option>`+croms.map(b=>`<option>${esc(b)}</option>`).join('');if(c)selC.value=c;}
     const selE=$('filter-emp');
     if(selE){selE.innerHTML=DB.getEmpresasList().map(e=>`<option value="${e}" ${e===DB.getEmpresaActiva()?'selected':''}>${e}</option>`).join('');}
+
+    // ── Filtro ESTADO dinámico según empresa ──────────────────────
+    const selEst=$('filter-est');
+    if(selEst){
+      const prev = selEst.value;
+      // Recoger todos los estatus únicos de las unidades activas de esta empresa
+      const estatusUnicos = [...new Set(
+        uns.map(u => Parsers.normalizarEstatus(u.estatus)).filter(Boolean)
+      )].sort();
+      selEst.innerHTML = `<option value="">Todos</option>` +
+        estatusUnicos.map(e => `<option value="${esc(e)}" ${prev===e?'selected':''}>${esc(e)}</option>`).join('');
+      if(prev && estatusUnicos.includes(prev)) selEst.value = prev;
+    }
   }
 
   /* ── UNIT LIST ─────────────────────────────────────── */
@@ -449,21 +462,15 @@ const UI = (() => {
     uns=uns.map(u=>({...u,dias:Parsers.diasDesde(u.ultima_act)}));
 
     // Excluir "Para venta" por defecto. Si el usuario filtra explícitamente por "Para venta", sí las muestra.
-    if (_rf.est !== 'venta') {
-      uns = uns.filter(u => Parsers.categorizarEstatus(u.estatus) !== 'Para venta');
+    if (_rf.est !== 'Para venta') {
+      uns = uns.filter(u => Parsers.normalizarEstatus(u.estatus) !== 'Para venta');
     }
 
     if(_rf.plat)   uns=uns.filter(u=>u.plataforma===_rf.plat||u['ultima_act_'+_rf.plat.toLowerCase()]);
     if(_rf.base)   uns=uns.filter(u=>u.base===_rf.base);
     if(_rf.crom)   uns=uns.filter(u=>u.cromatica===_rf.crom);
-    if(_rf.est){
-      uns=uns.filter(u=>{
-        const cat=Parsers.categorizarEstatus(u.estatus);
-        if(_rf.est==='op')    return cat==='En operación';
-        if(_rf.est==='fuera') return cat==='Fuera de operación';
-        if(_rf.est==='venta') return cat==='Para venta';
-        return true;
-      });
+    if(_rf.est) {
+      uns = uns.filter(u => Parsers.normalizarEstatus(u.estatus) === _rf.est);
     }
     if(_rf.dias){
       uns=uns.filter(u=>{
@@ -538,7 +545,25 @@ const UI = (() => {
               <div class="uf"><div class="uf-lbl">BASE</div><div class="uf-val">${esc(u.base||'—')}</div></div>
               <div class="uf"><div class="uf-lbl">CROMÁTICA</div><div class="uf-val">${esc(u.cromatica||'—')}</div></div>
               <div class="uf"><div class="uf-lbl">MODELO</div><div class="uf-val" style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.modelo||'—')}</div></div>
-              <div class="uf"><div class="uf-lbl">EMPRESA</div><div class="uf-val">${esc(u.empresa_asig||'—')}</div></div>
+              <div class="uf">
+                <div class="uf-lbl">EMPRESA</div>
+                <div class="uf-val" style="display:flex;align-items:center;gap:5px">
+                  ${esc(u.empresa_asig||'—')}
+                  ${u.estatus ? (() => {
+                    const est = Parsers.normalizarEstatus(u.estatus);
+                    const cfg = {
+                      'En operación':    { c:'#1a9e6e', bg:'rgba(26,158,110,.13)' },
+                      'Arrendamiento':   { c:'#1a9e6e', bg:'rgba(26,158,110,.10)' },
+                      'Para venta':      { c:'#c0392b', bg:'rgba(192,57,43,.13)' },
+                      'Fuera de operación':{ c:'#c07d10', bg:'rgba(192,125,16,.13)' },
+                      'Rentado a SAME':  { c:'#c07d10', bg:'rgba(192,125,16,.10)' },
+                      'Baja':            { c:'#888',    bg:'rgba(100,100,100,.13)' },
+                      'Siniestro':       { c:'#c0392b', bg:'rgba(192,57,43,.18)' },
+                    }[est] || { c:'var(--text3)', bg:'rgba(100,100,100,.08)' };
+                    return `<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;background:${cfg.bg};color:${cfg.c};white-space:nowrap" title="${esc(u.estatus)}">${esc(est||u.estatus)}</span>`;
+                  })() : ''}
+                </div>
+              </div>
             </div>
             ${_simInfo ? `<div style="display:flex;align-items:center;gap:6px;margin-top:6px;padding:5px 8px;border-radius:6px;background:${_simColor.bg};border:1px solid ${_simColor.text}30;flex-wrap:wrap">
               <span style="font-size:10px">📶</span>
