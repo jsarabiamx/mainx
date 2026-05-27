@@ -197,6 +197,15 @@ const GPS_SB = (() => {
     return result;
   }
 
+  // Convierte un Date a string de hora local "YYYY-MM-DD HH:MM:SS"
+  // sin usar toISOString() que convierte a UTC.
+  function _dateToLocalStr(d) {
+    if (!(d instanceof Date) || isNaN(d)) return null;
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ` +
+           `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
   async function saveBarrido(plataforma, registros, emp) {
     if (!registros || registros.length === 0) return { actualizadas: 0, total: 0 };
     const now = new Date().toISOString();
@@ -217,6 +226,13 @@ const GPS_SB = (() => {
       const num = String(r.num || r.placa || r.vehiculo || r.numero || '').trim();
       if (!num) return null;
       const ultimaConexion = r.fecha || r.ultimaConexion || r.ultima_conexion || null;
+      // Convertir Date a string de hora local para evitar conversión UTC al serializar JSON.
+      // Si se deja como Date, JSON.stringify lo convierte a ISO-UTC y pierde la hora local.
+      const ultimaConexionStr = ultimaConexion
+        ? (ultimaConexion instanceof Date
+            ? _dateToLocalStr(ultimaConexion)
+            : String(ultimaConexion))
+        : null;
       const prev = existentes[num];
       // Preservar observaciones: columna dedicada > datos_raw legacy > null
       const observaciones = r.observaciones || prev?.observaciones || prev?.datos_raw?.observaciones || null;
@@ -226,8 +242,8 @@ const GPS_SB = (() => {
         empresa_id:      emp,
         plataforma,
         num_economico:   num,
-        ultima_conexion: ultimaConexion || null,
-        tiene_datos:     !!ultimaConexion,
+        ultima_conexion: ultimaConexionStr || null,
+        tiene_datos:     !!ultimaConexionStr,
         activa:          true,
         observaciones,
         datos_raw:       rLimpio,
