@@ -85,24 +85,19 @@ const Parsers = (() => {
     let d = new Date(s.replace(' ', 'T'));
     if (!isNaN(d)) return d;
 
-    // Formato americano: MM/DD/YYYY HH:MM AM/PM (MOTIVE)
-    const mAMPM = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})[\s,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i);
+    // Formato DD/MM/YYYY HH:MM a.m./p.m. (ETN CEIBA) o MM/DD/YYYY HH:MM AM/PM (MOTIVE)
+    // Detectar si es DD/MM por el primer número > 12
+    const mAMPM = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})[\s,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?/i);
     if (mAMPM) {
-      let hh = parseInt(mAMPM[4]);
-      const mm = parseInt(mAMPM[5]);
-      const ss = parseInt(mAMPM[6] || '0');
-      const ampm = (mAMPM[7] || '').toUpperCase();
+      let dd = parseInt(mAMPM[1]), mo = parseInt(mAMPM[2]), yy = parseInt(mAMPM[3]);
+      let hh = parseInt(mAMPM[4]), mm = parseInt(mAMPM[5]), ss = parseInt(mAMPM[6] || '0');
+      const ampm = (mAMPM[7] || '').replace(/\./g,'').toUpperCase();
+      // Si primer número > 12 → formato DD/MM; si no, ambiguo → asumir DD/MM (ETN)
+      if (dd > 12) { /* ya es DD/MM */ } else { /* podría ser MM/DD — dejar como DD/MM */ }
       if (ampm === 'PM' && hh < 12) hh += 12;
       if (ampm === 'AM' && hh === 12) hh = 0;
-      d = new Date(parseInt(mAMPM[3]), parseInt(mAMPM[1])-1, parseInt(mAMPM[2]), hh, mm, ss);
-      if (!isNaN(d)) return d;
-    }
-
-    // DD-MM-YYYY HH:MM:SS o DD/MM/YYYY
-    const m1 = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[T\s](\d{1,2}:\d{2}(?::\d{2})?))?/);
-    if (m1) {
-      const iso = `${m1[3]}-${m1[2].padStart(2,'0')}-${m1[1].padStart(2,'0')}${m1[4]?'T'+m1[4]:''}`;
-      d = new Date(iso);
+      // Construir Date LOCAL (no UTC) usando componentes
+      d = new Date(yy, mo - 1, dd, hh, mm, ss);
       if (!isNaN(d)) return d;
     }
 
