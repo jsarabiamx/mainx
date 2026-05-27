@@ -52,10 +52,16 @@ const Parsers = (() => {
     if (!val && val !== 0) return null;
     if (val instanceof Date && !isNaN(val)) return val;
 
-    // Excel serial number
+    // Excel serial number → fecha local (no UTC)
+    // El serial representa días desde 1900-01-00 en hora local del sistema que generó el Excel.
+    // Usar UTC y luego ajustar por el offset del navegador para obtener la hora local correcta.
     if (typeof val === 'number' && val > 25000 && val < 60000) {
-      const d = new Date((val - 25569) * 86400 * 1000);
-      return isNaN(d) ? null : d;
+      const utcMs = (val - 25569) * 86400 * 1000;
+      const d = new Date(utcMs);
+      if (isNaN(d)) return null;
+      // Ajustar el offset para que la hora quede como hora local
+      const offsetMs = d.getTimezoneOffset() * 60 * 1000;
+      return new Date(utcMs + offsetMs);
     }
 
     let s = String(val).trim();
@@ -373,7 +379,7 @@ const Parsers = (() => {
         motor:        String(row[colIdx.motor]        || '').trim(),
         placa:        String(row[colIdx.placa]        || '').trim(),
         asientos:     String(row[colIdx.asientos]     || '').trim(),
-        obs_asig:     String(row[colIdx.observaciones]|| '').trim(), // campo interno de asignación, NO usar como observación de falla
+        observaciones:String(row[colIdx.observaciones]|| '').trim(),
         _duplicate:   isDuplicate,
         _rowIdx:      i + 1
       });
@@ -716,46 +722,39 @@ const Parsers = (() => {
   function parseMAN(rows) {
     if (!rows || rows.length < 2) return [];
 
-    // Buscar fila de headers (contiene "Dispositivo" o "VIN" o "Ultima Conexion")
+    // Encontrar fila de headers
     let hIdx = 0;
     for (let i = 0; i < Math.min(rows.length, 5); i++) {
       const r = rows[i];
-      if (!Array.isArray(r)) continue;
-      const rowStr = r.map(c => String(c||'').toLowerCase()).join('|');
-      if (rowStr.includes('dispositivo') || rowStr.includes('ultima conexion') || rowStr.includes('vin')) {
+      if (Array.isArray(r) && r.some(c => String(c||'').toLowerCase().includes('dispositivo'))) {
         hIdx = i; break;
       }
     }
 
-    // Detectar columnas por nombre de header
-    const headers = (rows[hIdx] || []).map(c =>
-      String(c||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim()
-    );
-    const iDisp  = (() => { const i = headers.findIndex(h => h.includes('dispositivo')); return i >= 0 ? i : 0; })();
-    const iVin   = (() => { const i = headers.findIndex(h => h === 'vin' || h.includes('serie')); return i >= 0 ? i : 1; })();
-    const iFecha = (() => { const i = headers.findIndex(h => h.includes('ultima conexion') || h.includes('last')); return i >= 0 ? i : 3; })();
-
     const result = [];
     for (let i = hIdx + 1; i < rows.length; i++) {
       const row = rows[i];
-      if (!Array.isArray(row) || !row[iDisp]) continue;
+      if (!Array.isArray(row) || !row[0]) continue;
 
-      // Número económico: primer número de 4-5 dígitos del campo Dispositivo
-      const rawDisp = String(row[iDisp] || '').trim();
-      const numMatch = rawDisp.match(/\b(\d{4,5})\b/);
-      if (!numMatch) continue;
-      const num = numMatch[1];
+      // Col A(0) = Dispositivo — "3039 - AERS C S", "2787 - AERS", "2596 Mont 2608 - AERS"
+      const rawDisp = String(row[0] || '').trim();
+      const num = cleanNum(rawDisp);
+      if (!num || isNaN(Number(num))) continue;
       const n = Number(num);
-      if (n < 1000 || n > 99999) continue;
+      if (n < 100 || n > 99999) continue;
 
-      const vin   = String(row[iVin] || '').trim();
-      const fecha = parseDate(row[iFecha]);
+      // Col B(1) = VIN — mantener tal cual "WMARR4ZZ8KC024699"
+      const vin = String(row[1] || '').trim();
+
+      // Col D(3) = Ultima Conexion — "14-04-2026 20:57:54"
+      const rawDate = String(row[3] || '').trim();
+      const fecha = parseDate(rawDate);
 
       result.push({
         num,
         fecha: fecha ? fecha.toISOString() : null,
         fechaStr: fecha ? fmtDate(fecha) : null,
-        serie: vin,
+        serie: vin,  // guardar VIN como serie
         plataforma: 'MAN'
       });
     }
@@ -939,13 +938,6 @@ const Parsers = (() => {
       if (hasUltimos) return 'AVL';
     }
     if (f.match(/\d{2}_asignaci/i) || f.includes('asignac')) return 'ASIGNACION';
-    // VOLVO: archivo tracking-report con variantes de nombre
-    if (f.includes('tracking-report') || f.includes('tracking_report') || f.includes('trackingreport')) return 'VOLVO';
-    // VOLVO: por hojas — tiene "Actividades del vehículo"
-    if (Array.isArray(sheetNames)) {
-      const normalize = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
-      if (sheetNames.some(n => normalize(n).includes('actividades del vehiculo') || normalize(n).includes('actividades del veh'))) return 'VOLVO';
-    }
     return null;
   }
 
@@ -1013,77 +1005,7 @@ const Parsers = (() => {
       const sh = sheetNames.find(n => normalize(n).includes('devices_report') || normalize(n).includes('devices report'));
       return sh || sheetNames[0];
     }
-    // VOLVO: usar hoja "Actividades del vehículo"
-    if (plat === 'VOLVO') {
-      const normalize = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
-      const sh = sheetNames.find(n => normalize(n).includes('actividades del vehiculo') || normalize(n).includes('actividades del veh'));
-      return sh || sheetNames[0];
-    }
     return sheetNames[0];
-  }
-
-
-  /**
-   * PARSER VOLVO — archivo tracking-report
-   * Hoja: "Actividades del vehículo"
-   * Col A: Vehículo (ej: "ETN-8101")  Col B: Tiempo (ej: "2026-05-24 10:26:55")
-   * Cada unidad aparece varias veces — tomamos la última fecha (máxima).
-   */
-  function parseVolvo(rows) {
-    if (!rows || rows.length < 3) return [];
-
-    // Encontrar fila de encabezado (contiene "Vehículo" y "Tiempo")
-    let hIdx = 1; // default fila 2 (índice 1)
-    for (let i = 0; i < Math.min(rows.length, 5); i++) {
-      const r = rows[i];
-      if (Array.isArray(r) && r.some(c => String(c||'').toLowerCase().includes('veh'))) {
-        hIdx = i; break;
-      }
-    }
-
-    // Mapear: num -> fecha máxima
-    const maxFecha = {};
-    for (let i = hIdx + 1; i < rows.length; i++) {
-      const row = rows[i];
-      if (!Array.isArray(row) || !row[0]) continue;
-
-      // Col A: "ETN-8101" o "8101" — extraer número económico
-      const rawVeh = String(row[0] || '').trim();
-      // Quitar prefijos como "ETN-", "GHO-", etc.
-      const numMatch = rawVeh.match(/(\d{3,6})$/);
-      if (!numMatch) continue;
-      const num = numMatch[1];
-
-      // Col B: fecha/hora "2026-05-24 10:26:55" o número serial de Excel
-      let fecha = null;
-      const rawFecha = row[1];
-      if (rawFecha instanceof Date) {
-        fecha = rawFecha;
-      } else if (typeof rawFecha === 'number') {
-        // Excel serial date
-        const d = new Date(Math.round((rawFecha - 25569) * 86400 * 1000));
-        if (!isNaN(d)) fecha = d;
-      } else if (rawFecha) {
-        const parsed = new Date(String(rawFecha).trim());
-        if (!isNaN(parsed)) fecha = parsed;
-      }
-      if (!fecha) continue;
-
-      // Guardar solo la fecha más reciente por unidad
-      if (!maxFecha[num] || fecha > maxFecha[num]) {
-        maxFecha[num] = fecha;
-      }
-    }
-
-    const result = Object.entries(maxFecha).map(([num, fecha]) => ({
-      num,
-      fecha: fecha.toISOString(),
-      fechaStr: fmtDate(fecha),
-      plataforma: 'VOLVO'
-    }));
-
-    console.log(`[VOLVO] ${result.length} unidades, última actividad por unidad`);
-    return result;
   }
 
   function parsearPorPlataforma(plat, rows) {
@@ -1094,7 +1016,6 @@ const Parsers = (() => {
       case 'SCANIA':  return parseScania(rows);
       case 'MAN':     return parseMAN(rows);
       case 'MOTIVE':  return parseMOTIVE(rows);
-      case 'VOLVO':   return parseVolvo(rows);
       default:        return [];
     }
   }
@@ -1125,7 +1046,6 @@ const Parsers = (() => {
   function normalizarEstatus(val) {
     const v = String(val||'').toUpperCase().trim();
     if (!v || v === '—') return '';
-    // ETN
     if (v.includes('EN OPERACI') || v === 'OPERACION') return 'En operación';
     if (v.includes('ARRENDAMIENTO') || v.includes('ARRENDADO')) return 'Arrendamiento';
     if (v.includes('PARA VENTA') || v === 'A VENTA') return 'Para venta';
@@ -1133,37 +1053,24 @@ const Parsers = (() => {
     if (v.includes('RENTADO A SAME') || v.includes('RENT')) return 'Rentado a SAME';
     if (v.includes('BAJA')) return 'Baja';
     if (v.includes('SINIESTRO')) return 'Siniestro';
-    // GHO
-    if (v === 'ENROLADO' || v.includes('ENROLADO')) return 'Enrolado';
-    if (v === 'DESENROLADO' || v.includes('DESENROLADO')) return 'Desenrolado';
-    if (v === 'ENTREGADO' || v.includes('ENTREGADO')) return 'Entregado';
-    if (v === 'ESCUELA' || v.includes('ESCUELA')) return 'Escuela';
-    if (v.includes('FUERA DE SERVICIO')) return 'Fuera de servicio';
     return val.trim();
   }
 
   function categorizarEstatus(est) {
     const e = normalizarEstatus(est);
-    // ETN
     if (e === 'En operación' || e === 'Arrendamiento') return 'En operación';
     if (e === 'Para venta') return 'Para venta';
     if (e === 'Fuera de operación' || e === 'Rentado a SAME') return 'Fuera de operación';
     if (e === 'Siniestro') return 'Siniestro';
     if (e === 'Baja') return 'Baja';
-    // GHO — cada estatus es su propia categoría para filtrado granular
-    if (e === 'Enrolado') return 'Enrolado';
-    if (e === 'Desenrolado') return 'Desenrolado';
-    if (e === 'Entregado') return 'Entregado';
-    if (e === 'Escuela') return 'Escuela';
-    if (e === 'Fuera de servicio') return 'Fuera de servicio';
-    return e || 'Otro';
+    return 'Otro';
   }
 
   return {
     cleanNum, parseDate, fmtDate, fmtDateShort, fmtTime,
     diasDesde, statusClass,
     parseAsignacion, parseCeiba, parseSamsara, parseMAN, parseAVL, parseScania,
-    readXLSX, detectarPlataforma, selectSheet, parsearPorPlataforma, validarResultado, parseVolvo,
+    readXLSX, detectarPlataforma, selectSheet, parsearPorPlataforma, validarResultado,
     normalizarCromatica, normalizarEstatus, categorizarEstatus
   };
 })();
