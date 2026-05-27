@@ -52,16 +52,19 @@ const Parsers = (() => {
     if (!val && val !== 0) return null;
     if (val instanceof Date && !isNaN(val)) return val;
 
-    // Excel serial number → fecha local (no UTC)
-    // El serial representa días desde 1900-01-00 en hora local del sistema que generó el Excel.
-    // Usar UTC y luego ajustar por el offset del navegador para obtener la hora local correcta.
+    // Excel serial number → hora local exacta
+    // El serial es días decimales desde 1900-01-00. La fracción decimal es la hora del día.
+    // Se lee con getUTC* para extraer los valores numéricos sin que el navegador aplique
+    // ninguna conversión de zona horaria ni DST (esos valores ya son la hora "local" del Excel).
     if (typeof val === 'number' && val > 25000 && val < 60000) {
-      const utcMs = (val - 25569) * 86400 * 1000;
-      const d = new Date(utcMs);
-      if (isNaN(d)) return null;
-      // Ajustar el offset para que la hora quede como hora local
-      const offsetMs = d.getTimezoneOffset() * 60 * 1000;
-      return new Date(utcMs + offsetMs);
+      const ms = (val - 25569) * 86400 * 1000;
+      const raw = new Date(ms);
+      if (isNaN(raw)) return null;
+      // Usar componentes UTC del Date — son los mismos dígitos que el Excel tenía
+      return new Date(
+        raw.getUTCFullYear(), raw.getUTCMonth(), raw.getUTCDate(),
+        raw.getUTCHours(), raw.getUTCMinutes(), raw.getUTCSeconds()
+      );
     }
 
     let s = String(val).trim();
