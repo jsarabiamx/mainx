@@ -1587,23 +1587,35 @@ const UI = (() => {
     if($('br-errores'))   $('br-errores').textContent  ='0';
   }
 
-  function integrarBarridos(){
+  async function integrarBarridos(){
     const emp=DB.getEmpresaActiva();
     const entries=Object.entries(_barridosPending);
     if(!entries.length){toast('No hay archivos pendientes','warn');return;}
     let totalAct=0,totalNoEnc=0;
+
+    // Guardar localmente
     entries.forEach(([plat,{parsed}])=>{
       const res=DB.saveBarrido(plat,parsed,emp);
       totalAct+=res.actualizadas;
       totalNoEnc+=res.noEncontradas;
     });
+
+    // Guardar en Supabase en paralelo
+    if (window.GPS_SB) {
+      try {
+        await Promise.all(entries.map(([plat,{parsed}]) => GPS_SB.saveBarrido(plat,parsed,emp).catch(()=>{})));
+        // Re-leer desde Supabase para que las horas queden exactas
+        await DB.initFromSupabase().catch(()=>{});
+      } catch(e) { console.warn('[integrarBarridos Supabase]', e); }
+    }
+
     _barridosPending={};
     _refreshLog();
-    toast(`✓ Integrados: ${totalAct} unidades actualizadas${totalNoEnc?' · '+totalNoEnc+' sin asignación (creadas)':''}`,'success',5000);
+    toast(`✓ Integrados: ${totalAct} unidades actualizadas${totalNoEnc?' · '+totalNoEnc+' sin asignación (creadas)':''}`, 'success', 5000);
     _setStep('bstep-',1);
     _renderPlatDetectCards();
     _updateBarridoResumen();
-    setTimeout(()=>App.nav(null,'panel-resumen'),1200);
+    setTimeout(()=>App.nav(null,'panel-resumen'),800);
   }
 
   /* ══════════════════════════════════════════════════════
@@ -2959,8 +2971,19 @@ const UI = (() => {
         return;
       }
       _barridosPending[plat]={parsed,filename:file.name,val:Parsers.validarResultado(parsed),sheetName};
-      const res=DB.saveBarrido(plat,parsed,DB.getEmpresaActiva());
-      toast(`✓ ${plat} (hoja: ${sheetName}): ${parsed.length} registros → ${res.actualizadas} unidades actualizadas`,'success',5000);
+      const emp = DB.getEmpresaActiva();
+      const res = DB.saveBarrido(plat, parsed, emp);
+      toast(`✓ ${plat} (hoja: ${sheetName}): ${parsed.length} registros → ${res.actualizadas} unidades actualizadas`, 'success', 5000);
+
+      // Guardar en Supabase y después re-leer para que las horas queden correctas
+      if (window.GPS_SB) {
+        try {
+          await GPS_SB.saveBarrido(plat, parsed, emp);
+        } catch(e) { console.warn('[GPS_SB saveBarrido]', e); }
+        // Re-sincronizar desde Supabase para que el render muestre los datos guardados
+        await DB.initFromSupabase().catch(() => {});
+      }
+
       renderPlataformas();
       renderResumen();
     }catch(err){
