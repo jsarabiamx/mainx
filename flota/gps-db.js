@@ -263,21 +263,14 @@ const GPS_SB = (() => {
         .catch(e => console.warn('[GPS_SB barrido upsert]', e))
     ));
 
-    // 3. Marcar inactivos los que ya no están en el nuevo barrido
-    const aEliminar = Object.keys(existentes).filter(n => !numsNuevos.has(n));
-    if (aEliminar.length > 0) {
-      await Promise.all(aEliminar.map(n =>
-        _patch('gps_barridos',
-          `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${encodeURIComponent(plataforma)}&num_economico=eq.${n}`,
-          { activa: false }
-        ).catch(() => {})
-      ));
-    }
+    // 3. NO marcar inactivos — cada barrido es una foto del día y puede ser subconjunto.
+    // Los registros antiguos con fechas previas siguen siendo válidos históricos.
+    // Solo el upsert actualiza los que están en el nuevo archivo.
 
     return {
       total: registros.length,
       upserted: rows.length,
-      eliminados: aEliminar.length
+      eliminados: 0
     };
   }
 
