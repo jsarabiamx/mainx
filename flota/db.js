@@ -275,8 +275,21 @@ const DB = (() => {
 
             const fechaStr = r.ultima_conexion || raw.fecha || null;
             if (fechaStr) {
+              // Supabase tiene fecha — aplicar si es más reciente
               if (!u[platKey] || new Date(fechaStr) > new Date(u[platKey])) u[platKey] = fechaStr;
               if (!u.ultima_act || new Date(fechaStr) > new Date(u.ultima_act)) u.ultima_act = fechaStr;
+            } else if (r.tiene_datos === false || r.ultima_conexion === null) {
+              // Supabase dice explícitamente sin fecha — borrar del localStorage
+              // Esto hace que "Eliminar datos de plataforma" persista al recargar
+              delete u[platKey];
+              // Recalcular ultima_act global
+              const PLATS2 = ['ceiba','samsara','avl','scania','man','volvo','motive'];
+              let maxF = null;
+              PLATS2.forEach(pp => {
+                const f2 = u['ultima_act_' + pp];
+                if (f2 && (!maxF || new Date(f2) > new Date(maxF))) maxF = f2;
+              });
+              u.ultima_act = maxF;
             }
             const idField = idFieldByPlat[plat];
             if (idField && raw.serie && !u[idField]) u[idField] = raw.serie;
