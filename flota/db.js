@@ -273,7 +273,8 @@ const DB = (() => {
             const u = _s.unidades[empR][num];
             if (!u) return;
 
-            const fechaStr = r.ultima_conexion || raw.fecha || null;
+            // Usar SOLO ultima_conexion — datos_raw.fecha puede estar en UTC incorrecto
+            const fechaStr = r.ultima_conexion || null;
             if (fechaStr) {
               // Supabase tiene fecha — aplicar si es más reciente
               if (!u[platKey] || new Date(fechaStr) > new Date(u[platKey])) u[platKey] = fechaStr;
