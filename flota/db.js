@@ -334,6 +334,15 @@ const DB = (() => {
   function getEmpresaActiva() { return _s.empresaActiva; }
   function setEmpresaActiva(k) { _s.empresaActiva = k; save(); }
   function getEmpresas() { return _s.empresas; }
+  // Convierte Date a "YYYY-MM-DD HH:MM:SS" local (sin toISOString que usa UTC)
+  function _toLocalStr(d) {
+    if (!d) return null;
+    if (typeof d === 'string') return d;
+    if (!(d instanceof Date) || isNaN(d)) return null;
+    const p = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+
   function getEmpresasList() { return Object.keys(_s.empresas); }
 
   function addEmpresa(nombre, color) {
@@ -898,10 +907,10 @@ const DB = (() => {
       if (!r.num) return;
       const datos = {};
       if (r.fecha) {
-        datos['ultima_act_' + plataforma.toLowerCase()] = r.fecha;
+        datos['ultima_act_' + plataforma.toLowerCase()] = _toLocalStr(r.fecha);
         const u = getUnidad(r.num, emp);
         if (!u || !u.ultima_act || new Date(r.fecha) > new Date(u.ultima_act)) {
-          datos.ultima_act = r.fecha;
+          datos.ultima_act = _toLocalStr(r.fecha);
         }
         datos.plataforma = plataforma;
       }
@@ -975,9 +984,9 @@ const DB = (() => {
       if (u) {
         const datos = { plataforma };
         if (r.fecha) {
-          datos[platKey] = r.fecha;
+          datos[platKey] = _toLocalStr(r.fecha);
           if (!u.ultima_act || new Date(r.fecha) > new Date(u.ultima_act)) {
-            datos.ultima_act = r.fecha;
+            datos.ultima_act = _toLocalStr(r.fecha);
           }
         }
         // Guardar el identificador ESPECÍFICO de esta plataforma (sin pisar el de asignación)
