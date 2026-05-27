@@ -263,11 +263,12 @@ const App = (() => {
     if (!confirm(`¿Eliminar TODOS los datos GPS de la plataforma ${plataforma} en ${emp}?\n\nSe borrarán todas las fechas de última conexión registradas para esta plataforma.`)) return;
     if (!confirm(`CONFIRMACIÓN FINAL\n\nEsta acción NO se puede deshacer.\n¿Estás completamente seguro de eliminar los datos de ${plataforma}?`)) return;
     const afectadas = DB.eliminarDatosPlataforma(plataforma, emp);
-    // También limpiar en Supabase: marcar inactivos todos los barridos de esa plataforma
+    // Limpiar en Supabase: solo borrar ultima_conexion y tiene_datos, NO activa=false
+    // (activa=false bloquea futuros upserts al volver a cargar)
     if (window.GPS_SB) {
       GPS_SB._patch('gps_barridos',
         `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${encodeURIComponent(plataforma)}`,
-        { activa: false, ultima_conexion: null, tiene_datos: false }
+        { ultima_conexion: null, tiene_datos: false }
       ).catch(e => console.warn('[GPS_SB eliminarDatosPlataforma]', e));
     }
     UI.toast(`${afectadas} unidades actualizadas. Datos de ${plataforma} eliminados.`, 'warn', 4500);
