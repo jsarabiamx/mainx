@@ -1593,21 +1593,13 @@ const UI = (() => {
     if(!entries.length){toast('No hay archivos pendientes','warn');return;}
     let totalAct=0,totalNoEnc=0;
 
-    // Guardar localmente
+    // DB.saveBarrido ya llama GPS_SB.saveBarrido internamente (fire-and-forget).
+    // No llamar GPS_SB.saveBarrido de nuevo para no duplicar el upsert.
     entries.forEach(([plat,{parsed}])=>{
       const res=DB.saveBarrido(plat,parsed,emp);
       totalAct+=res.actualizadas;
       totalNoEnc+=res.noEncontradas;
     });
-
-    // Guardar en Supabase en paralelo
-    if (window.GPS_SB) {
-      try {
-        await Promise.all(entries.map(([plat,{parsed}]) => GPS_SB.saveBarrido(plat,parsed,emp).catch(()=>{})));
-        // Re-leer desde Supabase para que las horas queden exactas
-        await DB.initFromSupabase().catch(()=>{});
-      } catch(e) { console.warn('[integrarBarridos Supabase]', e); }
-    }
 
     _barridosPending={};
     _refreshLog();
@@ -1615,7 +1607,12 @@ const UI = (() => {
     _setStep('bstep-',1);
     _renderPlatDetectCards();
     _updateBarridoResumen();
-    setTimeout(()=>App.nav(null,'panel-resumen'),800);
+
+    // Esperar a que Supabase procese y re-sincronizar antes de navegar al resumen
+    setTimeout(async () => {
+      await DB.initFromSupabase().catch(()=>{});
+      App.nav(null,'panel-resumen');
+    }, 2500);
   }
 
   /* ══════════════════════════════════════════════════════
@@ -2973,19 +2970,15 @@ const UI = (() => {
       _barridosPending[plat]={parsed,filename:file.name,val:Parsers.validarResultado(parsed),sheetName};
       const emp = DB.getEmpresaActiva();
       const res = DB.saveBarrido(plat, parsed, emp);
+      // DB.saveBarrido ya llama GPS_SB.saveBarrido internamente (fire-and-forget).
+      // Esperamos un momento para que Supabase procese y luego re-leemos para
+      // que las horas sean exactamente las que quedaron guardadas.
       toast(`✓ ${plat} (hoja: ${sheetName}): ${parsed.length} registros → ${res.actualizadas} unidades actualizadas`, 'success', 5000);
-
-      // Guardar en Supabase y después re-leer para que las horas queden correctas
-      if (window.GPS_SB) {
-        try {
-          await GPS_SB.saveBarrido(plat, parsed, emp);
-        } catch(e) { console.warn('[GPS_SB saveBarrido]', e); }
-        // Re-sincronizar desde Supabase para que el render muestre los datos guardados
+      setTimeout(async () => {
         await DB.initFromSupabase().catch(() => {});
-      }
-
-      renderPlataformas();
-      renderResumen();
+        renderPlataformas();
+        renderResumen();
+      }, 2500);
     }catch(err){
       toast(`Error en ${plat}: `+err.message,'error');
       console.error(err);
