@@ -166,6 +166,7 @@ const DB = (() => {
               placa:        extra.placa   || '',
               asientos:     extra.asientos || '',
               observaciones:extra.observaciones || '',
+              notas:        extra.notas             || '',
               mes:          r.mes_label,
               activa:       true,
               fallas:       [],
