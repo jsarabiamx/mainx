@@ -1053,7 +1053,16 @@ const UI = (() => {
         <textarea id="modal-notas" rows="5" style="width:100%;background:var(--bg-card);border:1px solid var(--border2);border-radius:8px;padding:10px;color:var(--text);font-family:var(--font);font-size:13px;resize:vertical">${esc(u?.notas||'')}</textarea>
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
           <button onclick="UI.closeModal()" class="act-btn">Cancelar</button>
-          <button onclick="DB.upsertUnidad('${esc(num)}',{notas:document.getElementById('modal-notas').value},'${esc(emp)}');UI.closeModal();UI.toast('Notas guardadas','success');const nd=document.getElementById('notas-display');if(nd)nd.textContent=document.getElementById('modal-notas').value||'Sin notas'" class="act-btn-primary">Guardar</button>
+          <button onclick="
+            const _txt=document.getElementById('modal-notas').value;
+            DB.upsertUnidad('${esc(num)}',{notas:_txt},'${esc(emp)}');
+            if(window.GPS_SB)GPS_SB._patch('gps_barridos','num_economico=eq.${esc(num)}&empresa_id=eq.${esc(emp)}',{observaciones:_txt||null}).catch(()=>{});
+            UI.closeModal();
+            UI.toast('Notas guardadas','success');
+            const nd=document.getElementById('notas-display');
+            if(nd)nd.innerHTML=_txt?UI._esc(_txt):'<span style=\'color:var(--text3)\'>Sin notas registradas.</span>';
+            if(UI._platExpandida)UI._refreshPlatTable(UI._platExpandida);
+          " class="act-btn-primary">Guardar</button>
         </div>
       </div>`);
   }
@@ -2734,15 +2743,21 @@ const UI = (() => {
     const texto = nuevo.trim();
     // Guardar en localStorage
     DB.upsertUnidad(num, { notas: texto, _fuente: 'edit_notas_inline' }, emp);
-    // Sincronizar a Supabase en gps_unidades (sobrevive a borrar plataforma)
+    // Sincronizar notas a Supabase en TODAS las plataformas del barrido de esta unidad
+    // (gps_barridos sí tiene filas para unidades _soloBarrido; gps_unidades puede no tenerlas)
     if (window.GPS_SB) {
-      GPS_SB._patch('gps_unidades',
-        `num_economico=eq.${encodeURIComponent(num)}&empresa_id=eq.${encodeURIComponent(emp)}`,
-        { datos_extra: { notas: texto } }
-      ).catch(e => console.warn('[GPS_SB notas]', e));
+      GPS_SB.patchObservacionesBarrido
+        ? GPS_SB.patchNotasBarrido(num, emp, texto).catch(e => console.warn('[GPS_SB notas]', e))
+        : GPS_SB._patch('gps_barridos',
+            `num_economico=eq.${encodeURIComponent(num)}&empresa_id=eq.${encodeURIComponent(emp)}`,
+            { observaciones: texto || null }
+          ).catch(e => console.warn('[GPS_SB notas]', e));
     }
-    toast('Nota guardada','success');
+    toast('Nota guardada', 'success');
     if (_platExpandida) _refreshPlatTable(_platExpandida);
+    // Refrescar detalle si está abierto
+    const nd = document.getElementById('notas-display');
+    if (nd && nd.closest('[data-num="'+num+'"]')) nd.textContent = texto || 'Sin notas registradas.';
   }
 
   /**
