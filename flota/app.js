@@ -277,7 +277,18 @@ const App = (() => {
     if (!confirm(`¿BORRAR TODOS los datos de ${emp}?\n\nEsto incluye unidades, barridos, asignaciones y viajes.`)) return;
     if (!confirm(`CONFIRMACIÓN FINAL\n\nEsta acción NO se puede deshacer.\n¿Seguro que deseas borrar toda la información de ${emp}?`)) return;
     DB.resetEmpresa();
-    UI.toast('Datos eliminados','error');
+    // ✅ FIX: también borrar de Supabase para evitar que initFromSupabase restaure datos zombi
+    if (window.GPS_SB) {
+      Promise.all([
+        GPS_SB._delete('gps_barridos',     `empresa_id=eq.${encodeURIComponent(emp)}`),
+        GPS_SB._delete('gps_asignaciones', `empresa_id=eq.${encodeURIComponent(emp)}`),
+        GPS_SB._delete('gps_unidades',     `empresa_id=eq.${encodeURIComponent(emp)}`),
+        GPS_SB._delete('gps_fallas',       `empresa_id=eq.${encodeURIComponent(emp)}`)
+      ]).then(() => {
+        console.log(`[GPS_SB] Datos de ${emp} eliminados de Supabase`);
+      }).catch(e => console.warn('[GPS_SB _borrarEmpresa]', e));
+    }
+    UI.toast('Datos eliminados', 'error');
     nav(null, 'panel-resumen');
   }
 
