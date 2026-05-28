@@ -226,19 +226,27 @@ const GPS_SB = (() => {
       const num = String(r.num || r.placa || r.vehiculo || r.numero || '').trim();
       if (!num) return null;
       const ultimaConexion = r.fecha || r.ultimaConexion || r.ultima_conexion || null;
-      // Convertir Date a string de hora local para evitar conversión UTC al serializar JSON.
-      // Si se deja como Date, JSON.stringify lo convierte a ISO-UTC y pierde la hora local.
-      const ultimaConexionStr = ultimaConexion
-        ? (ultimaConexion instanceof Date
-            ? _dateToLocalStr(ultimaConexion)
-            : String(ultimaConexion))
-        : null;
-      const prev = existentes[num];
-      // Preservar observaciones: columna dedicada > datos_raw legacy > null
-      const observaciones = r.observaciones || prev?.observaciones || prev?.datos_raw?.observaciones || null;
       // datos_raw NO debe incluir observaciones (evita corrupción en PATCH parciales)
       const { observaciones: _omit, ...rLimpio } = r;
       return {
+      // Preservar observaciones: columna dedicada > datos_raw legacy > null
+      const observaciones = r.observaciones || prev?.observaciones || prev?.datos_raw?.observaciones || null;
+
+      // ✅ FIX FECHA: el parser hace fecha.toISOString() que es UTC.
+      // Al llegar aquí ultimaConexion es un string ISO ("2024-08-19T11:02:30.000Z").
+      // Si lo guardamos directo en Supabase (columna TIMESTAMP WITHOUT TIME ZONE),
+      // Postgres lo interpreta como UTC y lo muestra desplazado de zona horaria.
+      // Solución: convertir a Date y luego a string LOCAL "YYYY-MM-DD HH:MM:SS".
+      let ultimaConexionStr = null;
+      if (ultimaConexion) {
+        if (ultimaConexion instanceof Date) {
+          ultimaConexionStr = _dateToLocalStr(ultimaConexion);
+        } else {
+          // Es string ISO (o cualquier otro formato) → parsear y formatear local
+          const d = new Date(ultimaConexion);
+          ultimaConexionStr = isNaN(d) ? String(ultimaConexion) : _dateToLocalStr(d);
+        }
+      }
         empresa_id:      emp,
         plataforma,
         num_economico:   num,
