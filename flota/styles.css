@@ -449,11 +449,13 @@ tbody td { padding: 8px 10px; white-space: nowrap; }
   padding: 10px 14px;
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
+  overflow: visible; /* permite que los dropdowns ms-panel sobresalgan */
 }
 .plat-filter-group {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  overflow: visible; /* necesario para que el dropdown no quede cortado */
 }
 .plat-filter-lbl {
   font-size: 9px;
@@ -512,6 +514,7 @@ tbody td { padding: 8px 10px; white-space: nowrap; }
   display: inline-block;
   min-width: 140px;
   font-family: var(--font);
+  overflow: visible; /* necesario para que el panel absoluto no quede cortado */
 }
 .ms-trigger {
   display: flex;
@@ -538,18 +541,20 @@ tbody td { padding: 8px 10px; white-space: nowrap; }
 .ms-trigger-text.ms-trigger-placeholder { color: var(--text2); }
 .ms-trigger-chev { font-size: 10px; color: var(--text3); flex-shrink: 0; }
 .ms-panel {
-  /* position:fixed para que el panel nunca quede cortado por overflow:hidden del padre */
-  position: fixed;
+  position: fixed; /* fixed escapa de cualquier overflow:hidden del padre */
+  /* top/left se calculan en JS al abrir — valores default para cuando no hay JS */
+  top: auto;
+  left: auto;
   min-width: 200px;
   max-width: 280px;
   z-index: 9999;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
   padding: 6px;
   display: none;
-  max-height: 340px;
+  max-height: 320px;
   overflow: hidden;
   flex-direction: column;
 }
