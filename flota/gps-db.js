@@ -82,9 +82,9 @@ const GPS_SB = (() => {
     return r.json();
   }
 
+  // FIX: usar return=minimal para DELETE masivo.
+  // Con return=representation PostgREST puede rechazar bulk deletes silenciosamente.
   async function _delete(table, filter) {
-    // FIX: usar return=minimal para DELETE masivo.
-    // Con return=representation PostgREST rechaza bulk deletes silenciosamente.
     const r = await fetch(`${BASE}/${table}?${filter}`, {
       method: 'DELETE',
       headers: {
@@ -231,34 +231,35 @@ const GPS_SB = (() => {
       rows.forEach(r => { existentes[String(r.num_economico)] = r; });
     } catch(e) { console.warn('[GPS_SB] getBarridos prev:', e); }
 
-    const numsNuevos = new Set(registros.map(r => String(r.num || '').trim()).filter(Boolean));
-
-    // 2. Preparar filas para UPSERT (ON CONFLICT DO UPDATE via Prefer header)
+    // 2. Preparar filas para UPSERT
     const rows = registros.map(r => {
       const num = String(r.num || r.placa || r.vehiculo || r.numero || '').trim();
       if (!num) return null;
-      const ultimaConexion = r.fecha || r.ultimaConexion || r.ultima_conexion || null;
-      // datos_raw NO debe incluir observaciones (evita corrupción en PATCH parciales)
-      const { observaciones: _omit, ...rLimpio } = r;
-      return {
+
+      const prev = existentes[num];
       // Preservar observaciones: columna dedicada > datos_raw legacy > null
       const observaciones = r.observaciones || prev?.observaciones || prev?.datos_raw?.observaciones || null;
 
-      // ✅ FIX FECHA: el parser hace fecha.toISOString() que es UTC.
-      // Al llegar aquí ultimaConexion es un string ISO ("2024-08-19T11:02:30.000Z").
-      // Si lo guardamos directo en Supabase (columna TIMESTAMP WITHOUT TIME ZONE),
-      // Postgres lo interpreta como UTC y lo muestra desplazado de zona horaria.
-      // Solución: convertir a Date y luego a string LOCAL "YYYY-MM-DD HH:MM:SS".
+      const ultimaConexion = r.fecha || r.ultimaConexion || r.ultima_conexion || null;
+
+      // FIX FECHA: convertir siempre a hora local antes de guardar en Supabase.
+      // El parser entrega r.fecha como ISO UTC string ("2024-08-19T11:02:30.000Z").
+      // Si se guarda directo en TIMESTAMP WITHOUT TIME ZONE, Postgres lo muestra desplazado.
+      // _dateToLocalStr convierte a "YYYY-MM-DD HH:MM:SS" en hora local del cliente.
       let ultimaConexionStr = null;
       if (ultimaConexion) {
         if (ultimaConexion instanceof Date) {
           ultimaConexionStr = _dateToLocalStr(ultimaConexion);
         } else {
-          // Es string ISO (o cualquier otro formato) → parsear y formatear local
           const d = new Date(ultimaConexion);
           ultimaConexionStr = isNaN(d) ? String(ultimaConexion) : _dateToLocalStr(d);
         }
       }
+
+      // datos_raw NO debe incluir observaciones (evita corrupción en PATCH parciales)
+      const { observaciones: _omit, ...rLimpio } = r;
+
+      return {
         empresa_id:      emp,
         plataforma,
         num_economico:   num,
@@ -271,11 +272,14 @@ const GPS_SB = (() => {
       };
     }).filter(Boolean);
 
-    // UPSERT en lotes de 200 (ON CONFLICT en empresa_id+plataforma+num_economico)
-    // ✅ FIX: usar ?on_conflict= explícito para que PostgREST resuelva el UNIQUE correcto
+    if (rows.length === 0) return { total: registros.length, upserted: 0 };
+
+    // FIX: usar ?on_conflict= explícito para que PostgREST resuelva el UNIQUE correcto.
+    // Sin esto PostgREST no puede inferir qué constraint usar cuando hay FK + UNIQUE.
     const ON_CONFLICT = 'on_conflict=empresa_id%2Cplataforma%2Cnum_economico';
     const lotes = [];
     for (let i = 0; i < rows.length; i += 200) lotes.push(rows.slice(i, i + 200));
+
     await Promise.all(lotes.map(lote =>
       fetch(`${BASE}/gps_barridos?${ON_CONFLICT}`, {
         method: 'POST',
@@ -290,10 +294,6 @@ const GPS_SB = (() => {
         }
       }).catch(e => console.error('[GPS_SB barrido upsert] FETCH ERROR:', e))
     ));
-
-    // 3. NO marcar inactivos — cada barrido es una foto del día y puede ser subconjunto.
-    // Los registros antiguos con fechas previas siguen siendo válidos históricos.
-    // Solo el upsert actualiza los que están en el nuevo archivo.
 
     return {
       total: registros.length,
@@ -417,8 +417,6 @@ const GPS_SB = (() => {
    * de una unidad. Usa la columna dedicada (no datos_raw) para evitar corrupción.
    */
   async function patchDesinstalacionBarrido(num, emp, plat, datos) {
-    // datos = { desinstalado, desinstalacion_fecha, desinstalacion_comentario, desinstalacion_ts }
-    // o null/undefined para liberar (resetear a false/null)
     const payload = datos
       ? {
           desinstalado:               true,
