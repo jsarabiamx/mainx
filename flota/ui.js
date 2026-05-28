@@ -82,7 +82,44 @@ const UI = (() => {
       if (p.id !== id + '-panel') p.classList.remove('open');
     });
     const panel = document.getElementById(id + '-panel');
-    if (panel) panel.classList.toggle('open');
+    if (!panel) return;
+
+    const isOpening = !panel.classList.contains('open');
+    panel.classList.toggle('open');
+
+    if (isOpening) {
+      // Posicionar el panel con position:fixed usando las coordenadas del trigger
+      const trigger = document.querySelector(`#${id} .ms-trigger`);
+      if (trigger) {
+        const rect = trigger.getBoundingClientRect();
+        const panelW = 260;
+        const viewW  = window.innerWidth;
+        // Alinear a la izquierda del trigger; si se sale de la pantalla, alinear a la derecha
+        let left = rect.left;
+        if (left + panelW > viewW - 8) left = rect.right - panelW;
+        if (left < 8) left = 8;
+        // Abrir hacia abajo normalmente; si no hay espacio, abrir hacia arriba
+        const panelH = 340;
+        const viewH  = window.innerHeight;
+        let top = rect.bottom + 4;
+        if (top + panelH > viewH - 8) top = rect.top - panelH - 4;
+        if (top < 8) top = 8;
+        panel.style.left = left + 'px';
+        panel.style.top  = top  + 'px';
+        panel.style.minWidth = Math.max(rect.width, 200) + 'px';
+      }
+
+      // Cerrar al hacer click fuera
+      const _closeMs = (e) => {
+        const root = document.getElementById(id);
+        if (root && !root.contains(e.target) && !panel.contains(e.target)) {
+          panel.classList.remove('open');
+          document.removeEventListener('mousedown', _closeMs);
+        }
+      };
+      // Pequeño delay para no capturar el click que abrió el panel
+      setTimeout(() => document.addEventListener('mousedown', _closeMs), 50);
+    }
   }
 
   function _msOnCheck(id, value, checked) {
