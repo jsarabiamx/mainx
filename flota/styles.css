@@ -538,19 +538,18 @@ tbody td { padding: 8px 10px; white-space: nowrap; }
 .ms-trigger-text.ms-trigger-placeholder { color: var(--text2); }
 .ms-trigger-chev { font-size: 10px; color: var(--text3); flex-shrink: 0; }
 .ms-panel {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  min-width: 100%;
-  max-width: 260px;
-  z-index: 2000;
+  /* position:fixed para que el panel nunca quede cortado por overflow:hidden del padre */
+  position: fixed;
+  min-width: 200px;
+  max-width: 280px;
+  z-index: 9999;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
   padding: 6px;
   display: none;
-  max-height: 320px;
+  max-height: 340px;
   overflow: hidden;
   flex-direction: column;
 }
