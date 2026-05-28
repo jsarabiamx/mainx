@@ -260,15 +260,23 @@ const GPS_SB = (() => {
     }).filter(Boolean);
 
     // UPSERT en lotes de 200 (ON CONFLICT en empresa_id+plataforma+num_economico)
+    // ✅ FIX: usar ?on_conflict= explícito para que PostgREST resuelva el UNIQUE correcto
+    const ON_CONFLICT = 'on_conflict=empresa_id%2Cplataforma%2Cnum_economico';
     const lotes = [];
     for (let i = 0; i < rows.length; i += 200) lotes.push(rows.slice(i, i + 200));
     await Promise.all(lotes.map(lote =>
-      fetch(`${BASE}/gps_barridos`, {
+      fetch(`${BASE}/gps_barridos?${ON_CONFLICT}`, {
         method: 'POST',
-        headers: { ...HEADERS, 'Prefer': 'return=representation,resolution=merge-duplicates' },
+        headers: { ...HEADERS, 'Prefer': 'return=minimal,resolution=merge-duplicates' },
         body: JSON.stringify(lote)
-      }).then(r => { if (!r.ok) r.text().then(t => console.warn('[GPS_SB barrido upsert]', t)); })
-        .catch(e => console.warn('[GPS_SB barrido upsert]', e))
+      }).then(async r => {
+        if (!r.ok) {
+          const t = await r.text();
+          console.error('[GPS_SB barrido upsert] ERROR HTTP', r.status, t);
+        } else {
+          console.log(`[GPS_SB barrido upsert] OK — ${lote.length} filas, plataforma: ${plataforma}, empresa: ${emp}`);
+        }
+      }).catch(e => console.error('[GPS_SB barrido upsert] FETCH ERROR:', e))
     ));
 
     // 3. NO marcar inactivos — cada barrido es una foto del día y puede ser subconjunto.
