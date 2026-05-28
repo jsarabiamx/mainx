@@ -274,30 +274,43 @@ const GPS_SB = (() => {
 
     if (rows.length === 0) return { total: registros.length, upserted: 0 };
 
+    // FIX DEDUP: eliminar duplicados por num_economico ANTES del upsert.
+    // Si el mismo num aparece dos veces en el archivo (ej: Samsara con dos VG),
+    // PostgREST falla el lote completo al detectar duplicate key en el batch.
+    // Nos quedamos con el último registro (generalmente el más reciente).
+    const rowsMap = new Map();
+    rows.forEach(r => rowsMap.set(r.num_economico, r));
+    const rowsUniq = Array.from(rowsMap.values());
+    console.log(`[GPS_SB] ${rows.length} filas → ${rowsUniq.length} únicas después de dedup`);
+
     // FIX: usar ?on_conflict= explícito para que PostgREST resuelva el UNIQUE correcto.
     // Sin esto PostgREST no puede inferir qué constraint usar cuando hay FK + UNIQUE.
     const ON_CONFLICT = 'on_conflict=empresa_id%2Cplataforma%2Cnum_economico';
     const lotes = [];
-    for (let i = 0; i < rows.length; i += 200) lotes.push(rows.slice(i, i + 200));
+    for (let i = 0; i < rowsUniq.length; i += 100) lotes.push(rowsUniq.slice(i, i + 100));
 
-    await Promise.all(lotes.map(lote =>
-      fetch(`${BASE}/gps_barridos?${ON_CONFLICT}`, {
-        method: 'POST',
-        headers: { ...HEADERS, 'Prefer': 'return=minimal,resolution=merge-duplicates' },
-        body: JSON.stringify(lote)
-      }).then(async r => {
-        if (!r.ok) {
-          const t = await r.text();
-          console.error('[GPS_SB barrido upsert] ERROR HTTP', r.status, t);
+    // Enviar lotes SECUENCIALMENTE para evitar conflictos de concurrencia en el upsert
+    for (const lote of lotes) {
+      try {
+        const resp = await fetch(`${BASE}/gps_barridos?${ON_CONFLICT}`, {
+          method: 'POST',
+          headers: { ...HEADERS, 'Prefer': 'return=minimal,resolution=merge-duplicates' },
+          body: JSON.stringify(lote)
+        });
+        if (!resp.ok) {
+          const t = await resp.text();
+          console.error(`[GPS_SB barrido upsert] ERROR HTTP ${resp.status} — lote ${lote.length} filas:`, t);
         } else {
           console.log(`[GPS_SB barrido upsert] OK — ${lote.length} filas, plataforma: ${plataforma}, empresa: ${emp}`);
         }
-      }).catch(e => console.error('[GPS_SB barrido upsert] FETCH ERROR:', e))
-    ));
+      } catch(e) {
+        console.error('[GPS_SB barrido upsert] FETCH ERROR:', e);
+      }
+    }
 
     return {
       total: registros.length,
-      upserted: rows.length,
+      upserted: rowsUniq.length,
       eliminados: 0
     };
   }
