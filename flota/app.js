@@ -258,17 +258,28 @@ const App = (() => {
     nav(null, 'panel-config');
   }
 
-  function _eliminarDatosPlataforma(plataforma) {
+  async function _eliminarDatosPlataforma(plataforma) {
     const emp = DB.getEmpresaActiva();
     if (!confirm(`¿Eliminar TODOS los datos GPS de la plataforma ${plataforma} en ${emp}?\n\nSe borrarán todas las fechas de última conexión registradas para esta plataforma.`)) return;
     if (!confirm(`CONFIRMACIÓN FINAL\n\nEsta acción NO se puede deshacer.\n¿Estás completamente seguro de eliminar los datos de ${plataforma}?`)) return;
-    const afectadas = DB.eliminarDatosPlataforma(plataforma, emp);
-    // Eliminar completamente de Supabase para que initFromSupabase no los restaure
+
+    // ✅ FIX: primero borrar en Supabase (await real), luego limpiar localStorage
+    // Así si el usuario recarga, initFromSupabase no restaura los datos borrados
     if (window.GPS_SB) {
-      GPS_SB._delete('gps_barridos',
-        `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${encodeURIComponent(plataforma)}`
-      ).catch(e => console.warn('[GPS_SB eliminarDatosPlataforma]', e));
+      try {
+        await GPS_SB._delete('gps_barridos',
+          `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${encodeURIComponent(plataforma)}`
+        );
+        console.log(`[GPS] Supabase: borrados barridos de ${plataforma} en ${emp}`);
+      } catch(e) {
+        console.warn('[GPS_SB eliminarDatosPlataforma]', e);
+        UI.toast(`Error al eliminar en Supabase: ${e.message}`, 'error');
+        return;
+      }
     }
+
+    // Ahora limpiar localStorage
+    const afectadas = DB.eliminarDatosPlataforma(plataforma, emp);
     UI.toast(`${afectadas} unidades actualizadas. Datos de ${plataforma} eliminados.`, 'warn', 4500);
     nav(null, 'panel-config');
   }
