@@ -664,8 +664,23 @@ const UI = (() => {
 
   function renderDetalle(num,emp){
     emp=emp||DB.getEmpresaActiva();
-    const u=DB.getUnidad(num,emp);
+    let u=DB.getUnidad(num,emp);
     if(!u){toast('Unidad no encontrada','error');App.nav(null,'panel-resumen');return;}
+    // Cargar notas frescas de Supabase (pueden haberse guardado desde plataforma)
+    if(window.GPS_SB){
+      GPS_SB._getRaw('gps_barridos',
+        'num_economico=eq.'+encodeURIComponent(num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&notas=not.is.null&limit=1'
+      ).then(rows=>{
+        if(rows && rows.length > 0 && rows[0].notas){
+          const notaFresca = rows[0].notas;
+          if(notaFresca !== u.notas){
+            DB.upsertUnidad(num, {notas: notaFresca}, emp);
+            const nd = document.getElementById('notas-display');
+            if(nd) nd.innerHTML = notaFresca.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          }
+        }
+      }).catch(()=>{});
+    }
     const cfg=DB.getConfig();
     const dias=Parsers.diasDesde(u.ultima_act);
     const cls=Parsers.statusClass(dias);
@@ -900,6 +915,7 @@ const UI = (() => {
         <div class="det-box" style="max-width:600px">
           <div class="det-box-title">NOTAS</div>
           <div id="notas-display" style="font-size:13px;line-height:1.7;padding:10px 0;min-height:80px;white-space:pre-wrap">${esc(u.notas)||'<span style="color:var(--text3)">Sin notas registradas.</span>'}</div>
+          <!-- notas-display se actualiza async desde Supabase si hay notas más recientes -->
           <button class="act-btn" onclick="UI._addNote('${esc(num)}','${esc(emp)}')">✏ Editar notas</button>
         </div>
       </div>
@@ -1052,29 +1068,56 @@ const UI = (() => {
       DB.upsertUnidad(num, { activa: true, _soloBarrido: true }, emp);
       u = DB.getUnidad(num, emp);
     }
-    const notasActuales = u ? (u.notas || '') : '';
+    const notasLocal = u ? (u.notas || '') : '';
 
-    openModal(`
-      <div style="background:var(--bg-panel);border:1px solid var(--border2);border-radius:12px;padding:24px;width:440px">
-        <div style="font-size:14px;font-weight:600;margin-bottom:12px">✏ Notas — Unidad ${esc(num)}</div>
-        <textarea id="modal-notas" rows="5" style="width:100%;background:var(--bg-card);border:1px solid var(--border2);border-radius:8px;padding:10px;color:var(--text);font-family:var(--font);font-size:13px;resize:vertical">${esc(notasActuales)}</textarea>
-        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
-          <button onclick="UI.closeModal()" class="act-btn">Cancelar</button>
-          <button onclick="UI._guardarNotaModal('${esc(num)}','${esc(emp)}')" class="act-btn-primary">Guardar</button>
-        </div>
-      </div>`);
+    // Abrir modal con lo que hay en localStorage mientras carga Supabase
+    const _abrirModalNotas = (txt) => {
+      openModal(`
+        <div style="background:var(--bg-panel);border:1px solid var(--border2);border-radius:12px;padding:24px;width:440px">
+          <div style="font-size:14px;font-weight:600;margin-bottom:12px">✏ Notas — Unidad ${esc(num)}</div>
+          <textarea id="modal-notas" rows="5" style="width:100%;background:var(--bg-card);border:1px solid var(--border2);border-radius:8px;padding:10px;color:var(--text);font-family:var(--font);font-size:13px;resize:vertical">${esc(txt)}</textarea>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+            <button onclick="UI.closeModal()" class="act-btn">Cancelar</button>
+            <button onclick="UI._guardarNotaModal('${esc(num)}','${esc(emp)}')" class="act-btn-primary">Guardar</button>
+          </div>
+        </div>`);
+    };
+
+    // Buscar nota más reciente en Supabase (fuente de verdad)
+    if (window.GPS_SB) {
+      GPS_SB._getRaw('gps_barridos',
+        'num_economico=eq.'+encodeURIComponent(num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&notas=not.is.null&limit=1'
+      ).then(rows => {
+        const notaSupa = (rows && rows.length > 0) ? (rows[0].notas || '') : '';
+        const notaFinal = notaSupa || notasLocal;
+        // Actualizar localStorage si Supabase tiene algo más reciente
+        if (notaSupa && notaSupa !== notasLocal) {
+          DB.upsertUnidad(num, { notas: notaSupa }, emp);
+        }
+        _abrirModalNotas(notaFinal);
+      }).catch(() => _abrirModalNotas(notasLocal));
+    } else {
+      _abrirModalNotas(notasLocal);
+    }
   }
 
   function _guardarNotaModal(num, emp) {
     const txt = (document.getElementById('modal-notas')?.value || '').trim();
     // 1. Guardar en localStorage
     DB.upsertUnidad(num, { notas: txt, _fuente: 'edit_notas_modal' }, emp);
-    // 2. Sincronizar a Supabase en gps_barridos.notas (campo separado de observaciones)
+    // 2. Sincronizar a Supabase en gps_barridos.notas con return=minimal (update masivo)
     if (window.GPS_SB) {
-      GPS_SB._patch('gps_barridos',
-        'num_economico=eq.' + encodeURIComponent(num) + '&empresa_id=eq.' + encodeURIComponent(emp),
-        { notas: txt || null }
-      ).catch(e => console.warn('[GPS_SB notas]', e));
+      const _cfg = window.CCTV_SUPABASE_CONFIG || {};
+      const _url = (_cfg.url||'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
+      const _key = _cfg.anonKey||'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
+      fetch(`${_url}/gps_barridos?num_economico=eq.${encodeURIComponent(num)}&empresa_id=eq.${encodeURIComponent(emp)}`, {
+        method: 'PATCH',
+        headers: { 'apikey': _key, 'Authorization': 'Bearer '+_key, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ notas: txt || null })
+      }).then(r => {
+        if (r.ok) console.log('[notas] Supabase PATCH OK para', num);
+        else r.text().then(t => console.error('[notas] Supabase PATCH ERROR', r.status, t));
+      }).catch(e => console.warn('[notas] PATCH error:', e));
     }
     UI.closeModal();
     UI.toast('Notas guardadas', 'success');
