@@ -5020,7 +5020,7 @@ const UI = (() => {
     _copiarReporteFinalBarrido();
   }
 
-  let _maestraFilter = { base:'', crom:'', est:'' };
+  let _maestraFilter = { base:'', crom:'', est:'', plats:{} }; // plats: { CEIBA:'con'|'sin'|'' , ... }
 
   function renderMaestra() {
     const emp = DB.getEmpresaActiva();
@@ -5039,6 +5039,14 @@ const UI = (() => {
     if (f.base) lista = lista.filter(u => u.base === f.base);
     if (f.crom) lista = lista.filter(u => u.cromatica === f.crom);
     if (f.est)  lista = lista.filter(u => Parsers.normalizarEstatus(u.estatus) === f.est);
+    // Filtros por plataforma con/sin
+    ALL_PLATS.forEach(p => {
+      const v = (f.plats || {})[p];
+      if (!v) return;
+      const k = 'ultima_act_' + p.toLowerCase();
+      if (v === 'con') lista = lista.filter(u => !!u[k]);
+      if (v === 'sin') lista = lista.filter(u => !u[k]);
+    });
 
     // Conteo por plataforma (con equipo / sin equipo)
     const conteos = {};
@@ -5093,6 +5101,17 @@ const UI = (() => {
             ${[...new Set(uns.map(u => Parsers.normalizarEstatus(u.estatus)).filter(Boolean))].sort()
               .map(e => `<option value="${esc(e)}" ${f.est===e?'selected':''}>${esc(e)}</option>`).join('')}
           </select>
+        </div>
+        <div class="plat-filter-group" style="flex-direction:row;flex-wrap:wrap;gap:6px;align-items:center;flex:1">
+          <span class="plat-filter-lbl" style="white-space:nowrap">PLATAFORMA</span>
+          ${ALL_PLATS.map(p => {
+            const v = (f.plats||{})[p] || '';
+            const platLow = p.charAt(0)+p.slice(1).toLowerCase();
+            return `<div style="display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;font-size:10px;font-weight:600">
+              <button onclick="UI._setMaestraPlatFilter('${p}','con')" style="padding:3px 7px;border:none;cursor:pointer;background:${v==='con'?'var(--green)':'var(--bg-base)'};color:${v==='con'?'#fff':'var(--text2)'}">✓ Con ${platLow}</button>
+              <button onclick="UI._setMaestraPlatFilter('${p}','sin')" style="padding:3px 7px;border:none;border-left:1px solid var(--border);cursor:pointer;background:${v==='sin'?'var(--red)':'var(--bg-base)'};color:${v==='sin'?'#fff':'var(--text2)'}">Sin ${platLow}</button>
+            </div>`;
+          }).join('')}
         </div>
         <button class="act-btn" onclick="UI._resetMaestraFilters()">↺ Reset</button>
         <span style="margin-left:auto;font-size:11px;color:var(--text2);align-self:center"><strong>${lista.length}</strong> unidades filtradas</span>
@@ -5158,14 +5177,21 @@ const UI = (() => {
 
   function _onMaestraFilterChange() {
     _maestraFilter = {
-      base: $('ma-f-base')?.value || '',
-      crom: $('ma-f-crom')?.value || '',
-      est:  $('ma-f-est')?.value || ''
+      base:  $('ma-f-base')?.value || '',
+      crom:  $('ma-f-crom')?.value || '',
+      est:   $('ma-f-est')?.value  || '',
+      plats: _maestraFilter.plats  || {}
     };
     renderMaestra();
   }
+  function _setMaestraPlatFilter(plat, val) {
+    if (!_maestraFilter.plats) _maestraFilter.plats = {};
+    // Toggle: si ya está activo, desactivar
+    _maestraFilter.plats[plat] = (_maestraFilter.plats[plat] === val) ? '' : val;
+    renderMaestra();
+  }
   function _resetMaestraFilters() {
-    _maestraFilter = { base:'', crom:'', est:'' };
+    _maestraFilter = { base:'', crom:'', est:'', plats:{} };
     renderMaestra();
   }
 
@@ -5331,7 +5357,7 @@ const UI = (() => {
     get _barridoManualState(){return _barridoManualState;},
     set _barridoManualState(v){Object.assign(_barridoManualState,v);},
     // maestra
-    _onMaestraFilterChange, _resetMaestraFilters, _exportarMaestra,
+    _onMaestraFilterChange, _resetMaestraFilters, _setMaestraPlatFilter, _exportarMaestra,
     // date picker
     openDatePicker, _confirmDatePicker,
     // carga
