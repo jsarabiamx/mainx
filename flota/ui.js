@@ -2057,7 +2057,8 @@ const UI = (() => {
         if (!u[k]) return false;
         const fd = new Date(u[k]);
         if (isNaN(fd)) return false;
-        const hoyL  = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+        const _hD2 = new Date(hoy); // hoy es Date.now() (número)
+        const hoyL  = new Date(_hD2.getFullYear(), _hD2.getMonth(), _hD2.getDate());
         const fechL = new Date(fd.getFullYear(), fd.getMonth(), fd.getDate());
         const d = Math.floor((hoyL - fechL) / 86400000);
         let bucket;
@@ -2101,7 +2102,8 @@ const UI = (() => {
         if (!fecha) return null;
         const fd = new Date(fecha);
         if (isNaN(fd)) return null;
-        const hoyL  = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+        const _hD  = new Date(hoy); // hoy es Date.now() (número)
+        const hoyL  = new Date(_hD.getFullYear(), _hD.getMonth(), _hD.getDate());
         const fechL = new Date(fd.getFullYear(), fd.getMonth(), fd.getDate());
         return Math.floor((hoyL - fechL) / 86400000);
       };
@@ -2191,7 +2193,8 @@ const UI = (() => {
           if (!fecha) return null;
           const fd = new Date(fecha);
           if (isNaN(fd)) return null;
-          const hoyLocal   = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+          const _hoyD = new Date(hoy); // hoy es Date.now() (número) — convertir a Date
+          const hoyLocal   = new Date(_hoyD.getFullYear(), _hoyD.getMonth(), _hoyD.getDate());
           const fechaLocal = new Date(fd.getFullYear(), fd.getMonth(), fd.getDate());
           return Math.floor((hoyLocal - fechaLocal) / 86400000);
         })();
