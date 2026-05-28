@@ -269,9 +269,33 @@ const DB = (() => {
             const platKey = 'ultima_act_' + plat.toLowerCase();
             const raw = r.datos_raw || {};
 
-            if (!_s.unidades[empR]) return;
-            const u = _s.unidades[empR][num];
-            if (!u) return;
+            if (!_s.unidades[empR]) _s.unidades[empR] = {};
+            let u = _s.unidades[empR][num];
+            // FIX: si la unidad no tiene asignación, crearla desde el barrido (_soloBarrido)
+            // Así las unidades que están en plataformas pero no en asignación también se restauran
+            if (!u) {
+              const rawDatos = r.datos_raw || {};
+              u = {
+                num,
+                economico:    num,
+                cromatica:    rawDatos.cromatica || '',
+                estatus:      rawDatos.estatus   || '',
+                modelo:       rawDatos.modelo    || '',
+                rol:          '',
+                base:         rawDatos.base      || '',
+                empresa_asig: empR,
+                activa:       true,
+                fallas:       [],
+                historialFallas: [],
+                historial:    [],
+                siniestro:    false,
+                siniestroDesc:'',
+                fallaCount:   0,
+                _soloBarrido: true,
+                _fuente:      'supabase_barrido'
+              };
+              _s.unidades[empR][num] = u;
+            }
 
             // Usar SOLO ultima_conexion — datos_raw.fecha puede estar en UTC incorrecto
             const fechaStr = r.ultima_conexion || null;
@@ -309,7 +333,7 @@ const DB = (() => {
               // Si Supabase dice que NO está desinstalado, limpiar local
               delete u[desKey];
             }
-            if (plat === 'SAMSARA' && raw.estadoSamsara) u.estado_samsara = raw.estadoSamsara;
+            if (plat === 'SAMSARA') { if (raw.estadoSamsara) u.estado_samsara = raw.estadoSamsara; else if (r.datos_raw?.estadoSamsara) u.estado_samsara = r.datos_raw.estadoSamsara; }
             if (plat === 'MOTIVE') {
               if (raw.serieGateway) u.motive_vg = raw.serieGateway;
               if (raw.serieDashcam) u.motive_cam = raw.serieDashcam;
