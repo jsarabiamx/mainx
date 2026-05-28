@@ -5064,8 +5064,8 @@ const UI = (() => {
           <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px">
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">${platIcon(p,18)}<div style="font-size:12px;font-weight:700">${p}</div></div>
             <div style="display:flex;gap:8px;font-size:11px">
-              <div><span style="color:var(--green);font-weight:700">${conteos[p].con}</span> <span style="color:var(--text3)">con equipo</span></div>
-              <div><span style="color:var(--text3);font-weight:600">${conteos[p].sin}</span> <span style="color:var(--text3)">sin equipo</span></div>
+              <div><span style="color:var(--green);font-weight:700">${conteos[p].con}</span> <span style="color:var(--text3)">con ${p.charAt(0)+p.slice(1).toLowerCase()}</span></div>
+              <div><span style="color:var(--text3);font-weight:600">${conteos[p].sin}</span> <span style="color:var(--text3)">sin ${p.charAt(0)+p.slice(1).toLowerCase()}</span></div>
             </div>
           </div>`).join('')}
       </div>
@@ -5141,11 +5141,11 @@ const UI = (() => {
                     return `<td style="text-align:center">
                       ${idVal
                         ? `<span style="font-family:monospace;font-size:10px;font-weight:700;color:var(--green)" title="${esc(idVal)}">${esc(idVal.length>10?idVal.substring(0,10)+'…':idVal)}</span>`
-                        : `<span style="font-size:11px;font-weight:700;color:var(--green)">✓ Con equipo</span>`
+                        : `<span style="font-size:11px;font-weight:700;color:var(--green)">✓ Con ${p.charAt(0)+p.slice(1).toLowerCase()}</span>`
                       }
                     </td>`;
                   } else {
-                    return `<td style="text-align:center;color:var(--text3);font-size:10px">Sin equipo</td>`;
+                    return `<td style="text-align:center;color:var(--text3);font-size:10px">Sin ${p.charAt(0)+p.slice(1).toLowerCase()}</td>`;
                   }
                 }).join('')}
               </tr>`).join('')}
