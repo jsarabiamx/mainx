@@ -77,48 +77,29 @@ const UI = (() => {
   }
 
   function _msToggle(id) {
-    // Cerrar otros paneles abiertos
-    document.querySelectorAll('.ms-panel.open').forEach(p => {
-      if (p.id !== id + '-panel') p.classList.remove('open');
-    });
     const panel = document.getElementById(id + '-panel');
     if (!panel) return;
+    const wasOpen = panel.classList.contains('open');
 
-    const isOpening = !panel.classList.contains('open');
-    panel.classList.toggle('open');
+    // Cerrar todos los paneles abiertos
+    document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
 
-    if (isOpening) {
-      // Posicionar el panel con position:fixed usando las coordenadas del trigger
-      const trigger = document.querySelector(`#${id} .ms-trigger`);
+    if (!wasOpen) {
+      // Posicionar con fixed: leer coordenadas del trigger una sola vez
+      const trigger = document.querySelector('#' + id + ' .ms-trigger');
       if (trigger) {
-        const rect = trigger.getBoundingClientRect();
-        const panelW = 260;
-        const viewW  = window.innerWidth;
-        // Alinear a la izquierda del trigger; si se sale de la pantalla, alinear a la derecha
-        let left = rect.left;
-        if (left + panelW > viewW - 8) left = rect.right - panelW;
-        if (left < 8) left = 8;
-        // Abrir hacia abajo normalmente; si no hay espacio, abrir hacia arriba
-        const panelH = 340;
-        const viewH  = window.innerHeight;
-        let top = rect.bottom + 4;
-        if (top + panelH > viewH - 8) top = rect.top - panelH - 4;
-        if (top < 8) top = 8;
-        panel.style.left = left + 'px';
-        panel.style.top  = top  + 'px';
-        panel.style.minWidth = Math.max(rect.width, 200) + 'px';
+        const r = trigger.getBoundingClientRect();
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const pw = 260, ph = 320;
+        let left = r.left;
+        let top  = r.bottom + 4;
+        if (left + pw > vw - 6) left = r.right - pw;
+        if (left < 4) left = 4;
+        if (top + ph > vh - 6) top = r.top - ph - 4;
+        if (top < 4) top = 4;
+        panel.style.cssText += ';left:' + left + 'px;top:' + top + 'px;min-width:' + Math.max(r.width, 180) + 'px';
       }
-
-      // Cerrar al hacer click fuera
-      const _closeMs = (e) => {
-        const root = document.getElementById(id);
-        if (root && !root.contains(e.target) && !panel.contains(e.target)) {
-          panel.classList.remove('open');
-          document.removeEventListener('mousedown', _closeMs);
-        }
-      };
-      // Pequeño delay para no capturar el click que abrió el panel
-      setTimeout(() => document.addEventListener('mousedown', _closeMs), 50);
+      panel.classList.add('open');
     }
   }
 
