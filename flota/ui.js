@@ -2155,7 +2155,8 @@ const UI = (() => {
       ${esMotive ? '<th>ESTADO DISP.</th><th>EMPRESA</th>' : ''}
       <th>${plat} ÚLT. ACTIVIDAD</th><th>DÍAS</th>
       ${esMotive ? '<th>SERIE VG</th><th>SERIE CAM</th>' : `<th>${idLabel}</th>`}
-      <th>OBSERVACIONES</th>`;
+      <th>OBSERVACIONES</th>
+      <th>NOTAS</th>`;
 
     const rows = uns.map(u => {
       try {
@@ -2170,6 +2171,7 @@ const UI = (() => {
           empresa:     String(u.empresa     || emp),
           empresa_asig:String(u.empresa_asig|| emp),
           observaciones: typeof u.observaciones === 'string' ? u.observaciones : (u.observaciones ? JSON.stringify(u.observaciones) : ''),
+          notas: typeof u.notas === 'string' ? u.notas : '',
           dvr_ceiba:   String(u.dvr_ceiba   || ''),
           vin_samsara: String(u.vin_samsara || ''),
           placa_man:   String(u.placa_man   || ''),
@@ -2268,6 +2270,10 @@ const UI = (() => {
           }
           <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarObsRapido('${esc(safeU.num)}','${esc(safeU.empresa_asig)}','${plat}')" title="Click para editar — ${esc(obsTexto||'sin observación')}">
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${esc(obsTexto)||'<span style="color:var(--text3);font-style:italic">+ agregar…</span>'}</span>
+            <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
+          </td>
+          <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarNotasRapido('${esc(safeU.num)}','${esc(safeU.empresa_asig)}')" title="Click para editar notas — ${esc(safeU.notas||'sin notas')}">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${esc(safeU.notas)||'<span style="color:var(--text3);font-style:italic">+ nota…</span>'}</span>
             <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
           </td>
         </tr>`;
@@ -2699,6 +2705,34 @@ const UI = (() => {
 
     toast('Observación guardada','success');
     if (_platExpandida === plat) _refreshPlatTable(plat);
+  }
+
+  /**
+   * Edita las notas de una unidad directamente desde la tabla de plataformas.
+   * Las notas se guardan en u.notas (campo de la unidad, no del barrido).
+   * Sobreviven al borrar datos de plataforma porque viven en gps_unidades.
+   */
+  function _editarNotasRapido(num, emp) {
+    const u = DB.getUnidad(num, emp);
+    if (!u) { toast('Unidad no encontrada','error'); return; }
+    const actual = u.notas || '';
+    const nuevo = window.prompt(
+      `Notas para unidad ${num}:\n(Estas notas se conservan aunque borres datos de plataforma)\n\n(Deja vacío para borrar)`,
+      actual
+    );
+    if (nuevo === null) return; // canceló
+    const texto = nuevo.trim();
+    // Guardar en localStorage
+    DB.upsertUnidad(num, { notas: texto, _fuente: 'edit_notas_inline' }, emp);
+    // Sincronizar a Supabase en gps_unidades (sobrevive a borrar plataforma)
+    if (window.GPS_SB) {
+      GPS_SB._patch('gps_unidades',
+        `num_economico=eq.${encodeURIComponent(num)}&empresa_id=eq.${encodeURIComponent(emp)}`,
+        { datos_extra: { notas: texto } }
+      ).catch(e => console.warn('[GPS_SB notas]', e));
+    }
+    toast('Nota guardada','success');
+    if (_platExpandida) _refreshPlatTable(_platExpandida);
   }
 
   /**
@@ -5330,7 +5364,7 @@ const UI = (() => {
     _modalDesinstalacion, _liberarDesinstalacion,
     _updatePlatFechaConISO,
     // v7.1: tabs del detalle inline y guardar observaciones in-situ
-    _cambiarPlatDetailTab, _guardarObsInline, _editarObsRapido,
+    _cambiarPlatDetailTab, _guardarObsInline, _editarObsRapido, _editarNotasRapido,
     // v7.2: multi-select dropdowns
     _msToggle, _msOnCheck, _msSelectAll, _msFilterOptions,
     // alertas
