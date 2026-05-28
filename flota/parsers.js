@@ -81,8 +81,22 @@ const Parsers = (() => {
     const multiDateMatch = s.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)/);
     if (multiDateMatch) s = multiDateMatch[1];
 
-    // Intentar parseo directo (ISO y variantes)
-    let d = new Date(s.replace(' ', 'T'));
+    // ── FIX ZONA HORARIA ──────────────────────────────────────────────────────
+    // Los strings "YYYY-MM-DD HH:MM:SS" deben tratarse como HORA LOCAL, NO como UTC.
+    // new Date("2024-08-19T05:02:30") en navegadores modernos interpreta esto como UTC
+    // y al convertir a hora local (UTC-6 en México) el resultado queda 6 horas adelante.
+    // La solución es construir el Date con componentes numéricos locales directamente.
+    const isoLike = s.match(/^(\d{4})-(\d{2})-(\d{2})[\sT](\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (isoLike) {
+      const d = new Date(
+        parseInt(isoLike[1]), parseInt(isoLike[2]) - 1, parseInt(isoLike[3]),
+        parseInt(isoLike[4]), parseInt(isoLike[5]), parseInt(isoLike[6] || '0')
+      );
+      if (!isNaN(d)) return d;
+    }
+
+    // Intentar parseo directo solo para otros formatos (ISO con Z, etc.)
+    let d = new Date(s);
     if (!isNaN(d)) return d;
 
     // Formato DD/MM/YYYY HH:MM a.m./p.m. (ETN CEIBA) o MM/DD/YYYY HH:MM AM/PM (MOTIVE)
@@ -422,12 +436,6 @@ const Parsers = (() => {
       // Col H(7) = GPS time
       const rawDate = row[7] || row[6] || '';
       const fecha = parseDate(rawDate);
-
-      // FIX CEIBA (v7.3): el archivo exportado de Ceiba trae la hora adelantada 1h.
-      // Restamos SOLO 1 hora al timestamp — minutos y segundos quedan intactos.
-      // Esto corrige el desfase EN ORIGEN, así que todo el sistema (Samsara cruzado,
-      // Viajes, Barrido Manual, agrupación por días) ya queda con la hora correcta.
-      if (fecha) fecha.setHours(fecha.getHours() - 1);
 
       // Col C(2) = Serial No.
       const serie = String(row[2] || '').trim();
