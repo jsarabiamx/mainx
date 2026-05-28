@@ -77,30 +77,12 @@ const UI = (() => {
   }
 
   function _msToggle(id) {
+    // Cerrar otros paneles abiertos
+    document.querySelectorAll('.ms-panel.open').forEach(p => {
+      if (p.id !== id + '-panel') p.classList.remove('open');
+    });
     const panel = document.getElementById(id + '-panel');
-    if (!panel) return;
-    const wasOpen = panel.classList.contains('open');
-
-    // Cerrar todos los paneles abiertos
-    document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
-
-    if (!wasOpen) {
-      // Posicionar con fixed: leer coordenadas del trigger una sola vez
-      const trigger = document.querySelector('#' + id + ' .ms-trigger');
-      if (trigger) {
-        const r = trigger.getBoundingClientRect();
-        const vw = window.innerWidth, vh = window.innerHeight;
-        const pw = 260, ph = 320;
-        let left = r.left;
-        let top  = r.bottom + 4;
-        if (left + pw > vw - 6) left = r.right - pw;
-        if (left < 4) left = 4;
-        if (top + ph > vh - 6) top = r.top - ph - 4;
-        if (top < 4) top = 4;
-        panel.style.cssText += ';left:' + left + 'px;top:' + top + 'px;min-width:' + Math.max(r.width, 180) + 'px';
-      }
-      panel.classList.add('open');
-    }
+    if (panel) panel.classList.toggle('open');
   }
 
   function _msOnCheck(id, value, checked) {
