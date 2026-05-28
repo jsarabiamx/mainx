@@ -4338,13 +4338,16 @@ const UI = (() => {
   function _fechaSistemaParaBarridoManual(num, plataforma) {
     const emp = DB.getEmpresaActiva();
     const u = DB.getUnidad(num, emp);
-    if (!u) return { fecha: null, fuente: '', unidad: null };
+    // Unidad no existe en asignación del sistema
+    if (!u) return { fecha: null, fuente: '', unidad: null, existeEnSistema: false, existeEnPlat: false };
     const plat = String(plataforma || '').toLowerCase();
     const platKey = plat ? 'ultima_act_' + plat : '';
     const fechaPlat = platKey ? u[platKey] : null;
-    if (fechaPlat) return { fecha: fechaPlat, fuente: String(plataforma || '').toUpperCase(), unidad: u };
-    if (u.ultima_act) return { fecha: u.ultima_act, fuente: 'SISTEMA', unidad: u };
-    return { fecha: null, fuente: '', unidad: u };
+    // La unidad existe en plataforma si tiene fecha registrada en esa plataforma
+    const existeEnPlat = !!fechaPlat;
+    if (fechaPlat) return { fecha: fechaPlat, fuente: String(plataforma || '').toUpperCase(), unidad: u, existeEnSistema: true, existeEnPlat: true };
+    // Existe en sistema pero NO en la plataforma seleccionada (nunca registró fecha en esa plat)
+    return { fecha: null, fuente: '', unidad: u, existeEnSistema: true, existeEnPlat: false };
   }
 
   function _fechaSalidaBarridoManual(f) {
@@ -4639,7 +4642,9 @@ const UI = (() => {
         enLinea,
         etiqueta,
         rawLine: line,
-        _hasTextoEtiqueta: hayTextoEtiqueta
+        _hasTextoEtiqueta: hayTextoEtiqueta,
+        _existeEnSistema: sys.existeEnSistema,
+        _existeEnPlat:    sys.existeEnPlat
       });
     });
 
@@ -4708,6 +4713,11 @@ const UI = (() => {
     if (!filas.length) return '';
     const hoy = new Date();
     const hoyStr = _fmtFechaSoloDia(hoy);
+    const plat = _barridoManualState.plataforma || 'CEIBA';
+
+    // Hora de corte: 07:00 – 16:00 = EN LÍNEA; 00:00–06:59 o 16:01–23:59 = espera/madrugada
+    const HORA_INICIO_LINEA = 7;   // 7:00 AM
+    const HORA_FIN_LINEA    = 16;  // 4:00 PM (16:00)
 
     const enriched = filas.map(f => {
       const fechaSalida = _fechaSalidaBarridoManual(f);
@@ -4720,12 +4730,22 @@ const UI = (() => {
         const esHoy = _fmtFechaSoloDia(d) === hoyStr;
         if (esHoy) {
           const hora = d.getHours();
-          if (hora >= 1 && hora <= 6) categoria = 'madrugada';
-          else if (hora >= 7) categoria = 'en_linea';
-          else categoria = 'en_linea';
+          // En línea: entre HORA_INICIO_LINEA y HORA_FIN_LINEA
+          if (hora >= HORA_INICIO_LINEA && hora < HORA_FIN_LINEA) {
+            categoria = 'en_linea';
+          } else {
+            // Antes de las 7 o después de las 4 PM → sin transmisión en la mañana/tarde
+            categoria = 'madrugada';
+          }
         } else {
           categoria = f.etiqueta ? 'etiqueta_con_fecha' : 'dias';
         }
+      } else if (f._existeEnSistema && !f._existeEnPlat) {
+        // Unidad en sistema pero SIN registro en esta plataforma
+        categoria = 'sin_plataforma';
+      } else if (f._existeEnSistema && f._existeEnPlat === true && !fechaSalida) {
+        // Existe en plataforma pero sin fecha (módulo GPS sin datos)
+        categoria = 'sin_modulo';
       } else {
         categoria = 'sin_fecha';
       }
@@ -4735,10 +4755,12 @@ const UI = (() => {
       return { ...f, _fechaSalida: fechaSalida, _fechaObj: d, _dias: dias, _categoria: categoria };
     });
 
+    const platNombre = String(plat).toUpperCase();
     let out = `Base ${_fmtFechaSoloDia(hoy)}\n`;
     out += `\n📡 ESTADO DE UNIDADES CCTV\n`;
     out += `✅ OPERATIVO — Cámaras / Antenas GPS-3G OK\n`;
 
+    // ── EN LÍNEA ──────────────────────────────────────────────────────────
     const enLineaList = enriched.filter(f => f._categoria === 'en_linea' && !f.etiqueta);
     if (enLineaList.length) {
       out += `\nEn línea:\n`;
@@ -4747,17 +4769,19 @@ const UI = (() => {
         .forEach(f => { out += `${f.num} (en línea)\n`; });
     }
 
+    // ── SIN TRANSMISIÓN EN LA MAÑANA (hoy pero fuera del horario 07-16) ──
     const madrugadaList = enriched.filter(f => f._categoria === 'madrugada' && !f.etiqueta);
     if (madrugadaList.length) {
-      out += `\n☀ Sin transmisión en la mañana\n`;
+      out += `\n☀️ Sin transmisión en la mañana\n`;
       madrugadaList
-        .sort((a,b) => a._fechaObj - b._fechaObj)
+        .sort((a,b) => (a._fechaObj||0) - (b._fechaObj||0))
         .forEach(f => {
           out += `${f.num} en espera, ${_fmtBarridoManualFecha(f._fechaSalida)}\n`;
         });
     }
 
-    const diasList = enriched.filter(f => f._categoria === 'dias');
+    // ── ÚLTIMA TRANSMISIÓN (días anteriores, sin etiqueta) ────────────────
+    const diasList = enriched.filter(f => f._categoria === 'dias' && !f.etiqueta);
     if (diasList.length) {
       const porDias = {};
       diasList.forEach(f => {
@@ -4765,9 +4789,9 @@ const UI = (() => {
         if (!porDias[d]) porDias[d] = [];
         porDias[d].push(f);
       });
-      out += `\n⏱ Última transmisión\n`;
+      out += `\n⏱️ Última transmisión\n`;
       Object.keys(porDias).map(Number).sort((a,b) => a-b).forEach(d => {
-        out += `▪ ${d} día${d===1?'':'s'}\n`;
+        out += `▪️ ${d} día${d===1?'':'s'}\n`;
         porDias[d]
           .sort((a,b) => b._fechaObj - a._fechaObj)
           .forEach(f => {
@@ -4776,30 +4800,53 @@ const UI = (() => {
       });
     }
 
-    const obsList = enriched.filter(f => f.etiqueta || f._categoria === 'sin_fecha');
+    // ── OBSERVACIONES (con etiqueta O con fecha pero con etiqueta) ─────────
+    const obsList = enriched.filter(f =>
+      f.etiqueta &&
+      f._categoria !== 'sin_plataforma' &&
+      f._categoria !== 'sin_modulo'
+    );
     if (obsList.length) {
       out += `\n⚠ OBSERVACIONES\n`;
       obsList
         .sort((a,b) => Number(a.num) - Number(b.num))
         .forEach(f => {
           const label = f.etiqueta ? (_BM_ETIQUETA_LABEL[f.etiqueta] || f.etiqueta.toLowerCase()) : '';
-
           if (f._fechaObj) {
-            const dias = f._dias;
-            const ayer = new Date(hoy.getTime() - 86400000);
-            const esAyer = _fmtFechaSoloDia(f._fechaObj) === _fmtFechaSoloDia(ayer);
-            const prefijoFecha = esAyer ? 'Ayer ' : '';
-
-            if (label) out += `${f.num} — ${label}\n`;
-            else out += `${f.num}\n`;
-
-            const diasTxt = dias > 0 ? ` (${dias} día${dias===1?'':'s'} sin transmitir)` : '';
-            out += `${prefijoFecha}${_fmtBarridoManualFecha(f._fechaObj)}${diasTxt}\n`;
+            const diasTxt = f._dias > 0 ? ` (${f._dias} día${f._dias===1?'':'s'} sin transmitir)` : '';
+            out += `${f.num} — ${label}\n`;
+            out += `${_fmtBarridoManualFecha(f._fechaObj)}${diasTxt}\n`;
           } else {
-            if (label) out += `${f.num} — ${label}\n`;
-            else out += `${f.num}\n`;
-            out += `(No marca fecha)\n`;
+            out += `${f.num} — ${label}\n`;
           }
+        });
+    }
+
+    // ── SIN MÓDULO GPS (existe en plataforma pero sin fecha) ──────────────
+    const sinModuloList = enriched.filter(f => f._categoria === 'sin_modulo');
+    // También incluir sin_fecha que existen en sistema y en plataforma pero sin fecha
+    const sinFechaConPlat = enriched.filter(f => f._categoria === 'sin_fecha' && f._existeEnSistema && f._existeEnPlat);
+    const todosSinModulo = [...sinModuloList, ...sinFechaConPlat];
+    if (todosSinModulo.length) {
+      out += `\n⛓️‍💥Sin módulo GPS / validar físicamente:\n`;
+      todosSinModulo
+        .sort((a,b) => Number(a.num) - Number(b.num))
+        .forEach(f => {
+          out += `${f.num} sin fecha en módulo⚠️validar\n`;
+        });
+    }
+
+    // ── SIN PLATAFORMA: unidad en sistema pero sin registro en esta plat,
+    //    O unidad que el técnico puso y no está en ningún lado
+    const sinPlatList = enriched.filter(f =>
+      f._categoria === 'sin_plataforma' || f._existeEnSistema === false
+    ).filter(f => !f.etiqueta); // con etiqueta ya van a OBSERVACIONES
+    if (sinPlatList.length) {
+      out += `\n🚫Unidades sin plataforma ${platNombre}:\n`;
+      sinPlatList
+        .sort((a,b) => Number(a.num) - Number(b.num))
+        .forEach(f => {
+          out += `${f.num} sin ${platNombre.toLowerCase()}\n`;
         });
     }
 
