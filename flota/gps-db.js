@@ -83,8 +83,20 @@ const GPS_SB = (() => {
   }
 
   async function _delete(table, filter) {
-    const r = await fetch(`${BASE}/${table}?${filter}`, { method: 'DELETE', headers: HEADERS });
-    if (!r.ok) throw new Error(`GPS_SB DELETE ${table}: ${r.status}`);
+    // FIX: usar return=minimal para DELETE masivo.
+    // Con return=representation PostgREST rechaza bulk deletes silenciosamente.
+    const r = await fetch(`${BASE}/${table}?${filter}`, {
+      method: 'DELETE',
+      headers: {
+        'apikey':        KEY,
+        'Authorization': 'Bearer ' + KEY,
+        'Prefer':        'return=minimal'
+      }
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => String(r.status));
+      throw new Error(`GPS_SB DELETE ${table}: ${r.status} — ${txt}`);
+    }
     return true;
   }
 
