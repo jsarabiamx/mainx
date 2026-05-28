@@ -73,13 +73,26 @@ const GPS_SB = (() => {
   }
 
   async function _patch(table, filter, data) {
+    // Tablas que tienen updated_at
+    const HAS_UPDATED_AT = ['gps_unidades','gps_empresas','gps_config','gps_fallas','gps_sims'];
+    const body = HAS_UPDATED_AT.includes(table)
+      ? { ...data, updated_at: new Date().toISOString() }
+      : { ...data };
     const r = await fetch(`${BASE}/${table}?${filter}`, {
       method: 'PATCH',
-      headers: HEADERS,
-      body: JSON.stringify({ ...data, updated_at: new Date().toISOString() })
+      headers: {
+        'apikey':        KEY,
+        'Authorization': 'Bearer ' + KEY,
+        'Content-Type':  'application/json',
+        'Prefer':        'return=minimal'   // return=minimal para bulk updates
+      },
+      body: JSON.stringify(body)
     });
-    if (!r.ok) throw new Error(`GPS_SB PATCH ${table}: ${r.status}`);
-    return r.json();
+    if (!r.ok) {
+      const txt = await r.text().catch(() => r.status);
+      throw new Error(`GPS_SB PATCH ${table}: ${r.status} — ${txt}`);
+    }
+    return true;
   }
 
   // FIX: usar return=minimal para DELETE masivo.
