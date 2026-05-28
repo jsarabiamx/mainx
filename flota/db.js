@@ -438,8 +438,10 @@ const DB = (() => {
             } else {
               store[k][f] = datos[f];
             }
-          } else if (f === 'siniestro' || f === 'notas' || f === 'fallas') {
+          } else if (f === 'siniestro' || f === 'fallas') {
             if (datos[f]) store[k][f] = datos[f];
+          } else if (f === 'notas') {
+            store[k][f] = datos[f]; // guardar siempre, incluso string vacío para borrar
           } else if (datos[f] !== null && datos[f] !== '') {
             store[k][f] = datos[f];
           }
