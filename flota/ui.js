@@ -1078,18 +1078,32 @@ const UI = (() => {
     }
     UI.closeModal();
     UI.toast('Notas guardadas', 'success');
-    // 3. Re-renderizar detalle para que se vea el dato actualizado
-    if (typeof renderDetalle === 'function') {
-      renderDetalle(num, emp);
-    } else {
-      // Actualizar solo el display sin re-renderizar todo
-      const nd = document.getElementById('notas-display');
-      if (nd) nd.innerHTML = txt
+    // 3. Actualizar el display de notas si el detalle está abierto
+    const nd = document.getElementById('notas-display');
+    if (nd) {
+      nd.innerHTML = txt
         ? txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
         : '<span style="color:var(--text3)">Sin notas registradas.</span>';
     }
-    // 4. Refrescar tabla de plataformas si está abierta
-    if (UI._platExpandida) UI._refreshPlatTable(UI._platExpandida);
+    // 4. Re-renderizar detalle completo si está abierto (renderDetalle está en UI)
+    if (typeof UI.renderDetalle === 'function') {
+      UI.renderDetalle(num, emp);
+    }
+    // 5. Refrescar celda NOTAS en tabla de plataformas directamente (sin re-render completo)
+    const platRows = document.querySelectorAll('[data-num="' + num + '"]');
+    platRows.forEach(row => {
+      const notasCells = row.querySelectorAll('td.plat-obs-cell');
+      // La última celda plat-obs-cell es la de NOTAS
+      const notasCell = notasCells[notasCells.length - 1];
+      if (notasCell) {
+        const span = notasCell.querySelector('span');
+        if (span) span.innerHTML = txt
+          ? txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          : '<span style="color:var(--text3);font-style:italic">+ nota…</span>';
+      }
+    });
+    // 6. Refrescar tabla completa si hay filtros activos que puedan afectar visibilidad
+    if (UI._platExpandida) setTimeout(() => UI._refreshPlatTable(UI._platExpandida), 100);
   }
 
   function _updateManualFechaConISO(num,emp,iso){
