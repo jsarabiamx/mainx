@@ -666,18 +666,17 @@ const UI = (() => {
     emp=emp||DB.getEmpresaActiva();
     let u=DB.getUnidad(num,emp);
     if(!u){toast('Unidad no encontrada','error');App.nav(null,'panel-resumen');return;}
-    // Cargar notas frescas de Supabase (pueden haberse guardado desde plataforma)
-    if(window.GPS_SB){
+    // Cargar nota fresca de Supabase (para mostrar notas guardadas desde plataforma)
+    // IMPORTANTE: solo actualizar si Supabase tiene dato — nunca borrar lo que ya está en pantalla
+    if(window.GPS_SB && !u.notas){
       GPS_SB._getRaw('gps_barridos',
         'num_economico=eq.'+encodeURIComponent(num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&notas=not.is.null&limit=1'
       ).then(rows=>{
         if(rows && rows.length > 0 && rows[0].notas){
           const notaFresca = rows[0].notas;
-          if(notaFresca !== u.notas){
-            DB.upsertUnidad(num, {notas: notaFresca}, emp);
-            const nd = document.getElementById('notas-display');
-            if(nd) nd.innerHTML = notaFresca.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-          }
+          DB.upsertUnidad(num, {notas: notaFresca}, emp);
+          const nd = document.getElementById('notas-display');
+          if(nd) nd.innerHTML = notaFresca.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         }
       }).catch(()=>{});
     }
@@ -1116,15 +1115,17 @@ const UI = (() => {
     }
     UI.closeModal();
     UI.toast('Notas guardadas', 'success');
-    // 3. Actualizar el display de notas si el detalle está abierto
+    // 3. Actualizar el display de notas inmediatamente si está visible
     const nd = document.getElementById('notas-display');
     if (nd) {
       nd.innerHTML = txt
         ? txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
         : '<span style="color:var(--text3)">Sin notas registradas.</span>';
     }
-    // 4. Re-renderizar detalle completo si está abierto (renderDetalle está en UI)
-    if (typeof UI.renderDetalle === 'function') {
+    // 4. Si el detalle está abierto, re-renderizar SOLO la sección notas (no todo el detalle)
+    // Llamar renderDetalle haría fetch async a Supabase que podría pisar el texto
+    // Solo llamar si notas-display no existe (detalle no está abierto)
+    if (!nd && typeof UI.renderDetalle === 'function') {
       UI.renderDetalle(num, emp);
     }
     // 5. Refrescar celda NOTAS en tabla de plataformas directamente (sin re-render completo)
@@ -1140,8 +1141,8 @@ const UI = (() => {
           : '<span style="color:var(--text3);font-style:italic">+ nota…</span>';
       }
     });
-    // 6. Refrescar tabla completa si hay filtros activos que puedan afectar visibilidad
-    if (UI._platExpandida) setTimeout(() => UI._refreshPlatTable(UI._platExpandida), 100);
+    // 6. NO hacer _refreshPlatTable — ya actualizamos las celdas directamente arriba
+    // Un refresh completo re-leería u.notas del store y podría pisar el texto si hay race condition
   }
 
   function _updateManualFechaConISO(num,emp,iso){
