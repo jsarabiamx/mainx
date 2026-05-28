@@ -1105,19 +1105,14 @@ const UI = (() => {
     const txt = (document.getElementById('modal-notas')?.value || '').trim();
     // 1. Guardar en localStorage
     DB.upsertUnidad(num, { notas: txt, _fuente: 'edit_notas_modal' }, emp);
-    // 2. Sincronizar a Supabase en gps_barridos.notas con return=minimal (update masivo)
+    // 2. Sincronizar a Supabase gps_barridos.notas (return=minimal para bulk update)
     if (window.GPS_SB) {
-      const _cfg = window.CCTV_SUPABASE_CONFIG || {};
-      const _url = (_cfg.url||'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
-      const _key = _cfg.anonKey||'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
-      fetch(`${_url}/gps_barridos?num_economico=eq.${encodeURIComponent(num)}&empresa_id=eq.${encodeURIComponent(emp)}`, {
-        method: 'PATCH',
-        headers: { 'apikey': _key, 'Authorization': 'Bearer '+_key, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ notas: txt || null })
-      }).then(r => {
-        if (r.ok) console.log('[notas] Supabase PATCH OK para', num);
-        else r.text().then(t => console.error('[notas] Supabase PATCH ERROR', r.status, t));
-      }).catch(e => console.warn('[notas] PATCH error:', e));
+      GPS_SB._patch(
+        'gps_barridos',
+        'num_economico=eq.' + encodeURIComponent(num) + '&empresa_id=eq.' + encodeURIComponent(emp),
+        { notas: txt || null }
+      ).then(() => console.log('[notas] OK:', num, txt))
+       .catch(e => console.error('[notas] ERROR:', e));
     }
     UI.closeModal();
     UI.toast('Notas guardadas', 'success');
