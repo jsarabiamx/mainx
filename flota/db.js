@@ -952,7 +952,7 @@ const DB = (() => {
   function saveBarrido(plataforma, registros, emp) {
     emp = emp || _s.empresaActiva;
 
-    // Para MOTIVE: agrupar registros por empresa y sincronizar cada grupo a Supabase
+    // ✅ FIX: Sincronizar a Supabase CON logging de errores visible en consola
     if (typeof GPS_SB !== 'undefined') {
       // Agrupar por empresa real del registro (r.empresa) para MOTIVE
       const grupos = {};
@@ -962,8 +962,13 @@ const DB = (() => {
         grupos[e].push(r);
       });
       Object.entries(grupos).forEach(([e, regs]) => {
-        GPS_SB.saveBarrido(plataforma, regs, e).catch(e2=>console.warn('[GPS_SB barrido]',e2));
+        console.log(`[DB.saveBarrido] Enviando ${regs.length} registros de ${plataforma} a Supabase (empresa: ${e})...`);
+        GPS_SB.saveBarrido(plataforma, regs, e)
+          .then(res => console.log(`[DB.saveBarrido] Supabase OK — ${plataforma} empresa ${e}:`, res))
+          .catch(e2 => console.error('[DB.saveBarrido] ERROR Supabase:', e2));
       });
+    } else {
+      console.warn('[DB.saveBarrido] GPS_SB no disponible — guardando solo en localStorage');
     }
     const now = new Date().toISOString();
     let actualizadas = 0, noEncontradas = 0, vinActualizados = 0;
@@ -1449,6 +1454,15 @@ const DB = (() => {
     _s.asignaciones[emp] = [];
     _logGlobal('reset', `Reset completo de ${emp}`, emp);
     save();
+    // ✅ FIX: borrar también en Supabase para que initFromSupabase no restaure datos zombi
+    if (window.GPS_SB) {
+      Promise.all([
+        GPS_SB._delete('gps_barridos',     `empresa_id=eq.${encodeURIComponent(emp)}`),
+        GPS_SB._delete('gps_asignaciones', `empresa_id=eq.${encodeURIComponent(emp)}`),
+        GPS_SB._delete('gps_unidades',     `empresa_id=eq.${encodeURIComponent(emp)}`),
+        GPS_SB._delete('gps_fallas',       `empresa_id=eq.${encodeURIComponent(emp)}`)
+      ]).catch(e => console.warn('[DB] resetEmpresa Supabase:', e));
+    }
   }
 
   function exportData() { return JSON.stringify(_s, null, 2); }
