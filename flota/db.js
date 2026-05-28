@@ -1,3 +1,4 @@
+
 /**
  * db.js v4 — Base de datos localStorage — Mesa de Control GPS
  */
@@ -43,6 +44,22 @@ const DB = (() => {
       // Recuperación: si empresaActiva está vacía o no existe en empresas, restaurar
       if (!d.empresaActiva || !d.empresas[d.empresaActiva]) {
         d.empresaActiva = Object.keys(d.empresas)[0] || 'ETN';
+      }
+      // Migración: limpiar observaciones duplicadas que fueron copiadas desde notas por bug anterior
+      // Si una unidad tiene observaciones === notas (sin falla activa), limpiar observaciones
+      if (!d._cleanedObsNotas) {
+        Object.values(d.unidades || {}).forEach(empUnits => {
+          Object.values(empUnits || {}).forEach(u => {
+            if (u.observaciones && u.notas && u.observaciones === u.notas) {
+              // Solo limpiar si no hay falla activa con ese texto
+              const fallaActiva = (u.fallas||[]).find(f => !f.resuelta);
+              if (!fallaActiva || fallaActiva.motivo !== u.observaciones) {
+                u.observaciones = '';
+              }
+            }
+          });
+        });
+        d._cleanedObsNotas = true;
       }
       // Migración defensiva: asegurar que existan las estructuras nuevas
       if (!d.catalogos) d.catalogos = schema().catalogos;
@@ -325,10 +342,12 @@ const DB = (() => {
             }
             const idField = idFieldByPlat[plat];
             if (idField && raw.serie && !u[idField]) u[idField] = raw.serie;
-            const obsBarrido = r.observaciones || raw.observaciones || null;
+            // observaciones = fallas/incidencias (solo desde gps_barridos.observaciones)
+            const obsBarrido = r.observaciones || null;
             if (obsBarrido && !u.observaciones) u.observaciones = obsBarrido;
-            // Restaurar notas (campo separado que sobrevive al borrar plataforma)
-            if (r.notas && !u.notas) u.notas = r.notas;
+            // notas = notas permanentes (desde gps_barridos.notas, campo separado)
+            // Tomar la nota más reciente entre plataformas (cualquiera que tenga valor)
+            if (r.notas) u.notas = r.notas;
             // ── Restaurar estado de desinstalación desde Supabase ──────────
             const desKey = 'desinstalacion_' + plat.toLowerCase();
             if (r.desinstalado) {
