@@ -2678,8 +2678,12 @@ const UI = (() => {
   }
 
   function _editarObsRapido(num, emp, plat) {
-    const u = DB.getUnidad(num, emp);
-    if (!u) { toast('Unidad no encontrada','error'); return; }
+    let u = DB.getUnidad(num, emp);
+    if (!u) {
+      DB.upsertUnidad(num, { activa: true, _soloBarrido: true, _fuente: 'obs_inline' }, emp);
+      u = DB.getUnidad(num, emp);
+    }
+    if (!u) { toast('No se pudo crear la unidad','error'); return; }
     const fallaActiva = (u.fallas||[]).find(f => !f.resuelta);
     const actual = u.observaciones || (fallaActiva ? fallaActiva.motivo : '') || '';
     const nuevo = window.prompt(
@@ -2713,8 +2717,14 @@ const UI = (() => {
    * Sobreviven al borrar datos de plataforma porque viven en gps_unidades.
    */
   function _editarNotasRapido(num, emp) {
-    const u = DB.getUnidad(num, emp);
-    if (!u) { toast('Unidad no encontrada','error'); return; }
+    // Buscar en empresa activa; si no, crear entrada mínima para poder guardar notas
+    let u = DB.getUnidad(num, emp);
+    if (!u) {
+      // Unidad _soloBarrido — crearla en localStorage para poder guardar notas
+      DB.upsertUnidad(num, { activa: true, _soloBarrido: true, _fuente: 'notas_inline' }, emp);
+      u = DB.getUnidad(num, emp);
+    }
+    if (!u) { toast('No se pudo crear la unidad','error'); return; }
     const actual = u.notas || '';
     const nuevo = window.prompt(
       `Notas para unidad ${num}:\n(Estas notas se conservan aunque borres datos de plataforma)\n\n(Deja vacío para borrar)`,
