@@ -1045,26 +1045,51 @@ const UI = (() => {
       </div>`);
   }
 
-  function _addNote(num,emp){
-    const u=DB.getUnidad(num,emp);
+  function _addNote(num, emp) {
+    // Asegurar que la unidad exista (puede ser _soloBarrido)
+    let u = DB.getUnidad(num, emp);
+    if (!u) {
+      DB.upsertUnidad(num, { activa: true, _soloBarrido: true }, emp);
+      u = DB.getUnidad(num, emp);
+    }
+    const notasActuales = u ? (u.notas || '') : '';
+
     openModal(`
       <div style="background:var(--bg-panel);border:1px solid var(--border2);border-radius:12px;padding:24px;width:440px">
         <div style="font-size:14px;font-weight:600;margin-bottom:12px">✏ Notas — Unidad ${esc(num)}</div>
-        <textarea id="modal-notas" rows="5" style="width:100%;background:var(--bg-card);border:1px solid var(--border2);border-radius:8px;padding:10px;color:var(--text);font-family:var(--font);font-size:13px;resize:vertical">${esc(u?.notas||'')}</textarea>
+        <textarea id="modal-notas" rows="5" style="width:100%;background:var(--bg-card);border:1px solid var(--border2);border-radius:8px;padding:10px;color:var(--text);font-family:var(--font);font-size:13px;resize:vertical">${esc(notasActuales)}</textarea>
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
           <button onclick="UI.closeModal()" class="act-btn">Cancelar</button>
-          <button onclick="
-            const _txt=document.getElementById('modal-notas').value;
-            DB.upsertUnidad('${esc(num)}',{notas:_txt},'${esc(emp)}');
-            if(window.GPS_SB)GPS_SB._patch('gps_barridos','num_economico=eq.${esc(num)}&empresa_id=eq.${esc(emp)}',{observaciones:_txt||null}).catch(()=>{});
-            UI.closeModal();
-            UI.toast('Notas guardadas','success');
-            const nd=document.getElementById('notas-display');
-            if(nd)nd.innerHTML=_txt?UI._esc(_txt):'<span style=\'color:var(--text3)\'>Sin notas registradas.</span>';
-            if(UI._platExpandida)UI._refreshPlatTable(UI._platExpandida);
-          " class="act-btn-primary">Guardar</button>
+          <button onclick="UI._guardarNotaModal('${esc(num)}','${esc(emp)}')" class="act-btn-primary">Guardar</button>
         </div>
       </div>`);
+  }
+
+  function _guardarNotaModal(num, emp) {
+    const txt = (document.getElementById('modal-notas')?.value || '').trim();
+    // 1. Guardar en localStorage
+    DB.upsertUnidad(num, { notas: txt, _fuente: 'edit_notas_modal' }, emp);
+    // 2. Sincronizar a Supabase en gps_barridos (todas las plataformas de esta unidad)
+    if (window.GPS_SB) {
+      GPS_SB._patch('gps_barridos',
+        'num_economico=eq.' + encodeURIComponent(num) + '&empresa_id=eq.' + encodeURIComponent(emp),
+        { observaciones: txt || null }
+      ).catch(e => console.warn('[GPS_SB notas]', e));
+    }
+    UI.closeModal();
+    UI.toast('Notas guardadas', 'success');
+    // 3. Re-renderizar detalle para que se vea el dato actualizado
+    if (typeof renderDetalle === 'function') {
+      renderDetalle(num, emp);
+    } else {
+      // Actualizar solo el display sin re-renderizar todo
+      const nd = document.getElementById('notas-display');
+      if (nd) nd.innerHTML = txt
+        ? txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        : '<span style="color:var(--text3)">Sin notas registradas.</span>';
+    }
+    // 4. Refrescar tabla de plataformas si está abierta
+    if (UI._platExpandida) UI._refreshPlatTable(UI._platExpandida);
   }
 
   function _updateManualFechaConISO(num,emp,iso){
@@ -2726,38 +2751,8 @@ const UI = (() => {
    * Sobreviven al borrar datos de plataforma porque viven en gps_unidades.
    */
   function _editarNotasRapido(num, emp) {
-    // Buscar en empresa activa; si no, crear entrada mínima para poder guardar notas
-    let u = DB.getUnidad(num, emp);
-    if (!u) {
-      // Unidad _soloBarrido — crearla en localStorage para poder guardar notas
-      DB.upsertUnidad(num, { activa: true, _soloBarrido: true, _fuente: 'notas_inline' }, emp);
-      u = DB.getUnidad(num, emp);
-    }
-    if (!u) { toast('No se pudo crear la unidad','error'); return; }
-    const actual = u.notas || '';
-    const nuevo = window.prompt(
-      `Notas para unidad ${num}:\n(Estas notas se conservan aunque borres datos de plataforma)\n\n(Deja vacío para borrar)`,
-      actual
-    );
-    if (nuevo === null) return; // canceló
-    const texto = nuevo.trim();
-    // Guardar en localStorage
-    DB.upsertUnidad(num, { notas: texto, _fuente: 'edit_notas_inline' }, emp);
-    // Sincronizar notas a Supabase en TODAS las plataformas del barrido de esta unidad
-    // (gps_barridos sí tiene filas para unidades _soloBarrido; gps_unidades puede no tenerlas)
-    if (window.GPS_SB) {
-      GPS_SB.patchObservacionesBarrido
-        ? GPS_SB.patchNotasBarrido(num, emp, texto).catch(e => console.warn('[GPS_SB notas]', e))
-        : GPS_SB._patch('gps_barridos',
-            `num_economico=eq.${encodeURIComponent(num)}&empresa_id=eq.${encodeURIComponent(emp)}`,
-            { observaciones: texto || null }
-          ).catch(e => console.warn('[GPS_SB notas]', e));
-    }
-    toast('Nota guardada', 'success');
-    if (_platExpandida) _refreshPlatTable(_platExpandida);
-    // Refrescar detalle si está abierto
-    const nd = document.getElementById('notas-display');
-    if (nd && nd.closest('[data-num="'+num+'"]')) nd.textContent = texto || 'Sin notas registradas.';
+    // Reusar el mismo modal que _addNote para consistencia
+    _addNote(num, emp);
   }
 
   /**
@@ -5370,7 +5365,7 @@ const UI = (() => {
     openUnitDetail, openEditarUnidad, openRegistrarFalla,
     _guardarUnidad, _guardarFalla, _abrirFormNuevaFalla,
     _registrarFalla: openRegistrarFalla,
-    _reactivar, _confirmarEliminar, _addNote,
+    _reactivar, _confirmarEliminar, _addNote, _guardarNotaModal,
     _updateManualFechaConISO, _updatePlatFechaConISO,
     _switchTab, _switchTipoReg, _cargarArchivoPlat,
     _marcarFallaResuelta, _confirmarResolverFalla,
