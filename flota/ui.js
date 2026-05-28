@@ -1104,14 +1104,23 @@ const UI = (() => {
     const txt = (document.getElementById('modal-notas')?.value || '').trim();
     // 1. Guardar en localStorage
     DB.upsertUnidad(num, { notas: txt, _fuente: 'edit_notas_modal' }, emp);
-    // 2. Sincronizar a Supabase gps_barridos.notas (return=minimal para bulk update)
+    // 2. Sincronizar notas a Supabase
+    // Usamos PATCH con return=minimal — si falla, loguear en consola
     if (window.GPS_SB) {
-      GPS_SB._patch(
-        'gps_barridos',
-        'num_economico=eq.' + encodeURIComponent(num) + '&empresa_id=eq.' + encodeURIComponent(emp),
-        { notas: txt || null }
-      ).then(() => console.log('[notas] OK:', num, txt))
-       .catch(e => console.error('[notas] ERROR:', e));
+      const _sbCfg = window.CCTV_SUPABASE_CONFIG || {};
+      const _sbUrl = (_sbCfg.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
+      const _sbKey = _sbCfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
+      const _sbHdr = { 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+      // PATCH todas las filas de esta unidad en todas las plataformas
+      fetch(_sbUrl + '/gps_barridos?num_economico=eq.' + encodeURIComponent(num) + '&empresa_id=eq.' + encodeURIComponent(emp), {
+        method: 'PATCH', headers: _sbHdr, body: JSON.stringify({ notas: txt || null })
+      }).then(r => {
+        if (r.ok) {
+          console.log('[notas PATCH] OK ✓', num, '"' + txt + '"');
+        } else {
+          r.text().then(t => console.error('[notas PATCH] FAIL', r.status, t));
+        }
+      }).catch(e => console.error('[notas PATCH] ERROR', e));
     }
     UI.closeModal();
     UI.toast('Notas guardadas', 'success');
