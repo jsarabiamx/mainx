@@ -1069,11 +1069,11 @@ const UI = (() => {
     const txt = (document.getElementById('modal-notas')?.value || '').trim();
     // 1. Guardar en localStorage
     DB.upsertUnidad(num, { notas: txt, _fuente: 'edit_notas_modal' }, emp);
-    // 2. Sincronizar a Supabase en gps_barridos (todas las plataformas de esta unidad)
+    // 2. Sincronizar a Supabase en gps_barridos.notas (campo separado de observaciones)
     if (window.GPS_SB) {
       GPS_SB._patch('gps_barridos',
         'num_economico=eq.' + encodeURIComponent(num) + '&empresa_id=eq.' + encodeURIComponent(emp),
-        { observaciones: txt || null }
+        { notas: txt || null }
       ).catch(e => console.warn('[GPS_SB notas]', e));
     }
     UI.closeModal();
