@@ -2055,7 +2055,11 @@ const UI = (() => {
     if (f.dias && f.dias.length) {
       uns = uns.filter(u => {
         if (!u[k]) return false;
-        const d = Math.floor((hoy - new Date(u[k]))/86400000);
+        const fd = new Date(u[k]);
+        if (isNaN(fd)) return false;
+        const hoyL  = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+        const fechL = new Date(fd.getFullYear(), fd.getMonth(), fd.getDate());
+        const d = Math.floor((hoyL - fechL) / 86400000);
         let bucket;
         if (d <= cfg.diasLinea) bucket = 'En línea';
         else if (d <= cfg.diasAtencion) bucket = 'Atención';
@@ -2093,9 +2097,17 @@ const UI = (() => {
 
     const sum = $('plat-table-summary');
     if (sum) {
-      const enLinea  = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d <= cfg.diasLinea; }).length;
-      const atencion = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasLinea && d <= cfg.diasAtencion; }).length;
-      const fuera    = uns.filter(u => { const d = Math.floor((hoy-new Date(u[k]))/86400000); return d > cfg.diasAtencion; }).length;
+      const _dLocal = (fecha) => {
+        if (!fecha) return null;
+        const fd = new Date(fecha);
+        if (isNaN(fd)) return null;
+        const hoyL  = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+        const fechL = new Date(fd.getFullYear(), fd.getMonth(), fd.getDate());
+        return Math.floor((hoyL - fechL) / 86400000);
+      };
+      const enLinea  = uns.filter(u => { const d = _dLocal(u[k]); return d !== null && d <= cfg.diasLinea; }).length;
+      const atencion = uns.filter(u => { const d = _dLocal(u[k]); return d !== null && d > cfg.diasLinea && d <= cfg.diasAtencion; }).length;
+      const fuera    = uns.filter(u => { const d = _dLocal(u[k]); return d !== null && d > cfg.diasAtencion; }).length;
       const sinis    = uns.filter(u => u.siniestro).length;
       sum.innerHTML = `<strong>${uns.length}</strong> unidades en ${plat} · <span style="color:var(--green)">${enLinea} en línea</span> · <span style="color:var(--yellow)">${atencion} atención</span> · <span style="color:var(--red)">${fuera} fuera</span>${sinis?` · <span style="color:#c0392b">🚨 ${sinis} siniestro${sinis>1?'s':''}</span>`:''}`;
     }
@@ -2172,7 +2184,17 @@ const UI = (() => {
           motive_cam:  String(u.motive_cam  || ''),
         };
         const fecha = u[k];
-        const d = fecha ? Math.floor((hoy - new Date(fecha))/86400000) : null;
+        // FIX: calcular días comparando SOLO la parte de fecha local (sin horas)
+        // Math.floor con new Date("YYYY-MM-DD HH:MM:SS") puede dar -1 si el browser
+        // interpreta el string como UTC y la hora local resulta en el día siguiente.
+        const d = (() => {
+          if (!fecha) return null;
+          const fd = new Date(fecha);
+          if (isNaN(fd)) return null;
+          const hoyLocal   = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+          const fechaLocal = new Date(fd.getFullYear(), fd.getMonth(), fd.getDate());
+          return Math.floor((hoyLocal - fechaLocal) / 86400000);
+        })();
 
         // ── Desinstalación ────────────────────────────────────────────────
         const desKey = 'desinstalacion_' + plat.toLowerCase();
@@ -4295,7 +4317,8 @@ const UI = (() => {
     finalEtiquetas: '',
     step: 0,
     dirtyReporte: false,
-    dirtyEtiquetas: false
+    dirtyEtiquetas: false,
+    horaCorte: 7   // Hora de inicio de "En línea" — ajustable con el slider
   };
 
   // Palabras clave para detectar etiquetas (matching se hace sobre el texto DESPUÉS del número)
@@ -4430,9 +4453,17 @@ const UI = (() => {
             <div style="font-size:11px;font-weight:700;color:var(--blue)">①</div>
             <div style="font-size:12px;font-weight:700">📥 ENTRADA</div>
             <select id="bm-plat" onchange="UI._barridoManualState.plataforma=this.value"
-              style="margin-left:auto;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:11px;font-family:var(--font)">
-              ${ALL_PLATS.map(p => `<option value="${p}" ${st.plataforma===p?'selected':''}>${p}</option>`).join('')}
+              style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:11px;font-family:var(--font)">
+              ${ALL_PLATS.map(p => `<option value="${p}" ${st.plataforma===p?'selected':''}>` + p + `</option>`).join('')}
             </select>
+            <div style="margin-left:auto;display:flex;align-items:center;gap:6px" title="Hora desde la cual se considera En línea (default: 7 AM)">
+              <span style="font-size:10px;color:var(--text3)">⏰ Desde:</span>
+              <input type="range" id="bm-hora-corte" min="0" max="12" step="1"
+                value="${st.horaCorte ?? 7}"
+                oninput="UI._barridoManualState.horaCorte=parseInt(this.value);document.getElementById('bm-hora-label').textContent=parseInt(this.value)+':00'"
+                style="width:80px;accent-color:var(--blue);cursor:pointer">
+              <span id="bm-hora-label" style="font-size:11px;font-weight:700;color:var(--blue);min-width:32px">${st.horaCorte ?? 7}:00</span>
+            </div>
           </div>
           <div style="padding:8px 14px 4px;font-size:10px;color:var(--text3)">Pega el texto del técnico · un número + texto = etiqueta · solo número = consulta</div>
           <textarea id="bm-input" style="flex:1;width:100%;min-height:380px;background:var(--bg-card);border:none;padding:12px 14px;color:var(--text);font-family:monospace;font-size:12px;resize:none;line-height:1.55" placeholder="Ejemplo:
@@ -4715,9 +4746,11 @@ const UI = (() => {
     const hoyStr = _fmtFechaSoloDia(hoy);
     const plat = _barridoManualState.plataforma || 'CEIBA';
 
-    // Hora de corte: 07:00 – 16:00 = EN LÍNEA; 00:00–06:59 o 16:01–23:59 = espera/madrugada
-    const HORA_INICIO_LINEA = 7;   // 7:00 AM
-    const HORA_FIN_LINEA    = 16;  // 4:00 PM (16:00)
+    // Hora de corte configurable: desde HORA_INICIO_LINEA hasta medianoche = EN LÍNEA
+    // El valor se guarda en _barridoManualState.horaCorte (default 7)
+    const HORA_INICIO_LINEA = typeof _barridoManualState.horaCorte === 'number'
+      ? _barridoManualState.horaCorte : 7;
+    const HORA_FIN_LINEA    = 24;  // Hasta medianoche (comportamiento original)
 
     const enriched = filas.map(f => {
       const fechaSalida = _fechaSalidaBarridoManual(f);
