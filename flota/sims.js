@@ -6,6 +6,7 @@
 const SimsUI = (() => {
 
   /* ═══ CONSTANTES ════════════════════════════════════════ */
+  let _destinoSeleccionado = null; // 'STOCK' | 'BAJA' | null — para SIM RETIRADA
   const OPERADORAS_STD = ['TELCEL', 'YUMOVIL', 'ALESTRA'];
   const ESTADOS_STD    = ['SIM INSTALADA', 'SIM RETIRADA', 'SIM SIN ASIGNAR', 'SIM PARA INSTALAR'];
 
@@ -265,6 +266,7 @@ const SimsUI = (() => {
 
   /* ═══ PANEL LATERAL (DRAWER) ════════════════════════════ */
   function abrirPanel(id) {
+    _destinoSeleccionado = null; // resetear destino al abrir
     _panelAbierto = true;
     _editandoId = id || null;
     const emp = DB.getEmpresaActiva();
@@ -374,6 +376,22 @@ const SimsUI = (() => {
               onclick="SimsUI._selEstadoChip(this,'${e}')">${e.replace('SIM ','')}</button>`;
           }).join('')}
         </div>
+        <!-- Destino de retiro: solo visible cuando estado = SIM RETIRADA -->
+        <div id="sd-destino-wrap" style="margin-top:12px;${sim?.estado==='SIM RETIRADA'?'':'display:none'}">
+          <div class="sim-label" style="margin-bottom:6px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">DESTINO DE RETIRO</div>
+          <div style="display:flex;gap:8px">
+            <button id="sd-dest-stock" class="sim-destino-btn ${sim?.destino_retiro==='STOCK'?'active-stock':''}"
+              onclick="SimsUI._selDestino('STOCK')"
+              style="${sim?.destino_retiro==='STOCK'?'background:rgba(16,185,129,.2);color:#10b981;border-color:#10b981':''}">
+              📦 STOCK
+            </button>
+            <button id="sd-dest-baja" class="sim-destino-btn ${sim?.destino_retiro==='BAJA'?'active-baja':''}"
+              onclick="SimsUI._selDestino('BAJA')"
+              style="${sim?.destino_retiro==='BAJA'?'background:rgba(239,68,68,.2);color:#ef4444;border-color:#ef4444':''}">
+              🗑 BAJA
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- 4. OBSERVACIONES -->
@@ -439,6 +457,32 @@ const SimsUI = (() => {
         ch.style.borderColor  = '';
       }
     });
+    // Mostrar/ocultar sección STOCK/BAJA
+    const destiWrap = document.getElementById('sd-destino-wrap');
+    if (destiWrap) {
+      destiWrap.style.display = (val === 'SIM RETIRADA') ? 'block' : 'none';
+      // Si cambia de RETIRADA a otro estado, limpiar destino seleccionado
+      if (val !== 'SIM RETIRADA') _selDestino(null);
+    }
+  }
+
+  function _selDestino(dest) {
+    _destinoSeleccionado = dest;
+    const btnStock = document.getElementById('sd-dest-stock');
+    const btnBaja  = document.getElementById('sd-dest-baja');
+    if (!btnStock || !btnBaja) return;
+    // Reset ambos
+    btnStock.style.background = ''; btnStock.style.color = ''; btnStock.style.borderColor = '';
+    btnBaja.style.background  = ''; btnBaja.style.color  = ''; btnBaja.style.borderColor  = '';
+    if (dest === 'STOCK') {
+      btnStock.style.background = 'rgba(16,185,129,.2)';
+      btnStock.style.color      = '#10b981';
+      btnStock.style.borderColor= '#10b981';
+    } else if (dest === 'BAJA') {
+      btnBaja.style.background  = 'rgba(239,68,68,.2)';
+      btnBaja.style.color       = '#ef4444';
+      btnBaja.style.borderColor = '#ef4444';
+    }
   }
 
   function _selEstadoChip(btn, estado) {
@@ -459,25 +503,41 @@ const SimsUI = (() => {
     if (!unidad && !iccid) { UI.toast('Ingresa al menos la unidad o el ICCID', 'warn'); return; }
     if (!operadora)         { UI.toast('Selecciona o escribe una operadora',   'warn'); return; }
     if (!estado)            { UI.toast('Selecciona o escribe el estado',        'warn'); return; }
+    if (estado === 'SIM RETIRADA' && !_destinoSeleccionado) {
+      UI.toast('Selecciona el destino de retiro: STOCK o BAJA', 'warn'); return;
+    }
 
     // Obtener datos de unidad para autocompletar
     const u = unidad ? DB.getUnidad(unidad, emp) : null;
     const simData = {
-      id:           _editandoId || undefined,
+      id:              _editandoId || undefined,
       unidad,
+      num_economico:   unidad,
       iccid,
-      operadora:    operadora.toUpperCase(),
+      operadora:       operadora.toUpperCase(),
       estado,
-      observaciones: obs,
-      base:         u?.base       || '',
-      cromatica:    u?.cromatica  || '',
-      equipoDvr:    u?.plataforma || u?.modelo || '',
-      empresa:      u?.empresa    || emp,
-      movimiento:   _editandoId ? undefined : 'Asignación'
+      destino_retiro:  estado === 'SIM RETIRADA' ? _destinoSeleccionado : null,
+      observaciones:   obs,
+      base:            u?.base       || '',
+      cromatica:       u?.cromatica  || '',
+      equipo_dvr:      u?.plataforma || u?.modelo || '',
+      empresa:         u?.empresa    || emp,
+      movimiento:      _editandoId ? 'Edición' : 'Asignación',
+      activa:          true
     };
 
+    // Guardar en localStorage
     DB.saveSim(simData, emp);
+
+    // Guardar en Supabase si está disponible
+    if (window.GPS_SB && GPS_SB.saveSim) {
+      GPS_SB.saveSim(simData, emp)
+        .then(() => console.log('[SimsUI] Supabase saveSim OK', simData.unidad))
+        .catch(e => console.error('[SimsUI] Supabase saveSim ERROR', e));
+    }
+
     UI.toast(_editandoId ? 'SIM actualizada' : 'SIM asignada correctamente', 'success');
+    _destinoSeleccionado = null;
     cerrarPanel();
     render();
   }
@@ -861,6 +921,8 @@ const SimsUI = (() => {
 .sim-estado-chip{padding:4px 10px;border-radius:20px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:10px;font-weight:600;cursor:pointer;transition:all .12s;white-space:nowrap}
 .sim-estado-chip:hover{border-color:var(--blue);color:var(--blue)}
 .sim-estado-chip.active{font-weight:700}
+.sim-destino-btn{flex:1;padding:8px 12px;border-radius:8px;border:2px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;letter-spacing:.04em}
+.sim-destino-btn:hover{border-color:var(--blue);color:var(--blue);background:rgba(96,165,250,.1)}
 </style>`;
   }
 
@@ -873,6 +935,7 @@ const SimsUI = (() => {
     eliminar,
     exportarCSV,
     _setFiltro,
+    _selDestino,
     _limpiarFiltros,
     _irPag,
     _setPorPagina,
