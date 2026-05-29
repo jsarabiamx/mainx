@@ -54,6 +54,7 @@ const SimsUI = (() => {
           </div>
           <div style="display:flex;gap:8px;align-items:center">
             <button class="sims-btn-export" onclick="SimsUI.exportarCSV()" title="Exportar CSV">↓ CSV</button>
+            <button class="sims-btn-export" onclick="SimsUI.verHistorial()" title="Historial de retiros" style="background:rgba(139,92,246,.15);color:#a78bfa;border-color:rgba(139,92,246,.3)">🕑 Historial</button>
             <button class="sims-btn-primary" onclick="SimsUI.abrirPanel(null)">+ Agregar / Gestionar SIM</button>
           </div>
         </div>
@@ -491,6 +492,35 @@ const SimsUI = (() => {
     }
   }
 
+  function _registrarHistorialRetiro(simData, simAnterior, emp) {
+    if (!window.GPS_SB) return;
+    const _sbCfg = window.CCTV_SUPABASE_CONFIG || {};
+    const _sbUrl = (_sbCfg.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
+    const _sbKey = _sbCfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
+    const _sbHdr = { 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+    const registro = {
+      empresa_id:     emp,
+      num_economico:  simData.unidad    || (simAnterior && simAnterior.unidad)    || '',
+      iccid:          simData.iccid     || (simAnterior && simAnterior.iccid)     || '',
+      operadora:      simData.operadora || (simAnterior && simAnterior.operadora) || '',
+      gb:             simData.gb        || (simAnterior && simAnterior.gb)        || null,
+      base:           simData.base      || (simAnterior && simAnterior.base)      || '',
+      cromatica:      simData.cromatica || (simAnterior && simAnterior.cromatica) || '',
+      equipo_dvr:     simData.equipo_dvr || (simAnterior && simAnterior.equipoDvr) || '',
+      estado_antes:   (simAnterior && simAnterior.estado) || 'SIM INSTALADA',
+      estado_nuevo:   'SIM RETIRADA',
+      destino_retiro: simData.destino_retiro || null,
+      observaciones:  simData.observaciones || '',
+      fecha_retiro:   new Date().toISOString()
+    };
+    fetch(_sbUrl + '/gps_sims_historial', {
+      method: 'POST', headers: _sbHdr, body: JSON.stringify(registro)
+    }).then(r => {
+      if (r.ok) console.log('[SimsUI] Historial retiro registrado', registro.iccid);
+      else r.text().then(t => console.error('[SimsUI] Historial retiro FAIL', r.status, t));
+    }).catch(e => console.error('[SimsUI] Historial retiro ERROR', e));
+  }
+
   function _selDestino(dest) {
     _destinoSeleccionado = dest;
     const btnStock = document.getElementById('sd-dest-stock');
@@ -554,14 +584,34 @@ const SimsUI = (() => {
       activa:          true
     };
 
-    // Guardar en localStorage
-    DB.saveSim(simData, emp);
+    // Obtener registro anterior para detectar retiro y recuperar _sbId
+    const simAnterior = _editandoId ? DB.getSims(emp).find(s => String(s.id) === String(_editandoId)) : null;
+    const esRetiro = estado === 'SIM RETIRADA' && simAnterior && simAnterior.estado !== 'SIM RETIRADA';
 
-    // Guardar en Supabase si está disponible
+    // Propagar _sbId del registro anterior para que Supabase haga PATCH en vez de INSERT
+    if (simAnterior && simAnterior._sbId) simData._sbId = simAnterior._sbId;
+
+    // Guardar en localStorage
+    const registroLocal = DB.saveSim(simData, emp);
+
+    // Guardar en Supabase — INSERT retorna el id real (bigserial); guardarlo en localStorage
     if (window.GPS_SB && GPS_SB.saveSim) {
       GPS_SB.saveSim(simData, emp)
-        .then(() => console.log('[SimsUI] Supabase saveSim OK', simData.unidad))
+        .then(rows => {
+          // rows es array con el registro insertado/actualizado — guardar _sbId localmente
+          if (rows && rows.length > 0 && rows[0].id) {
+            const sbId = rows[0].id;
+            console.log('[SimsUI] Supabase saveSim OK', simData.unidad, '→ sbId:', sbId);
+            // Persistir _sbId en localStorage para que ediciones futuras usen PATCH
+            DB.saveSim({ ...registroLocal, id: registroLocal.id, _sbId: sbId }, emp);
+          }
+        })
         .catch(e => console.error('[SimsUI] Supabase saveSim ERROR', e));
+    }
+
+    // Registrar en historial si es retiro de SIM activa
+    if (esRetiro || (estado === 'SIM RETIRADA' && !_editandoId)) {
+      _registrarHistorialRetiro(simData, simAnterior, emp);
     }
 
     UI.toast(_editandoId ? 'SIM actualizada' : 'SIM asignada correctamente', 'success');
@@ -576,6 +626,75 @@ const SimsUI = (() => {
     DB.deleteSim(id, emp);
     UI.toast('Registro eliminado', 'info');
     render();
+  }
+
+  function verHistorial() {
+    const emp = DB.getEmpresaActiva();
+    // Abrir modal con tabla de historial cargada desde Supabase
+    if (typeof UI === 'undefined' || !UI.openModal) return;
+    UI.openModal(`
+      <div style="background:var(--bg-panel);border:1px solid var(--border2);border-radius:12px;padding:24px;width:700px;max-width:95vw">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div style="font-size:14px;font-weight:700">🕑 HISTORIAL DE SIMs RETIRADAS — ${emp}</div>
+          <button onclick="UI.closeModal()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+        </div>
+        <div id="sims-hist-body" style="font-size:12px;color:var(--text3);text-align:center;padding:20px">Cargando historial...</div>
+      </div>`);
+
+    // Cargar historial desde Supabase
+    if (!window.GPS_SB) {
+      const el = document.getElementById('sims-hist-body');
+      if (el) el.textContent = 'Supabase no disponible.';
+      return;
+    }
+    GPS_SB._getRaw('gps_sims_historial',
+      `empresa_id=eq.${encodeURIComponent(emp)}&order=fecha_retiro.desc&limit=100`
+    ).then(rows => {
+      const el = document.getElementById('sims-hist-body');
+      if (!el) return;
+      if (!rows || rows.length === 0) {
+        el.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text3)">Sin historial de retiros registrado.</div>';
+        return;
+      }
+      const fmtDate = d => d ? new Date(d).toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+      const destColor = d => d === 'STOCK' ? 'color:#10b981' : d === 'BAJA' ? 'color:#ef4444' : 'color:var(--text3)';
+      el.innerHTML = \`
+        <div style="overflow-x:auto;max-height:400px;overflow-y:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
+            <thead>
+              <tr style="position:sticky;top:0;background:var(--bg-card);z-index:1">
+                <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">FECHA RETIRO</th>
+                <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">UNIDAD</th>
+                <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">ICCID</th>
+                <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">OPERADORA</th>
+                <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">GB</th>
+                <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">BASE</th>
+                <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">DESTINO</th>
+                <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">OBS</th>
+              </tr>
+            </thead>
+            <tbody>
+              \${rows.map(r => \`
+                <tr style="border-bottom:1px solid var(--border);transition:background .1s" onmouseover="this.style.background='var(--bg-card)'" onmouseout="this.style.background=''">
+                  <td style="padding:6px 8px;color:var(--text2);white-space:nowrap">\${fmtDate(r.fecha_retiro)}</td>
+                  <td style="padding:6px 8px;font-weight:700;color:var(--text)">\${r.num_economico || '—'}</td>
+                  <td style="padding:6px 8px;font-family:monospace;color:var(--text2);font-size:10px">\${r.iccid || '—'}</td>
+                  <td style="padding:6px 8px;color:var(--text2)">\${r.operadora || '—'}</td>
+                  <td style="padding:6px 8px;text-align:center;color:var(--blue);font-weight:700">\${r.gb ? r.gb + ' GB' : '—'}</td>
+                  <td style="padding:6px 8px;color:var(--text2)">\${r.base || '—'}</td>
+                  <td style="padding:6px 8px;font-weight:700;\${destColor(r.destino_retiro)}">\${r.destino_retiro || '—'}</td>
+                  <td style="padding:6px 8px;color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">\${r.observaciones || ''}</td>
+                </tr>
+              \`).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top:10px;font-size:10px;color:var(--text3);text-align:right">\${rows.length} registro(s)</div>
+      \`;
+    }).catch(e => {
+      const el = document.getElementById('sims-hist-body');
+      if (el) el.textContent = 'Error cargando historial: ' + e.message;
+    });
   }
 
   function exportarCSV() {
@@ -964,6 +1083,8 @@ const SimsUI = (() => {
     exportarCSV,
     _setFiltro,
     _selDestino,
+    verHistorial,
+    _registrarHistorialRetiro,
     _limpiarFiltros,
     _irPag,
     _setPorPagina,
