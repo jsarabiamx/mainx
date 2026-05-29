@@ -666,17 +666,29 @@ const UI = (() => {
     emp=emp||DB.getEmpresaActiva();
     let u=DB.getUnidad(num,emp);
     if(!u){toast('Unidad no encontrada','error');App.nav(null,'panel-resumen');return;}
-    // Cargar nota fresca de Supabase (para mostrar notas guardadas desde plataforma)
-    // IMPORTANTE: solo actualizar si Supabase tiene dato — nunca borrar lo que ya está en pantalla
-    if(window.GPS_SB && !u.notas){
-      GPS_SB._getRaw('gps_barridos',
-        'num_economico=eq.'+encodeURIComponent(num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&notas=not.is.null&limit=1'
+    // Cargar nota fresca de Supabase (fuente de verdad: gps_unidades.notas)
+    // Si gps_unidades no tiene, intentar gps_notas, luego gps_barridos como fallback
+    if(window.GPS_SB){
+      GPS_SB._getRaw('gps_unidades',
+        'num_economico=eq.'+encodeURIComponent(num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&select=notas&limit=1'
       ).then(rows=>{
-        if(rows && rows.length > 0 && rows[0].notas){
-          const notaFresca = rows[0].notas;
-          DB.upsertUnidad(num, {notas: notaFresca}, emp);
+        const notaUnidad = (rows && rows.length > 0) ? (rows[0].notas || '') : '';
+        if(notaUnidad){
+          DB.upsertUnidad(num, {notas: notaUnidad}, emp);
           const nd = document.getElementById('notas-display');
-          if(nd) nd.innerHTML = notaFresca.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          if(nd) nd.innerHTML = notaUnidad.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        } else if(!u.notas){
+          // Fallback: intentar gps_notas
+          GPS_SB._getRaw('gps_notas',
+            'num_economico=eq.'+encodeURIComponent(num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&limit=1'
+          ).then(r2=>{
+            const n2 = (r2 && r2.length > 0) ? (r2[0].nota || '') : '';
+            if(n2){
+              DB.upsertUnidad(num, {notas: n2}, emp);
+              const nd = document.getElementById('notas-display');
+              if(nd) nd.innerHTML = n2.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            }
+          }).catch(()=>{});
         }
       }).catch(()=>{});
     }
@@ -1082,18 +1094,26 @@ const UI = (() => {
         </div>`);
     };
 
-    // Buscar nota más reciente en Supabase (fuente de verdad)
+    // Buscar nota más reciente en Supabase: prioridad gps_unidades > gps_notas > localStorage
     if (window.GPS_SB) {
-      GPS_SB._getRaw('gps_barridos',
-        'num_economico=eq.'+encodeURIComponent(num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&notas=not.is.null&limit=1'
+      GPS_SB._getRaw('gps_unidades',
+        'num_economico=eq.'+encodeURIComponent(num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&select=notas&limit=1'
       ).then(rows => {
         const notaSupa = (rows && rows.length > 0) ? (rows[0].notas || '') : '';
-        const notaFinal = notaSupa || notasLocal;
-        // Actualizar localStorage si Supabase tiene algo más reciente
-        if (notaSupa && notaSupa !== notasLocal) {
-          DB.upsertUnidad(num, { notas: notaSupa }, emp);
+        if (notaSupa) {
+          if (notaSupa !== notasLocal) DB.upsertUnidad(num, { notas: notaSupa }, emp);
+          _abrirModalNotas(notaSupa);
+        } else {
+          // Fallback: gps_notas
+          GPS_SB._getRaw('gps_notas',
+            'num_economico=eq.'+encodeURIComponent(num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&limit=1'
+          ).then(r2 => {
+            const n2 = (r2 && r2.length > 0) ? (r2[0].nota || '') : '';
+            const notaFinal = n2 || notasLocal;
+            if (n2 && n2 !== notasLocal) DB.upsertUnidad(num, { notas: n2 }, emp);
+            _abrirModalNotas(notaFinal);
+          }).catch(() => _abrirModalNotas(notasLocal));
         }
-        _abrirModalNotas(notaFinal);
       }).catch(() => _abrirModalNotas(notasLocal));
     } else {
       _abrirModalNotas(notasLocal);
@@ -1104,23 +1124,38 @@ const UI = (() => {
     const txt = (document.getElementById('modal-notas')?.value || '').trim();
     // 1. Guardar en localStorage
     DB.upsertUnidad(num, { notas: txt, _fuente: 'edit_notas_modal' }, emp);
-    // 2. Sincronizar notas a Supabase
-    // Usamos PATCH con return=minimal — si falla, loguear en consola
+    // 2. Sincronizar notas a Supabase — guardar en gps_unidades + gps_notas + gps_barridos
     if (window.GPS_SB) {
       const _sbCfg = window.CCTV_SUPABASE_CONFIG || {};
       const _sbUrl = (_sbCfg.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
       const _sbKey = _sbCfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
       const _sbHdr = { 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
-      // PATCH todas las filas de esta unidad en todas las plataformas
+      const _sbHdrUpsert = { ..._sbHdr, 'Prefer': 'resolution=merge-duplicates,return=minimal' };
+
+      // 2a. PATCH gps_unidades — tabla maestra (sincroniza con vista resumen)
+      fetch(_sbUrl + '/gps_unidades?num_economico=eq.' + encodeURIComponent(num) + '&empresa_id=eq.' + encodeURIComponent(emp), {
+        method: 'PATCH', headers: _sbHdr, body: JSON.stringify({ notas: txt || null, updated_at: new Date().toISOString() })
+      }).then(r => {
+        if (r.ok) console.log('[notas gps_unidades PATCH] OK ✓', num);
+        else r.text().then(t => console.error('[notas gps_unidades PATCH] FAIL', r.status, t));
+      }).catch(e => console.error('[notas gps_unidades PATCH] ERROR', e));
+
+      // 2b. UPSERT gps_notas — tabla dedicada (historial de notas)
+      fetch(_sbUrl + '/gps_notas', {
+        method: 'POST', headers: _sbHdrUpsert,
+        body: JSON.stringify({ empresa_id: emp, num_economico: num, nota: txt || null, updated_at: new Date().toISOString() })
+      }).then(r => {
+        if (r.ok) console.log('[notas gps_notas UPSERT] OK ✓', num);
+        else r.text().then(t => console.error('[notas gps_notas UPSERT] FAIL', r.status, t));
+      }).catch(e => console.error('[notas gps_notas UPSERT] ERROR', e));
+
+      // 2c. PATCH gps_barridos — mantener sincronía con registros de plataforma
       fetch(_sbUrl + '/gps_barridos?num_economico=eq.' + encodeURIComponent(num) + '&empresa_id=eq.' + encodeURIComponent(emp), {
         method: 'PATCH', headers: _sbHdr, body: JSON.stringify({ notas: txt || null })
       }).then(r => {
-        if (r.ok) {
-          console.log('[notas PATCH] OK ✓', num, '"' + txt + '"');
-        } else {
-          r.text().then(t => console.error('[notas PATCH] FAIL', r.status, t));
-        }
-      }).catch(e => console.error('[notas PATCH] ERROR', e));
+        if (r.ok) console.log('[notas gps_barridos PATCH] OK ✓', num);
+        else r.text().then(t => console.error('[notas gps_barridos PATCH] FAIL', r.status, t));
+      }).catch(e => console.error('[notas gps_barridos PATCH] ERROR', e));
     }
     UI.closeModal();
     UI.toast('Notas guardadas', 'success');
@@ -2824,6 +2859,32 @@ const UI = (() => {
     const obs = $('pid-obs-'+num)?.value || '';
     const notas = $('pid-notas-'+num)?.value || '';
     DB.upsertUnidad(num, { observaciones: obs, notas: notas, _fuente: 'edit_inline' }, emp);
+
+    // Persistir notas en Supabase (misma lógica que _guardarNotaModal)
+    if (window.GPS_SB) {
+      const _sbCfg = window.CCTV_SUPABASE_CONFIG || {};
+      const _sbUrl = (_sbCfg.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
+      const _sbKey = _sbCfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
+      const _sbHdr = { 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+      const _sbHdrUpsert = { ..._sbHdr, 'Prefer': 'resolution=merge-duplicates,return=minimal' };
+
+      // PATCH gps_unidades — fuente de verdad
+      fetch(_sbUrl + '/gps_unidades?num_economico=eq.' + encodeURIComponent(num) + '&empresa_id=eq.' + encodeURIComponent(emp), {
+        method: 'PATCH', headers: _sbHdr, body: JSON.stringify({ notas: notas || null, observaciones: obs || null, updated_at: new Date().toISOString() })
+      }).catch(e => console.error('[obs_inline gps_unidades] ERROR', e));
+
+      // UPSERT gps_notas
+      fetch(_sbUrl + '/gps_notas', {
+        method: 'POST', headers: _sbHdrUpsert,
+        body: JSON.stringify({ empresa_id: emp, num_economico: num, nota: notas || null, updated_at: new Date().toISOString() })
+      }).catch(e => console.error('[obs_inline gps_notas] ERROR', e));
+
+      // PATCH gps_barridos
+      fetch(_sbUrl + '/gps_barridos?num_economico=eq.' + encodeURIComponent(num) + '&empresa_id=eq.' + encodeURIComponent(emp), {
+        method: 'PATCH', headers: _sbHdr, body: JSON.stringify({ notas: notas || null, observaciones: obs || null })
+      }).catch(e => console.error('[obs_inline gps_barridos] ERROR', e));
+    }
+
     toast('Cambios guardados','success');
     _refreshPlatTable(plat);
   }
