@@ -481,11 +481,41 @@ const GPS_SB = (() => {
   }
 
   async function saveSim(sim, emp) {
-    return _upsert('gps_sims', {
-      ...sim,
-      empresa_id:  emp,
-      updated_at:  new Date().toISOString()
+    const payload = {
+      empresa_id:    emp,
+      num_economico: sim.unidad        || sim.num_economico || '',
+      unidad:        sim.unidad        || '',
+      iccid:         sim.iccid         || '',
+      operadora:     sim.operadora     || '',
+      estado:        sim.estado        || '',
+      destino_retiro:sim.destino_retiro || null,
+      gb:            sim.gb            || null,
+      base:          sim.base          || '',
+      cromatica:     sim.cromatica     || '',
+      equipo_dvr:    sim.equipo_dvr    || sim.equipoDvr || '',
+      observaciones: sim.observaciones || '',
+      movimiento:    sim.movimiento    || '',
+      activa:        true,
+      updated_at:    new Date().toISOString()
+    };
+    // Si tiene _sbId (id real de Supabase bigserial), hacer PATCH
+    if (sim._sbId) {
+      const r = await fetch(`${BASE}/gps_sims?id=eq.${sim._sbId}`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Prefer': 'return=representation' },
+        body: JSON.stringify(payload)
+      });
+      if (!r.ok) { const e = await r.text(); throw new Error(`GPS_SB PATCH gps_sims: ${e}`); }
+      return r.json();
+    }
+    // Sin _sbId: INSERT nuevo
+    const r = await fetch(`${BASE}/gps_sims`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Prefer': 'return=representation' },
+      body: JSON.stringify(payload)
     });
+    if (!r.ok) { const e = await r.text(); throw new Error(`GPS_SB INSERT gps_sims: ${e}`); }
+    return r.json();
   }
 
   async function deleteSim(id) {
