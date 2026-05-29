@@ -1,4 +1,3 @@
-
 /**
  * db.js v4 — Base de datos localStorage — Mesa de Control GPS
  */
@@ -372,6 +371,37 @@ const DB = (() => {
           });
         }
       } catch(eb) { console.warn('[DB] initFromSupabase barridos:', eb); }
+
+      // ── PASO 3: SIMs — cargar desde gps_sims para todas las empresas ──
+      try {
+        for (const emp of empresas) {
+          const simRows = await GPS_SB._getRaw('gps_sims',
+            `empresa_id=eq.${encodeURIComponent(emp)}&activa=eq.true&order=updated_at.desc`
+          );
+          if (simRows && simRows.length > 0) {
+            if (!_s.sims) _s.sims = {};
+            _s.sims[emp] = simRows.map(r => ({
+              id:            r.id,
+              unidad:        r.unidad        || r.num_economico || '',
+              base:          r.base          || '',
+              cromatica:     r.cromatica     || '',
+              equipoDvr:     r.equipo_dvr    || '',
+              empresa:       r.empresa_id    || emp,
+              iccid:         r.iccid         || '',
+              operadora:     r.operadora     || '',
+              estado:        r.estado        || 'SIM SIN ASIGNAR',
+              destino_retiro:r.destino_retiro || null,
+              gb:            r.gb            || null,
+              observaciones: r.observaciones || '',
+              movimiento:    r.movimiento    || 'Asignación',
+              creadoEn:      r.created_at    || '',
+              actualizadoEn: r.updated_at    || '',
+              _fromSupabase: true
+            }));
+            console.log(`[DB] initFromSupabase: ${simRows.length} SIMs cargadas para ${emp}`);
+          }
+        }
+      } catch(es) { console.warn('[DB] initFromSupabase sims:', es); }
 
       save();
       console.log('[DB] initFromSupabase: carga completa');
@@ -1422,22 +1452,25 @@ const DB = (() => {
     const arr = _empSims(emp);
     const now = new Date().toISOString();
     const registro = {
-      id:          sim.id || Date.now(),
-      unidad:      sim.unidad      || '',
-      base:        sim.base        || '',
-      cromatica:   sim.cromatica   || '',
-      equipoDvr:   sim.equipoDvr   || '',
-      empresa:     sim.empresa     || emp,
-      iccid:       sim.iccid       || '',
-      operadora:   sim.operadora   || '',
-      estado:      sim.estado      || 'SIM SIN ASIGNAR',
+      id:            sim.id || Date.now(),
+      _sbId:         sim._sbId     || null,   // id real de Supabase bigserial
+      unidad:        sim.unidad      || '',
+      base:          sim.base        || '',
+      cromatica:     sim.cromatica   || '',
+      equipoDvr:     sim.equipoDvr   || sim.equipo_dvr || '',
+      empresa:       sim.empresa     || emp,
+      iccid:         sim.iccid       || '',
+      operadora:     sim.operadora   || '',
+      estado:        sim.estado      || 'SIM SIN ASIGNAR',
+      destino_retiro:sim.destino_retiro || null,
+      gb:            sim.gb          || null,
       observaciones: sim.observaciones || '',
-      movimiento:  sim.movimiento  || 'Asignación',
-      creadoEn:    sim.creadoEn    || now,
+      movimiento:    sim.movimiento  || 'Asignación',
+      creadoEn:      sim.creadoEn    || now,
       actualizadoEn: now
     };
     // Si el registro ya existe (mismo id), actualizar; sino insertar al frente
-    const idx = arr.findIndex(x => x.id === registro.id);
+    const idx = arr.findIndex(x => String(x.id) === String(registro.id));
     if (idx >= 0) {
       // Registrar movimiento automático si cambia el estado
       if (arr[idx].estado !== registro.estado) {
