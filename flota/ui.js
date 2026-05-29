@@ -2373,11 +2373,11 @@ const UI = (() => {
             ? `<td style="font-family:monospace;font-size:10px">${esc(motiveSerieVG||'—')}</td><td style="font-family:monospace;font-size:10px">${esc(motiveSerieCam||'—')}</td>`
             : `<td style="font-family:monospace;font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(idValue)}</td>`
           }
-          <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarObsRapido('${esc(safeU.num)}','${esc(safeU.empresa_asig)}','${plat}')" title="Click para editar — ${esc(obsTexto||'sin observación')}">
+          <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarObsRapido('${esc(safeU.num)}','${emp}','${plat}')" title="Click para editar — ${esc(obsTexto||'sin observación')}">
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${esc(obsTexto)||'<span style="color:var(--text3);font-style:italic">+ agregar…</span>'}</span>
             <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
           </td>
-          <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarNotasRapido('${esc(safeU.num)}','${esc(safeU.empresa_asig)}')" title="Click para editar notas — ${esc(safeU.notas||'sin notas')}">
+          <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarNotasRapido('${esc(safeU.num)}','${emp}')" title="Click para editar notas — ${esc(safeU.notas||'sin notas')}">
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${esc(safeU.notas)||'<span style="color:var(--text3);font-style:italic">+ nota…</span>'}</span>
             <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
           </td>
@@ -2441,7 +2441,8 @@ const UI = (() => {
    * - Observaciones editables in-situ
    */
   function _renderPlatDetailInline(u, plat) {
-    const emp = u.empresa || DB.getEmpresaActiva();
+    // IMPORTANTE: para notas/obs siempre usar empresa activa (no u.empresa que puede ser empresa_asig)
+    const emp = DB.getEmpresaActiva();
     const cfg = DB.getConfig();
     const hoy = Date.now();
     const k = 'ultima_act_' + plat.toLowerCase();
@@ -2568,9 +2569,9 @@ const UI = (() => {
         </div>`;
       }
     } else if (tab === 'notas') {
-      // Observaciones EDITABLES in-situ
+      // Observaciones EDITABLES in-situ — nota se carga desde Supabase (gps_notas)
       const obsActual = u.observaciones || '';
-      const notasAct = u.notas || '';
+      // Iniciar con placeholder; se actualizará async desde gps_notas
       tabContent = `
         <div style="display:flex;flex-direction:column;gap:10px;max-height:280px;overflow-y:auto">
           <div>
@@ -2578,14 +2579,28 @@ const UI = (() => {
             <textarea id="pid-obs-${esc(u.num)}" rows="3" placeholder="Escribe una observación..." style="width:100%;background:var(--bg-panel);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-family:var(--font);font-size:12px;resize:vertical" onclick="event.stopPropagation()">${esc(obsActual)}</textarea>
           </div>
           <div>
-            <label style="display:block;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">NOTAS ADICIONALES</label>
-            <textarea id="pid-notas-${esc(u.num)}" rows="3" placeholder="Notas internas sobre esta unidad..." style="width:100%;background:var(--bg-panel);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-family:var(--font);font-size:12px;resize:vertical" onclick="event.stopPropagation()">${esc(notasAct)}</textarea>
+            <label style="display:block;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">NOTAS</label>
+            <textarea id="pid-notas-${esc(u.num)}" rows="3" placeholder="Cargando..." style="width:100%;background:var(--bg-panel);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-family:var(--font);font-size:12px;resize:vertical" onclick="event.stopPropagation()"></textarea>
           </div>
           <div style="display:flex;gap:6px">
             <button class="act-btn act-btn-primary" onclick="event.stopPropagation();UI._guardarObsInline('${esc(u.num)}','${esc(emp)}','${plat}')">💾 Guardar cambios</button>
             <div style="font-size:10px;color:var(--text3);align-self:center">Los cambios quedan guardados en la unidad</div>
           </div>
         </div>`;
+      // Cargar nota fresca desde gps_notas de forma async
+      if (window.GPS_SB) {
+        GPS_SB._getRaw('gps_notas',
+          'num_economico=eq.'+encodeURIComponent(u.num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&limit=1'
+        ).then(rows => {
+          const notaSupa = (rows && rows.length > 0) ? (rows[0].nota || '') : '';
+          DB.upsertUnidad(u.num, { notas: notaSupa }, emp);
+          const ta = document.getElementById('pid-notas-'+u.num);
+          if (ta) ta.value = notaSupa;
+        }).catch(() => {
+          const ta = document.getElementById('pid-notas-'+u.num);
+          if (ta) ta.placeholder = 'Sin notas';
+        });
+      }
     }
 
     // ══ LAYOUT GENERAL ══
