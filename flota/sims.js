@@ -270,6 +270,12 @@ const SimsUI = (() => {
     _panelAbierto = true;
     _editandoId = id || null;
     const emp = DB.getEmpresaActiva();
+    // Si es edición, restaurar destino_retiro del sim existente
+    if (id) {
+      const sims = DB.getSims(emp);
+      const sim = sims.find(s => s.id === id);
+      if (sim?.destino_retiro) _destinoSeleccionado = sim.destino_retiro;
+    }
     const overlay = document.getElementById('sim-drawer-overlay');
     const drawer  = document.getElementById('sim-drawer');
     if (overlay) overlay.classList.remove('hidden');
@@ -376,27 +382,32 @@ const SimsUI = (() => {
               onclick="SimsUI._selEstadoChip(this,'${e}')">${e.replace('SIM ','')}</button>`;
           }).join('')}
         </div>
-        <!-- Destino de retiro: solo visible cuando estado = SIM RETIRADA -->
-        <div id="sd-destino-wrap" style="margin-top:12px;${sim?.estado==='SIM RETIRADA'?'':'display:none'}">
-          <div class="sim-label" style="margin-bottom:6px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">DESTINO DE RETIRO</div>
+        <!-- Destino de retiro: visible cuando estado = SIM RETIRADA -->
+        <div id="sd-destino-wrap" style="margin-top:14px;padding:12px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.25);border-radius:8px;display:none">
+          <div class="sim-label" style="margin-bottom:8px;font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:.06em">📤 DESTINO DE RETIRO *</div>
           <div style="display:flex;gap:8px">
-            <button id="sd-dest-stock" class="sim-destino-btn ${sim?.destino_retiro==='STOCK'?'active-stock':''}"
-              onclick="SimsUI._selDestino('STOCK')"
-              style="${sim?.destino_retiro==='STOCK'?'background:rgba(16,185,129,.2);color:#10b981;border-color:#10b981':''}">
-              📦 STOCK
-            </button>
-            <button id="sd-dest-baja" class="sim-destino-btn ${sim?.destino_retiro==='BAJA'?'active-baja':''}"
-              onclick="SimsUI._selDestino('BAJA')"
-              style="${sim?.destino_retiro==='BAJA'?'background:rgba(239,68,68,.2);color:#ef4444;border-color:#ef4444':''}">
-              🗑 BAJA
-            </button>
+            <button id="sd-dest-stock" class="sim-destino-btn" onclick="SimsUI._selDestino('STOCK')">📦 STOCK</button>
+            <button id="sd-dest-baja"  class="sim-destino-btn" onclick="SimsUI._selDestino('BAJA')">🗑 BAJA</button>
           </div>
         </div>
       </div>
 
-      <!-- 4. OBSERVACIONES -->
+      <!-- 4. CAPACIDAD GB -->
       <div class="sim-section">
-        <div class="sim-section-title">4. OBSERVACIONES (OPCIONAL)</div>
+        <div class="sim-section-title">4. CAPACIDAD</div>
+        <div class="sim-field">
+          <div style="display:flex;align-items:center;gap:8px">
+            <input id="sd-gb" class="sim-input" type="number" min="0" step="1" placeholder="Ej. 15"
+              style="flex:1;-moz-appearance:textfield" value="${sim?.gb||''}"
+              oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+            <span style="font-size:13px;font-weight:700;color:var(--text2);white-space:nowrap">GB</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. OBSERVACIONES -->
+      <div class="sim-section">
+        <div class="sim-section-title">5. OBSERVACIONES (OPCIONAL)</div>
         <textarea id="sd-obs" class="sim-input" rows="3" placeholder="Escribe alguna observación...">${sim?.observaciones||''}</textarea>
       </div>
 
@@ -408,6 +419,14 @@ const SimsUI = (() => {
         </button>
       </div>
     `;
+    // Post-render: inicializar estado visual del destino-wrap y botones
+    setTimeout(() => {
+      if (sim?.estado === 'SIM RETIRADA') {
+        const wrap = document.getElementById('sd-destino-wrap');
+        if (wrap) wrap.style.display = 'block';
+      }
+      if (_destinoSeleccionado) SimsUI._selDestino(_destinoSeleccionado);
+    }, 0);
   }
 
   /* ═══ ACCIONES ══════════════════════════════════════════ */
@@ -441,28 +460,34 @@ const SimsUI = (() => {
   }
 
   function _toggleOtroEst(val) {
+    // Campo "otro estado"
     const inp = document.getElementById('sd-est-otro');
     if (inp) inp.style.display = val === 'OTRO' ? 'block' : 'none';
-    // Sync chips
+
+    // Sync chips visuales
     document.querySelectorAll('.sim-estado-chip').forEach(ch => {
       ch.classList.toggle('active', ch.dataset.estado === val);
       const ec = _estadoColor(ch.dataset.estado);
       if (ch.classList.contains('active')) {
-        ch.style.background   = ec.bg;
-        ch.style.color        = ec.text;
-        ch.style.borderColor  = ec.border;
+        ch.style.background  = ec.bg;
+        ch.style.color       = ec.text;
+        ch.style.borderColor = ec.border;
       } else {
-        ch.style.background   = '';
-        ch.style.color        = '';
-        ch.style.borderColor  = '';
+        ch.style.background  = '';
+        ch.style.color       = '';
+        ch.style.borderColor = '';
       }
     });
-    // Mostrar/ocultar sección STOCK/BAJA
-    const destiWrap = document.getElementById('sd-destino-wrap');
-    if (destiWrap) {
-      destiWrap.style.display = (val === 'SIM RETIRADA') ? 'block' : 'none';
-      // Si cambia de RETIRADA a otro estado, limpiar destino seleccionado
-      if (val !== 'SIM RETIRADA') _selDestino(null);
+
+    // Mostrar/ocultar DESTINO DE RETIRO
+    const wrap = document.getElementById('sd-destino-wrap');
+    if (wrap) {
+      if (val === 'SIM RETIRADA') {
+        wrap.style.display = 'block';
+      } else {
+        wrap.style.display = 'none';
+        _selDestino(null); // limpiar selección si cambia de estado
+      }
     }
   }
 
@@ -499,6 +524,8 @@ const SimsUI = (() => {
     let estado = document.getElementById('sd-est')?.value || '';
     if (estado === 'OTRO') estado = (document.getElementById('sd-est-otro')?.value || '').trim();
     const obs    = (document.getElementById('sd-obs')?.value || '').trim();
+    const gbRaw  = (document.getElementById('sd-gb')?.value || '').trim();
+    const gb     = gbRaw ? parseInt(gbRaw, 10) : null;
 
     if (!unidad && !iccid) { UI.toast('Ingresa al menos la unidad o el ICCID', 'warn'); return; }
     if (!operadora)         { UI.toast('Selecciona o escribe una operadora',   'warn'); return; }
@@ -517,6 +544,7 @@ const SimsUI = (() => {
       operadora:       operadora.toUpperCase(),
       estado,
       destino_retiro:  estado === 'SIM RETIRADA' ? _destinoSeleccionado : null,
+      gb:              gb,
       observaciones:   obs,
       base:            u?.base       || '',
       cromatica:       u?.cromatica  || '',
