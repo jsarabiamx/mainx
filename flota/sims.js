@@ -629,71 +629,64 @@ const SimsUI = (() => {
   }
 
   function verHistorial() {
-    const emp = DB.getEmpresaActiva();
-    // Abrir modal con tabla de historial cargada desde Supabase
+    var emp = DB.getEmpresaActiva();
     if (typeof UI === 'undefined' || !UI.openModal) return;
-    UI.openModal(`
-      <div style="background:var(--bg-panel);border:1px solid var(--border2);border-radius:12px;padding:24px;width:700px;max-width:95vw">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-          <div style="font-size:14px;font-weight:700">🕑 HISTORIAL DE SIMs RETIRADAS — ${emp}</div>
-          <button onclick="UI.closeModal()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
-        </div>
-        <div id="sims-hist-body" style="font-size:12px;color:var(--text3);text-align:center;padding:20px">Cargando historial...</div>
-      </div>`);
-
-    // Cargar historial desde Supabase
+    UI.openModal('<div style="background:var(--bg-panel);border:1px solid var(--border2);border-radius:12px;padding:24px;width:700px;max-width:95vw">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
+      + '<div style="font-size:14px;font-weight:700">&#128336; HISTORIAL DE SIMs RETIRADAS — ' + emp + '</div>'
+      + '<button onclick="UI.closeModal()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>'
+      + '</div>'
+      + '<div id="sims-hist-body" style="font-size:12px;color:var(--text3);text-align:center;padding:20px">Cargando historial...</div>'
+      + '</div>');
     if (!window.GPS_SB) {
-      const el = document.getElementById('sims-hist-body');
-      if (el) el.textContent = 'Supabase no disponible.';
+      var elx = document.getElementById('sims-hist-body');
+      if (elx) elx.textContent = 'Supabase no disponible.';
       return;
     }
     GPS_SB._getRaw('gps_sims_historial',
-      `empresa_id=eq.${encodeURIComponent(emp)}&order=fecha_retiro.desc&limit=100`
-    ).then(rows => {
-      const el = document.getElementById('sims-hist-body');
+      'empresa_id=eq.' + encodeURIComponent(emp) + '&order=fecha_retiro.desc&limit=100'
+    ).then(function(rows) {
+      var el = document.getElementById('sims-hist-body');
       if (!el) return;
       if (!rows || rows.length === 0) {
         el.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text3)">Sin historial de retiros registrado.</div>';
         return;
       }
-      const fmtDate = d => d ? new Date(d).toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-      const destColor = d => d === 'STOCK' ? 'color:#10b981' : d === 'BAJA' ? 'color:#ef4444' : 'color:var(--text3)';
-      el.innerHTML = \`
-        <div style="overflow-x:auto;max-height:400px;overflow-y:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:11px">
-            <thead>
-              <tr style="position:sticky;top:0;background:var(--bg-card);z-index:1">
-                <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">FECHA RETIRO</th>
-                <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">UNIDAD</th>
-                <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">ICCID</th>
-                <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">OPERADORA</th>
-                <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">GB</th>
-                <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">BASE</th>
-                <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">DESTINO</th>
-                <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">OBS</th>
-              </tr>
-            </thead>
-            <tbody>
-              \${rows.map(r => \`
-                <tr style="border-bottom:1px solid var(--border);transition:background .1s" onmouseover="this.style.background='var(--bg-card)'" onmouseout="this.style.background=''">
-                  <td style="padding:6px 8px;color:var(--text2);white-space:nowrap">\${fmtDate(r.fecha_retiro)}</td>
-                  <td style="padding:6px 8px;font-weight:700;color:var(--text)">\${r.num_economico || '—'}</td>
-                  <td style="padding:6px 8px;font-family:monospace;color:var(--text2);font-size:10px">\${r.iccid || '—'}</td>
-                  <td style="padding:6px 8px;color:var(--text2)">\${r.operadora || '—'}</td>
-                  <td style="padding:6px 8px;text-align:center;color:var(--blue);font-weight:700">\${r.gb ? r.gb + ' GB' : '—'}</td>
-                  <td style="padding:6px 8px;color:var(--text2)">\${r.base || '—'}</td>
-                  <td style="padding:6px 8px;font-weight:700;\${destColor(r.destino_retiro)}">\${r.destino_retiro || '—'}</td>
-                  <td style="padding:6px 8px;color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">\${r.observaciones || ''}</td>
-                </tr>
-              \`).join('')}
-            </tbody>
-          </table>
-        </div>
-        <div style="margin-top:10px;font-size:10px;color:var(--text3);text-align:right">\${rows.length} registro(s)</div>
-      \`;
-    }).catch(e => {
-      const el = document.getElementById('sims-hist-body');
-      if (el) el.textContent = 'Error cargando historial: ' + e.message;
+      var fmtDate = function(d) {
+        return d ? new Date(d).toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+      };
+      var ths = '<th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">';
+      var thead = '<thead><tr>'
+        + ths + 'FECHA RETIRO</th>'
+        + ths + 'UNIDAD</th>'
+        + ths + 'ICCID</th>'
+        + ths + 'OPERADORA</th>'
+        + ths + 'GB</th>'
+        + ths + 'BASE</th>'
+        + ths + 'DESTINO</th>'
+        + ths + 'OBS</th>'
+        + '</tr></thead>';
+      var tbody = '<tbody>' + rows.map(function(r) {
+        var destStyle = r.destino_retiro === 'STOCK' ? 'color:#10b981' : r.destino_retiro === 'BAJA' ? 'color:#ef4444' : 'color:var(--text3)';
+        var td = 'style="padding:6px 8px;';
+        return '<tr style="border-bottom:1px solid var(--border)">'
+          + '<td ' + td + 'color:var(--text2);white-space:nowrap">' + fmtDate(r.fecha_retiro) + '</td>'
+          + '<td ' + td + 'font-weight:700;color:var(--text)">' + (r.num_economico || '—') + '</td>'
+          + '<td ' + td + 'font-family:monospace;color:var(--text2);font-size:10px">' + (r.iccid || '—') + '</td>'
+          + '<td ' + td + 'color:var(--text2)">' + (r.operadora || '—') + '</td>'
+          + '<td ' + td + 'text-align:center;color:var(--blue);font-weight:700">' + (r.gb ? r.gb + ' GB' : '—') + '</td>'
+          + '<td ' + td + 'color:var(--text2)">' + (r.base || '—') + '</td>'
+          + '<td ' + td + 'font-weight:700;' + destStyle + '">' + (r.destino_retiro || '—') + '</td>'
+          + '<td ' + td + 'color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (r.observaciones || '') + '</td>'
+          + '</tr>';
+      }).join('') + '</tbody>';
+      el.innerHTML = '<div style="overflow-x:auto;max-height:400px;overflow-y:auto">'
+        + '<table style="width:100%;border-collapse:collapse;font-size:11px">' + thead + tbody + '</table>'
+        + '</div>'
+        + '<div style="margin-top:10px;font-size:10px;color:var(--text3);text-align:right">' + rows.length + ' registro(s)</div>';
+    }).catch(function(e) {
+      var el = document.getElementById('sims-hist-body');
+      if (el) el.textContent = 'Error: ' + e.message;
     });
   }
 
