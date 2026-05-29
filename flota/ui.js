@@ -1106,20 +1106,20 @@ const UI = (() => {
     const txt = (document.getElementById('modal-notas')?.value || '').trim();
     // 1. Guardar en localStorage
     DB.upsertUnidad(num, { notas: txt, _fuente: 'edit_notas_modal' }, emp);
-    // 2. Sincronizar notas a Supabase — guardar en gps_unidades + gps_notas + gps_barridos
+    // 2. Sincronizar notas a Supabase — fuente de verdad: gps_notas
     if (window.GPS_SB) {
       const _sbCfg = window.CCTV_SUPABASE_CONFIG || {};
       const _sbUrl = (_sbCfg.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
       const _sbKey = _sbCfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
       const _sbHdr = { 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
-      const _sbHdrUpsert = { ..._sbHdr, 'Prefer': 'resolution=merge-duplicates,return=minimal' };
 
-      // 2a. UPSERT gps_notas — fuente de verdad única (crea o actualiza siempre)
-      fetch(_sbUrl + '/gps_notas', {
-        method: 'POST', headers: _sbHdrUpsert,
+      // 2a. UPSERT gps_notas con on_conflict explícito (único método confiable en PostgREST)
+      fetch(_sbUrl + '/gps_notas?on_conflict=empresa_id,num_economico', {
+        method: 'POST',
+        headers: { ..._sbHdr, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
         body: JSON.stringify({ empresa_id: emp, num_economico: num, nota: txt || null, updated_at: new Date().toISOString() })
       }).then(r => {
-        if (r.ok) console.log('[notas gps_notas UPSERT] OK ✓', num);
+        if (r.ok) console.log('[notas gps_notas UPSERT] OK ✓', num, '"' + txt + '"');
         else r.text().then(t => console.error('[notas gps_notas UPSERT] FAIL', r.status, t));
       }).catch(e => console.error('[notas gps_notas UPSERT] ERROR', e));
 
@@ -2842,10 +2842,14 @@ const UI = (() => {
       const _sbHdr = { 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
       const _sbHdrUpsert = { ..._sbHdr, 'Prefer': 'resolution=merge-duplicates,return=minimal' };
 
-      // UPSERT gps_notas — fuente de verdad única
-      fetch(_sbUrl + '/gps_notas', {
-        method: 'POST', headers: _sbHdrUpsert,
+      // UPSERT gps_notas con on_conflict explícito
+      fetch(_sbUrl + '/gps_notas?on_conflict=empresa_id,num_economico', {
+        method: 'POST',
+        headers: { ..._sbHdr, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
         body: JSON.stringify({ empresa_id: emp, num_economico: num, nota: notas || null, updated_at: new Date().toISOString() })
+      }).then(r => {
+        if (r.ok) console.log('[obs_inline gps_notas UPSERT] OK ✓', num, '"' + notas + '"');
+        else r.text().then(t => console.error('[obs_inline gps_notas UPSERT] FAIL', r.status, t));
       }).catch(e => console.error('[obs_inline gps_notas] ERROR', e));
 
       // PATCH gps_barridos — sincronía con registros de plataforma
