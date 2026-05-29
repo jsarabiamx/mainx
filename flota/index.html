@@ -51,6 +51,7 @@
       </div>
       <div class="nav-group-items">
         <div class="nav-item" id="nav-sims"               onclick="App.nav(this,'panel-sims')"><span class="nav-icon">📶</span> Control de SIMs</div>
+        <div class="nav-item" id="nav-sims-historial"   onclick="App.nav(this,'panel-sims-historial');SimsHistorialUI.render()"><span class="nav-icon">🕑</span> Historial SIMs</div>
       </div>
     </div>
     <div class="nav-group" data-group="analisis">
@@ -510,6 +511,11 @@
   <div id="sims-content"></div>
 </div>
 
+<!-- ════ HISTORIAL DE SIMS ════════════════════════ -->
+<div id="panel-sims-historial" class="panel">
+  <div id="sims-historial-content"></div>
+</div>
+
   </div><!-- /content -->
 </main>
 </div><!-- /app -->
@@ -520,6 +526,7 @@
 <script src="charts.js"></script>
 <script src="ui.js"></script>
 <script src="sims.js"></script>
+<script src="sims-historial.js"></script>
 <script src="app.js"></script>
 <script>
 /* ── HELPERS GLOBALES ───────────────────────────────── */
