@@ -666,15 +666,18 @@ const UI = (() => {
     emp=emp||DB.getEmpresaActiva();
     let u=DB.getUnidad(num,emp);
     if(!u){toast('Unidad no encontrada','error');App.nav(null,'panel-resumen');return;}
-    // Cargar nota fresca de Supabase — fuente de verdad: gps_notas (UPSERT garantiza existencia)
+    // Limpiar notas del store local para que el DOM siempre refleje Supabase al abrir
+    if(window.GPS_SB){
+      DB.upsertUnidad(num, {notas: ''}, emp);
+      u = DB.getUnidad(num,emp) || u;
+    }
+    // Cargar nota fresca de Supabase — fuente de verdad: gps_notas
     if(window.GPS_SB){
       GPS_SB._getRaw('gps_notas',
         'num_economico=eq.'+encodeURIComponent(num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&limit=1'
       ).then(rows=>{
         const notaSupa = (rows && rows.length > 0) ? (rows[0].nota || '') : '';
-        if(notaSupa !== (u.notas || '')){
-          DB.upsertUnidad(num, {notas: notaSupa}, emp);
-        }
+        DB.upsertUnidad(num, {notas: notaSupa}, emp);
         const nd = document.getElementById('notas-display');
         if(nd){
           nd.innerHTML = notaSupa
@@ -916,8 +919,8 @@ const UI = (() => {
       <div id="dtab-notas" class="hidden">
         <div class="det-box" style="max-width:600px">
           <div class="det-box-title">NOTAS</div>
-          <div id="notas-display" style="font-size:13px;line-height:1.7;padding:10px 0;min-height:80px;white-space:pre-wrap">${esc(u.notas)||'<span style="color:var(--text3)">Sin notas registradas.</span>'}</div>
-          <!-- notas-display se actualiza async desde Supabase si hay notas más recientes -->
+          <div id="notas-display" style="font-size:13px;line-height:1.7;padding:10px 0;min-height:80px;white-space:pre-wrap"><span style="color:var(--text3);font-style:italic">Cargando notas…</span></div>
+          <!-- notas-display siempre se actualiza desde Supabase (gps_notas) al abrir -->
           <button class="act-btn" onclick="UI._addNote('${esc(num)}','${esc(emp)}')">✏ Editar notas</button>
         </div>
       </div>
