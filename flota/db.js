@@ -280,8 +280,8 @@ const DB = (() => {
       // Aplica ultima_act_<plat> solo a unidades que existen en asignaciones.
       // No crea unidades huérfanas — solo enriquece las que ya están.
       try {
-        // Cargar TODOS los barridos (activos e inactivos) para aplicar borrados persistentes
-        const barridoRows = await GPS_SB._getRaw('gps_barridos', 'order=updated_at.desc');
+        // Cargar solo barridos activos (activa=eq.true) — los inactivos se ignoran
+        const barridoRows = await GPS_SB._getRaw('gps_barridos', 'activa=eq.true');
         if (barridoRows && barridoRows.length > 0) {
           const idFieldByPlat = { CEIBA:'dvr_ceiba', SAMSARA:'vin_samsara', MAN:'placa_man', SCANIA:'placa_scania' };
           barridoRows.forEach(r => {
