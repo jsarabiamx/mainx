@@ -280,7 +280,8 @@ const DB = (() => {
       // Aplica ultima_act_<plat> solo a unidades que existen en asignaciones.
       // No crea unidades huérfanas — solo enriquece las que ya están.
       try {
-        const barridoRows = await GPS_SB._getRaw('gps_barridos', 'activa=eq.true');
+        // Cargar TODOS los barridos (activos e inactivos) para aplicar borrados persistentes
+        const barridoRows = await GPS_SB._getRaw('gps_barridos', 'order=updated_at.desc');
         if (barridoRows && barridoRows.length > 0) {
           const idFieldByPlat = { CEIBA:'dvr_ceiba', SAMSARA:'vin_samsara', MAN:'placa_man', SCANIA:'placa_scania' };
           barridoRows.forEach(r => {
@@ -320,6 +321,17 @@ const DB = (() => {
               _s.unidades[empR][num] = u;
             }
 
+            // Si el barrido está inactivo (eliminado manualmente) — borrar platKey y salir
+            if (r.activa === false || r.activa === 'false') {
+              delete u[platKey];
+              // Recalcular ultima_act
+              const PLATS_ALL = ['ceiba','samsara','avl','scania','man','volvo','motive'];
+              let maxFi = null;
+              PLATS_ALL.forEach(pp => { const f2 = u['ultima_act_' + pp]; if (f2 && (!maxFi || new Date(f2) > new Date(maxFi))) maxFi = f2; });
+              u.ultima_act = maxFi;
+              return; // no seguir procesando este barrido inactivo
+            }
+
             // Usar SOLO ultima_conexion — datos_raw.fecha puede estar en UTC incorrecto
             const fechaStr = r.ultima_conexion || null;
             if (fechaStr) {
@@ -328,7 +340,6 @@ const DB = (() => {
               if (!u.ultima_act || new Date(fechaStr) > new Date(u.ultima_act)) u.ultima_act = fechaStr;
             } else if (r.tiene_datos === false || r.ultima_conexion === null) {
               // Supabase dice explícitamente sin fecha — borrar del localStorage
-              // Esto hace que "Eliminar datos de plataforma" persista al recargar
               delete u[platKey];
               // Recalcular ultima_act global
               const PLATS2 = ['ceiba','samsara','avl','scania','man','volvo','motive'];
@@ -487,7 +498,11 @@ const DB = (() => {
       Object.keys(datos).forEach(f => {
         if (datos[f] !== undefined) {
           if (f.startsWith('ultima_act_') || f === 'ultima_act') {
-            if (datos[f]) store[k][f] = datos[f];
+            if (datos[f] === null) {
+              delete store[k][f]; // eliminar del barrido de esta plataforma
+            } else if (datos[f]) {
+              store[k][f] = datos[f];
+            }
           } else if (f.startsWith('desinstalacion_')) {
             // Desinstalación: guardar objeto completo o null para liberar
             if (datos[f] === null) {
