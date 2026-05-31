@@ -382,9 +382,18 @@ const DB = (() => {
   }
 
   function save() {
+    // Usar setTimeout para no bloquear el hilo principal al serializar datos grandes
     try {
-      localStorage.setItem(KEY, JSON.stringify(_s));
-      // También sincronizar empresa activa a Supabase si GPS_SB disponible
+      const str = JSON.stringify(_s);
+      if (typeof requestIdleCallback !== 'undefined') {
+        requestIdleCallback(() => {
+          try { localStorage.setItem(KEY, str); } catch(e) { console.error('DB save error', e); }
+        }, { timeout: 2000 });
+      } else {
+        setTimeout(() => {
+          try { localStorage.setItem(KEY, str); } catch(e) { console.error('DB save error', e); }
+        }, 0);
+      }
       if (typeof GPS_SB !== 'undefined') {
         GPS_SB.setEmpresaActiva(_s.empresaActiva).catch(()=>{});
       }
