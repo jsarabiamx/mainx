@@ -1915,18 +1915,10 @@ const UI = (() => {
     //   en el archivo de esa plataforma (tienen ultima_act_<plat> o fueron cargadas por barrido).
     //   Esto evita que por ejemplo el filtro TAPA muestre unidades sin Samsara.
     // - Plataformas manuales (VOLVO, MOTIVE): solo las que tienen captura manual (ultima_act_<plat>).
-    // MOTIVE y VOLVO pueden tener unidades en múltiples empresas — cargar de todas
-    let scopeUns;
-    if (plat === 'MOTIVE' || plat === 'VOLVO') {
-      const todasEmpresas = DB.getEmpresasList();
-      scopeUns = todasEmpresas.flatMap(e => DB.getUnidadesList(e)).filter(u =>
-        u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-      );
-    } else {
-      scopeUns = DB.getUnidadesList(emp).filter(u =>
-        u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-      );
-    }
+    // Siempre filtrar por empresa activa para evitar datos cruzados entre empresas
+    let scopeUns = DB.getUnidadesList(emp).filter(u =>
+      u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+    );
     scopeUns = scopeUns.filter(u => !!u[k]);
 
     // Los selects se pueblan SOLO con valores presentes en el scope (unidades de esta plataforma).
@@ -2055,6 +2047,7 @@ const UI = (() => {
           ${filtroEstadoSam}
           <input id="pf-search" oninput="UI._debouncePlatSearch('${plat}')" placeholder="🔍 Buscar (separa con espacios: 2280 2275)..." class="plat-filter-search">
           <button class="act-btn" onclick="UI._resetPlatFilters('${plat}')">↺ Reset</button>
+          <button id="plat-btn-del-sel" class="act-btn" style="display:none;background:rgba(239,68,68,.15);color:#ef4444;border-color:rgba(239,68,68,.4)" onclick="UI._eliminarSeleccionadas('${plat}')">🗑 Eliminar seleccionadas (<span id="plat-sel-count">0</span>)</button>
         </div>
         <div id="plat-table-wrap"></div>
       </div>
@@ -2132,13 +2125,11 @@ const UI = (() => {
     // TAPA aunque no estuvieran en el archivo de Samsara.
     // Unidades "Para venta" se excluyen de los conteos operativos.
     // VOLVO/MOTIVE son captura manual — pueden tener unidades de cualquier empresa
-    let uns = (plat === 'VOLVO' || plat === 'MOTIVE')
-      ? DB.getEmpresasList().flatMap(e => DB.getUnidadesList(e)).filter(u =>
-          u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-        )
-      : DB.getUnidadesList(emp).filter(u =>
-          u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-        );
+    // SCOPE: siempre filtrar por empresa activa para evitar datos cruzados entre empresas.
+    // VOLVO/MOTIVE también usan empresa activa — el barrido masivo ya segmenta por empresa_id.
+    let uns = DB.getUnidadesList(emp).filter(u =>
+      u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+    );
     uns = uns.filter(u => !!u[k]);
 
     // Siniestros activos NO aparecen en tabla de Plataformas GPS.
@@ -2254,6 +2245,7 @@ const UI = (() => {
     const esMotive = (plat === 'MOTIVE');
 
     const th = `
+      <th style="width:28px;text-align:center;padding:4px 6px"><input type="checkbox" id="plat-chk-all" title="Selec. todas" onclick="event.stopPropagation();UI._platCheckAll(this,'${plat}')" style="cursor:pointer;width:14px;height:14px"></th>
       <th>UNIDAD</th><th>BASE</th><th>CROMÁTICA</th><th>MODELO</th>
       <th>ESTATUS</th>
       ${incluyeEstadoCol ? '<th>ESTADO SAMSARA</th>' : ''}
@@ -2361,6 +2353,7 @@ const UI = (() => {
           ? `<span style="display:inline-block;margin-left:4px;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;background:rgba(120,120,120,.25);color:#999;border:1px solid #555" title="Desinstalado el ${desInfo.fecha||'?'}">DESINSTAL.</span>`
           : '';
         return `<tr data-num="${esc(safeU.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(safeU.num)}','${plat}')" ondblclick="UI._editarCapturaManuaRow('${esc(safeU.num)}','${plat}')" style="${rowStyle}" title="${esManualRow?'Doble clic para editar fecha':''}">
+          <td style="text-align:center;padding:4px 6px" onclick="event.stopPropagation()"><input type="checkbox" class="plat-row-chk" data-num="${esc(safeU.num)}" style="cursor:pointer;width:14px;height:14px" onclick="event.stopPropagation()" onchange="UI._platUpdateSelCount()"></td>
           <td style="font-weight:700">${esc(safeU.num)}${desBadge}</td>
           <td>${esc(safeU.base||'—')}</td>
           <td>${esc(safeU.cromatica||'—')}</td>
@@ -3014,6 +3007,59 @@ const UI = (() => {
     // Limpiar y refrescar
     ['pf-m-num','pf-m-base','pf-m-crom','pf-m-modelo','pf-m-id','pf-m-fecha'].forEach(id => { const e = $(id); if (e && e.tagName !== 'DIV') e.value = ''; });
     if ($('pf-m-dias')) $('pf-m-dias').textContent = '—';
+    _refreshPlatTable(plat);
+  }
+
+  // Checkbox: seleccionar/deseleccionar todas las filas visibles
+  function _platCheckAll(chkAll, plat) {
+    document.querySelectorAll('.plat-row-chk').forEach(chk => {
+      chk.checked = chkAll.checked;
+    });
+    _platUpdateSelCount();
+  }
+
+  // Actualizar contador de seleccionadas y mostrar/ocultar botón eliminar
+  function _platUpdateSelCount() {
+    const sel = document.querySelectorAll('.plat-row-chk:checked');
+    const btn = document.getElementById('plat-btn-del-sel');
+    const cnt = document.getElementById('plat-sel-count');
+    if (btn) btn.style.display = sel.length > 0 ? '' : 'none';
+    if (cnt) cnt.textContent = sel.length;
+  }
+
+  // Eliminar todas las unidades seleccionadas via checkbox
+  function _eliminarSeleccionadas(plat) {
+    const chks = document.querySelectorAll('.plat-row-chk:checked');
+    if (!chks.length) return;
+    const nums = Array.from(chks).map(c => c.dataset.num);
+    if (!confirm('¿Eliminar ' + nums.length + ' unidad(es) de ' + plat + '?\n\n' + nums.slice(0,10).join(', ') + (nums.length > 10 ? '...' : '') + '\n\nSolo se eliminan de este barrido, no de la asignación.')) return;
+    const emp    = DB.getEmpresaActiva();
+    const platKey= 'ultima_act_' + plat.toLowerCase();
+    const _sbCfg = window.CCTV_SUPABASE_CONFIG || {};
+    const _sbUrl = (_sbCfg.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
+    const _sbKey = _sbCfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
+    const hdrs   = { 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+
+    nums.forEach(num => {
+      // Borrar del localStorage
+      const borrado = {};
+      borrado[platKey] = null;
+      if (plat === 'SAMSARA') { borrado.estado_samsara = null; borrado.vin_samsara = null; }
+      if (plat === 'MOTIVE')  { borrado.estado_motive = null; borrado.motive_vg = null; borrado.motive_cam = null; }
+      DB.upsertUnidad(num, borrado, emp);
+
+      // Borrar de Supabase
+      if (window.GPS_SB) {
+        fetch(_sbUrl + '/gps_barridos?num_economico=eq.' + encodeURIComponent(num)
+          + '&empresa_id=eq.' + encodeURIComponent(emp)
+          + '&plataforma=eq.' + encodeURIComponent(plat), {
+          method: 'DELETE', headers: hdrs
+        }).catch(e => console.error('[_eliminarSeleccionadas]', num, e));
+      }
+    });
+
+    toast(nums.length + ' unidad(es) eliminadas de ' + plat, 'info');
+    _platDetailUnit = null;
     _refreshPlatTable(plat);
   }
 
@@ -5598,6 +5644,7 @@ const UI = (() => {
     _onPlatRowClick, _cerrarPlatDetailInline,
     _abrirCapturaManualPlat, _autocompletarCapturaManual,
     _eliminarDeBarrido, _editarFechaInline, _confirmarFechaInline,
+    _platCheckAll, _platUpdateSelCount, _eliminarSeleccionadas,
     _recalcularDiasManual, _guardarCapturaManualPlat, _editarCapturaManuaRow,
     _modalDesinstalacion, _liberarDesinstalacion,
     _updatePlatFechaConISO,
