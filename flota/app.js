@@ -489,26 +489,25 @@ const App = (() => {
     const hayDatos = DB.getUnidadesList(DB.getEmpresaActiva()).length > 0;
 
     if (!hayDatos) {
-      // Sin datos locales: carga completa bloqueante con banner
+      // Sin datos locales: carga completa desde Supabase
       _showSyncBanner('⏳ Cargando datos desde Supabase...');
-      DB.initFromSupabase().then(ok => {
+      DB.initFromSupabase().then(() => {
         _hideSyncBanner();
-        if (ok) { UI.renderResumen(); populateEmpresaSelect(); }
+        UI.renderResumen();
+        populateEmpresaSelect();
+      }).catch(e => {
+        _hideSyncBanner();
+        console.error('[App] initFromSupabase error:', e);
+        UI.renderResumen();
       });
     } else {
-      // Hay datos locales: sincronizar en background (no bloquea UI)
-      // Incluye asignaciones + barridos GPS + fallas — siempre frescos desde Supabase
-      console.log('[App] Datos locales detectados — sincronizando barridos GPS desde Supabase en background...');
+      // Hay datos locales: sincronizar en background
       setTimeout(() => {
-        DB.initFromSupabase().then(ok => {
-          if (ok) {
-            UI.renderResumen();
-            const panelPlat = document.getElementById('panel-plataformas');
-            if (panelPlat && panelPlat.classList.contains('active')) {
-              UI.renderPlataformas();
-            }
-          }
-        });
+        DB.initFromSupabase().then(() => {
+          UI.renderResumen();
+          const panelPlat = document.getElementById('panel-plataformas');
+          if (panelPlat && panelPlat.classList.contains('active')) UI.renderPlataformas();
+        }).catch(e => console.error('[App] bg sync error:', e));
       }, 500);
     }
 
