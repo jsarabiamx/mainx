@@ -408,6 +408,32 @@ const App = (() => {
     });
   }
 
+  // ── Polling de barridos GPS (para ver en cualquier navegador sin recargar) ──
+  // Cada 3 minutos, si la página está visible, recarga barridos y fallas desde Supabase.
+  // No re-renderiza el resumen mientras el usuario está en otra pantalla.
+  async function _syncBarridosBackground() {
+    if (!window.GPS_SB || document.hidden) return;
+    try {
+      const ok = await DB.initFromSupabase();
+      if (ok) {
+        // Refrescar solo el panel activo, no forzar cambio de navegación
+        const panelActivo = document.querySelector('.panel.active');
+        if (!panelActivo) return;
+        const id = panelActivo.id;
+        if (id === 'panel-resumen')     UI.renderResumen();
+        if (id === 'panel-plataformas') UI.renderPlataformas();
+        if (id === 'panel-graficas')    UI.renderGraficas();
+        if (id === 'panel-maestra')     UI.renderMaestra();
+        console.log('[App] Barridos sincronizados desde Supabase (background)');
+      }
+    } catch(e) { /* silencioso */ }
+  }
+
+  function _startBarridosSync() {
+    _syncBarridosBackground();
+    setInterval(_syncBarridosBackground, 3 * 60 * 1000); // cada 3 minutos
+  }
+
   function init() {
     populateEmpresaSelect();
     injectStyles();
@@ -441,6 +467,7 @@ const App = (() => {
     setTimeout(() => { _syncFallasDesdeInicio(); },    8000);
     setTimeout(_startFallasSync,                       15000);
     setTimeout(_startDesinstalacionesSync,             20000);
+    setTimeout(_startBarridosSync,                     30000); // sincronizar barridos 30s después del arranque
   }
 
   let _barridosSyncBloqueadoHasta = 0;
@@ -628,6 +655,7 @@ const App = (() => {
     _eliminarDatosPlataforma,
     _borrarEmpresa,
     forzarRecargaSupabase,
+    _startBarridosSync,
     _bloquearBarridosSync: function() {
       _barridosSyncBloqueadoHasta = Date.now() + 180000;
     }
