@@ -138,7 +138,7 @@ const DB = (() => {
   // Se llama desde app.js después de que GPS_SB esté disponible.
   // Reconstruye unidades a partir de asignaciones en Supabase (misma lógica que saveAsignacion).
   async function initFromSupabase() {
-    if (!window.GPS_SB) { console.warn('[DB] GPS_SB no disponible'); return false; }
+    if (!window.GPS_SB) return;
     try {
       // Asegurar que las empresas base siempre existan en el schema
       if (!_s.empresas || Object.keys(_s.empresas).length === 0) {
@@ -280,7 +280,6 @@ const DB = (() => {
       // Aplica ultima_act_<plat> solo a unidades que existen en asignaciones.
       // No crea unidades huérfanas — solo enriquece las que ya están.
       try {
-        // Cargar solo barridos activos (activa=eq.true) — los inactivos se ignoran
         const barridoRows = await GPS_SB._getRaw('gps_barridos', 'activa=eq.true');
         if (barridoRows && barridoRows.length > 0) {
           const idFieldByPlat = { CEIBA:'dvr_ceiba', SAMSARA:'vin_samsara', MAN:'placa_man', SCANIA:'placa_scania' };
@@ -321,17 +320,6 @@ const DB = (() => {
               _s.unidades[empR][num] = u;
             }
 
-            // Si el barrido está inactivo (eliminado manualmente) — borrar platKey y salir
-            if (r.activa === false || r.activa === 'false') {
-              delete u[platKey];
-              // Recalcular ultima_act
-              const PLATS_ALL = ['ceiba','samsara','avl','scania','man','volvo','motive'];
-              let maxFi = null;
-              PLATS_ALL.forEach(pp => { const f2 = u['ultima_act_' + pp]; if (f2 && (!maxFi || new Date(f2) > new Date(maxFi))) maxFi = f2; });
-              u.ultima_act = maxFi;
-              return; // no seguir procesando este barrido inactivo
-            }
-
             // Usar SOLO ultima_conexion — datos_raw.fecha puede estar en UTC incorrecto
             const fechaStr = r.ultima_conexion || null;
             if (fechaStr) {
@@ -340,6 +328,7 @@ const DB = (() => {
               if (!u.ultima_act || new Date(fechaStr) > new Date(u.ultima_act)) u.ultima_act = fechaStr;
             } else if (r.tiene_datos === false || r.ultima_conexion === null) {
               // Supabase dice explícitamente sin fecha — borrar del localStorage
+              // Esto hace que "Eliminar datos de plataforma" persista al recargar
               delete u[platKey];
               // Recalcular ultima_act global
               const PLATS2 = ['ceiba','samsara','avl','scania','man','volvo','motive'];
@@ -382,37 +371,6 @@ const DB = (() => {
           });
         }
       } catch(eb) { console.warn('[DB] initFromSupabase barridos:', eb); }
-
-      // ── PASO 3: SIMs — cargar desde gps_sims para todas las empresas ──
-      try {
-        for (const emp of empresas) {
-          const simRows = await GPS_SB._getRaw('gps_sims',
-            `empresa_id=eq.${encodeURIComponent(emp)}&activa=eq.true&order=updated_at.desc`
-          );
-          if (simRows && simRows.length > 0) {
-            if (!_s.sims) _s.sims = {};
-            _s.sims[emp] = simRows.map(r => ({
-              id:            r.id,
-              unidad:        r.unidad        || r.num_economico || '',
-              base:          r.base          || '',
-              cromatica:     r.cromatica     || '',
-              equipoDvr:     r.equipo_dvr    || '',
-              empresa:       r.empresa_id    || emp,
-              iccid:         r.iccid         || '',
-              operadora:     r.operadora     || '',
-              estado:        r.estado        || 'SIM SIN ASIGNAR',
-              destino_retiro:r.destino_retiro || null,
-              gb:            r.gb            || null,
-              observaciones: r.observaciones || '',
-              movimiento:    r.movimiento    || 'Asignación',
-              creadoEn:      r.created_at    || '',
-              actualizadoEn: r.updated_at    || '',
-              _fromSupabase: true
-            }));
-            console.log(`[DB] initFromSupabase: ${simRows.length} SIMs cargadas para ${emp}`);
-          }
-        }
-      } catch(es) { console.warn('[DB] initFromSupabase sims:', es); }
 
       save();
       console.log('[DB] initFromSupabase: carga completa');
@@ -498,11 +456,8 @@ const DB = (() => {
       Object.keys(datos).forEach(f => {
         if (datos[f] !== undefined) {
           if (f.startsWith('ultima_act_') || f === 'ultima_act') {
-            if (datos[f] === null) {
-              delete store[k][f]; // eliminar del barrido de esta plataforma
-            } else if (datos[f]) {
-              store[k][f] = datos[f];
-            }
+            if (datos[f] === null) { delete store[k][f]; }
+            else if (datos[f]) store[k][f] = datos[f];
           } else if (f.startsWith('desinstalacion_')) {
             // Desinstalación: guardar objeto completo o null para liberar
             if (datos[f] === null) {
@@ -1467,25 +1422,22 @@ const DB = (() => {
     const arr = _empSims(emp);
     const now = new Date().toISOString();
     const registro = {
-      id:            sim.id || Date.now(),
-      _sbId:         sim._sbId     || null,   // id real de Supabase bigserial
-      unidad:        sim.unidad      || '',
-      base:          sim.base        || '',
-      cromatica:     sim.cromatica   || '',
-      equipoDvr:     sim.equipoDvr   || sim.equipo_dvr || '',
-      empresa:       sim.empresa     || emp,
-      iccid:         sim.iccid       || '',
-      operadora:     sim.operadora   || '',
-      estado:        sim.estado      || 'SIM SIN ASIGNAR',
-      destino_retiro:sim.destino_retiro || null,
-      gb:            sim.gb          || null,
+      id:          sim.id || Date.now(),
+      unidad:      sim.unidad      || '',
+      base:        sim.base        || '',
+      cromatica:   sim.cromatica   || '',
+      equipoDvr:   sim.equipoDvr   || '',
+      empresa:     sim.empresa     || emp,
+      iccid:       sim.iccid       || '',
+      operadora:   sim.operadora   || '',
+      estado:      sim.estado      || 'SIM SIN ASIGNAR',
       observaciones: sim.observaciones || '',
-      movimiento:    sim.movimiento  || 'Asignación',
-      creadoEn:      sim.creadoEn    || now,
+      movimiento:  sim.movimiento  || 'Asignación',
+      creadoEn:    sim.creadoEn    || now,
       actualizadoEn: now
     };
     // Si el registro ya existe (mismo id), actualizar; sino insertar al frente
-    const idx = arr.findIndex(x => String(x.id) === String(registro.id));
+    const idx = arr.findIndex(x => x.id === registro.id);
     if (idx >= 0) {
       // Registrar movimiento automático si cambia el estado
       if (arr[idx].estado !== registro.estado) {
