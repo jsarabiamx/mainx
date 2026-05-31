@@ -239,7 +239,7 @@ const GPS_SB = (() => {
     let existentes = {};
     try {
       const rows = await _getRaw('gps_barridos',
-        `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${encodeURIComponent(plataforma)}`
+        `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${encodeURIComponent(plataforma)}&activa=eq.true`
       );
       rows.forEach(r => { existentes[String(r.num_economico)] = r; });
     } catch(e) { console.warn('[GPS_SB] getBarridos prev:', e); }
@@ -300,7 +300,7 @@ const GPS_SB = (() => {
     // Sin esto PostgREST no puede inferir qué constraint usar cuando hay FK + UNIQUE.
     const ON_CONFLICT = 'on_conflict=empresa_id%2Cplataforma%2Cnum_economico';
     const lotes = [];
-    for (let i = 0; i < rowsUniq.length; i += 100) lotes.push(rowsUniq.slice(i, i + 100));
+    for (let i = 0; i < rowsUniq.length; i += 200) lotes.push(rowsUniq.slice(i, i + 200));
 
     // Enviar lotes SECUENCIALMENTE para evitar conflictos de concurrencia en el upsert
     for (const lote of lotes) {
@@ -312,7 +312,7 @@ const GPS_SB = (() => {
         });
         if (!resp.ok) {
           const t = await resp.text();
-          console.error(`[GPS_SB barrido upsert] ERROR HTTP ${resp.status} — lote ${lote.length} filas:`, t);
+          console.error(`[GPS_SB barrido upsert] ERROR HTTP ${resp.status} — lote ${lote.length} filas, plat: ${plataforma}, emp: ${emp}:`, t.substring(0,300));
         } else {
           console.log(`[GPS_SB barrido upsert] OK — ${lote.length} filas, plataforma: ${plataforma}, empresa: ${emp}`);
         }
