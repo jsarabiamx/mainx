@@ -1834,7 +1834,7 @@ const UI = (() => {
       const conFechaGPS=conFecha.filter(u=>!_tieneSiniestroActivo(u));
       const enLinea=conFechaGPS.filter(u=>Math.floor((hoy-new Date(u[k]))/86400000)<=cfg.diasLinea).length;
       const fuera=conFechaGPS.length-enLinea;
-      const esManual=p==='VOLVO';
+      const esManual=true; // Captura manual habilitada para todas las plataformas
       const COLS_MAP={
         CEIBA:'Plate No. | GPS time | Serial No.',
         SAMSARA:'Nombre | Última hora de registro | N° serie',
@@ -2261,7 +2261,8 @@ const UI = (() => {
       <th>${plat} ÚLT. ACTIVIDAD</th><th>DÍAS</th>
       ${esMotive ? '<th>SERIE VG</th><th>SERIE CAM</th>' : `<th>${idLabel}</th>`}
       <th>OBSERVACIONES</th>
-      <th>NOTAS</th>`;
+      <th>NOTAS</th>
+      <th style="width:32px"></th>`;
 
     const rows = uns.map(u => {
       try {
@@ -2352,7 +2353,7 @@ const UI = (() => {
           return `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${c}22;color:${c};border:1px solid ${c}44">${motiveEstado||'—'}</span>`;
         })() : '';
 
-        const esManualRow = plat === 'VOLVO';
+        const esManualRow = true; // Editar fecha disponible en todas
         const rowStyle = estaDesinstalada
           ? 'cursor:pointer;opacity:.55;filter:grayscale(.8);background:rgba(80,80,80,.08)'
           : 'cursor:pointer';
@@ -2367,7 +2368,7 @@ const UI = (() => {
           <td>${estatusCell}</td>
           ${incluyeEstadoCol ? `<td>${estadoSamsaraCell}</td>` : ''}
           ${esMotive ? `<td>${motiveEstadoCell}</td><td style="font-size:11px">${esc(motiveEmpresa||'—')}</td>` : ''}
-          <td style="font-size:11px">${fecha?Parsers.fmtDate(fecha):'<span style="color:var(--text3)">Sin datos</span>'}</td>
+          <td style="font-size:11px;cursor:pointer" onclick="event.stopPropagation();UI._editarFechaInline('${esc(safeU.num)}','${plat}',this)" title="Click para editar fecha de última actividad">${fecha?Parsers.fmtDate(fecha):'<span style="color:var(--text3)">Sin datos</span>'}<span style="opacity:0;margin-left:3px;font-size:9px" class="plat-obs-pencil">✎</span></td>
           <td>${diasBadge(d)}</td>
           ${esMotive
             ? `<td style="font-family:monospace;font-size:10px">${esc(motiveSerieVG||'—')}</td><td style="font-family:monospace;font-size:10px">${esc(motiveSerieCam||'—')}</td>`
@@ -2380,6 +2381,11 @@ const UI = (() => {
           <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarNotasRapido('${esc(safeU.num)}','${emp}')" title="Click para editar notas — ${esc(safeU.notas||'sin notas')}">
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${esc(safeU.notas)||'<span style="color:var(--text3);font-style:italic">+ nota…</span>'}</span>
             <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
+          </td>
+          <td style="text-align:center" onclick="event.stopPropagation()">
+            <button title="Eliminar unidad de esta plataforma" onclick="UI._eliminarDeBarrido('${esc(safeU.num)}','${emp}','${plat}')"
+              style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:2px 5px;border-radius:4px;transition:color .15s"
+              onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='var(--text3)'">🗑</button>
           </td>
         </tr>`;
       } catch(rowErr) {
@@ -3008,6 +3014,106 @@ const UI = (() => {
     // Limpiar y refrescar
     ['pf-m-num','pf-m-base','pf-m-crom','pf-m-modelo','pf-m-id','pf-m-fecha'].forEach(id => { const e = $(id); if (e && e.tagName !== 'DIV') e.value = ''; });
     if ($('pf-m-dias')) $('pf-m-dias').textContent = '—';
+    _refreshPlatTable(plat);
+  }
+
+  /**
+   * Eliminar unidad del barrido de una plataforma específica.
+   * Borra ultima_act_<plat> en localStorage y en gps_barridos de Supabase.
+   */
+  function _eliminarDeBarrido(num, emp, plat) {
+    if (!confirm('¿Eliminar unidad ' + num + ' de la plataforma ' + plat + '?\nSolo se elimina de este barrido, no de la asignación.')) return;
+    const platKey = 'ultima_act_' + plat.toLowerCase();
+    // Borrar del localStorage
+    const borrado = {};
+    borrado[platKey] = null;
+    // Si la plataforma tiene campos adicionales, limpiarlos también
+    if (plat === 'SAMSARA') { borrado.estado_samsara = null; borrado.vin_samsara = null; }
+    if (plat === 'MOTIVE')  { borrado.estado_motive = null; borrado.motive_vg = null; borrado.motive_cam = null; }
+    DB.upsertUnidad(num, borrado, emp);
+    toast('Unidad ' + num + ' eliminada de ' + plat, 'info');
+
+    // Borrar de Supabase (gps_barridos)
+    if (window.GPS_SB) {
+      const _sbCfg = window.CCTV_SUPABASE_CONFIG || {};
+      const _sbUrl = (_sbCfg.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
+      const _sbKey = _sbCfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
+      const hdrs = { 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+      // Eliminar filas de gps_barridos para esta unidad+empresa+plataforma
+      fetch(_sbUrl + '/gps_barridos?num_economico=eq.' + encodeURIComponent(num)
+        + '&empresa_id=eq.' + encodeURIComponent(emp)
+        + '&plataforma=eq.' + encodeURIComponent(plat), {
+        method: 'DELETE', headers: hdrs
+      }).then(r => {
+        if (r.ok) console.log('[_eliminarDeBarrido] Supabase DELETE OK', num, plat);
+        else r.text().then(t => console.error('[_eliminarDeBarrido] FAIL', r.status, t));
+      }).catch(e => console.error('[_eliminarDeBarrido] ERROR', e));
+    }
+    _platDetailUnit = null;
+    _refreshPlatTable(plat);
+  }
+
+  /**
+   * Click en celda de fecha — abre editor inline de fecha en esa misma celda.
+   * Al confirmar, guarda en localStorage + Supabase + refresca la fila.
+   */
+  function _editarFechaInline(num, plat, tdEl) {
+    if (!tdEl) return;
+    const emp    = DB.getEmpresaActiva();
+    const u      = DB.getUnidad(num, emp);
+    const platKey= 'ultima_act_' + plat.toLowerCase();
+    const fechaActual = u && u[platKey] ? u[platKey] : (u && u.ultima_act ? u.ultima_act : '');
+
+    // Convertir ISO a datetime-local
+    const toLocal = iso => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      const pad = n => String(n).padStart(2,'0');
+      return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate())
+        + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    };
+
+    // Reemplazar contenido de la celda con input
+    const oldHtml = tdEl.innerHTML;
+    tdEl.innerHTML = [
+      '<input type="datetime-local" style="font-size:11px;background:var(--bg-base);border:1px solid var(--blue);border-radius:4px;padding:2px 4px;color:var(--text);font-family:var(--font);width:160px" value="' + toLocal(fechaActual) + '">',
+      '<button style="margin-left:4px;padding:2px 6px;border-radius:4px;background:var(--blue);color:#fff;border:none;cursor:pointer;font-size:10px" onclick="event.stopPropagation();UI._confirmarFechaInline(this,&quot;' + num + '&quot;,&quot;' + plat + '&quot;)">\u2713</button>',
+      '<button style="margin-left:2px;padding:2px 6px;border-radius:4px;background:var(--bg-card);color:var(--text2);border:1px solid var(--border);cursor:pointer;font-size:10px" onclick="event.stopPropagation();UI._refreshPlatTable(&quot;' + plat + '&quot;)">\u2715</button>'
+    ].join('');
+  }
+
+  function _confirmarFechaInline(btnEl, num, plat) {
+    const td = btnEl.closest('td');
+    if (!td) return;
+    const inp = td.querySelector('input');
+    if (!inp || !inp.value) { toast('Ingresa una fecha válida', 'warn'); return; }
+    const emp    = DB.getEmpresaActiva();
+    const iso    = new Date(inp.value).toISOString();
+    const platKey= 'ultima_act_' + plat.toLowerCase();
+    const datos  = {};
+    datos[platKey] = iso;
+    // Actualizar ultima_act global si es más reciente
+    const u = DB.getUnidad(num, emp);
+    if (!u || !u.ultima_act || new Date(iso) > new Date(u.ultima_act)) datos.ultima_act = iso;
+    DB.upsertUnidad(num, datos, emp);
+    toast('Fecha actualizada para ' + num, 'success');
+
+    // Sincronizar a Supabase (PATCH en gps_barridos)
+    if (window.GPS_SB) {
+      const _sbCfg = window.CCTV_SUPABASE_CONFIG || {};
+      const _sbUrl = (_sbCfg.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
+      const _sbKey = _sbCfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
+      const hdrs = { 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+      const patchBody = { fecha: iso, updated_at: iso };
+      fetch(_sbUrl + '/gps_barridos?num_economico=eq.' + encodeURIComponent(num)
+        + '&empresa_id=eq.' + encodeURIComponent(emp)
+        + '&plataforma=eq.' + encodeURIComponent(plat), {
+        method: 'PATCH', headers: hdrs, body: JSON.stringify(patchBody)
+      }).then(r => {
+        if (r.ok) console.log('[_confirmarFechaInline] Supabase PATCH OK', num, plat, iso);
+        else r.text().then(t => console.error('[_confirmarFechaInline] FAIL', r.status, t));
+      }).catch(e => console.error('[_confirmarFechaInline] ERROR', e));
+    }
     _refreshPlatTable(plat);
   }
 
@@ -5491,6 +5597,7 @@ const UI = (() => {
     // plataformas v7: detalle inline, búsqueda multi-token, captura manual
     _onPlatRowClick, _cerrarPlatDetailInline,
     _abrirCapturaManualPlat, _autocompletarCapturaManual,
+    _eliminarDeBarrido, _editarFechaInline, _confirmarFechaInline,
     _recalcularDiasManual, _guardarCapturaManualPlat, _editarCapturaManuaRow,
     _modalDesinstalacion, _liberarDesinstalacion,
     _updatePlatFechaConISO,
