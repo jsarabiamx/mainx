@@ -408,6 +408,14 @@ const UI = (() => {
   let _rf={plat:'',base:'',crom:'',est:'',dias:'',search:'',sort:'dias',page:1};
 
   function renderResumen() {
+    // Ceder el hilo al navegador antes de ejecutar para no bloquear clicks
+    if (typeof requestAnimationFrame !== 'undefined') {
+      requestAnimationFrame(_doRenderResumen);
+    } else {
+      _doRenderResumen();
+    }
+  }
+  function _doRenderResumen() {
     const emp=DB.getEmpresaActiva();
     const st=DB.getStats(emp);
 
