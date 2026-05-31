@@ -666,23 +666,17 @@ const UI = (() => {
     emp=emp||DB.getEmpresaActiva();
     let u=DB.getUnidad(num,emp);
     if(!u){toast('Unidad no encontrada','error');App.nav(null,'panel-resumen');return;}
-    // Limpiar notas del store local para que el DOM siempre refleje Supabase al abrir
-    if(window.GPS_SB){
-      DB.upsertUnidad(num, {notas: ''}, emp);
-      u = DB.getUnidad(num,emp) || u;
-    }
-    // Cargar nota fresca de Supabase — fuente de verdad: gps_notas
-    if(window.GPS_SB){
-      GPS_SB._getRaw('gps_notas',
-        'num_economico=eq.'+encodeURIComponent(num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&limit=1'
+    // Cargar nota fresca de Supabase (para mostrar notas guardadas desde plataforma)
+    // IMPORTANTE: solo actualizar si Supabase tiene dato — nunca borrar lo que ya está en pantalla
+    if(window.GPS_SB && !u.notas){
+      GPS_SB._getRaw('gps_barridos',
+        'num_economico=eq.'+encodeURIComponent(num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&notas=not.is.null&limit=1'
       ).then(rows=>{
-        const notaSupa = (rows && rows.length > 0) ? (rows[0].nota || '') : '';
-        DB.upsertUnidad(num, {notas: notaSupa}, emp);
-        const nd = document.getElementById('notas-display');
-        if(nd){
-          nd.innerHTML = notaSupa
-            ? notaSupa.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-            : '<span style="color:var(--text3)">Sin notas registradas.</span>';
+        if(rows && rows.length > 0 && rows[0].notas){
+          const notaFresca = rows[0].notas;
+          DB.upsertUnidad(num, {notas: notaFresca}, emp);
+          const nd = document.getElementById('notas-display');
+          if(nd) nd.innerHTML = notaFresca.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         }
       }).catch(()=>{});
     }
@@ -919,8 +913,8 @@ const UI = (() => {
       <div id="dtab-notas" class="hidden">
         <div class="det-box" style="max-width:600px">
           <div class="det-box-title">NOTAS</div>
-          <div id="notas-display" style="font-size:13px;line-height:1.7;padding:10px 0;min-height:80px;white-space:pre-wrap"><span style="color:var(--text3);font-style:italic">Cargando notas…</span></div>
-          <!-- notas-display siempre se actualiza desde Supabase (gps_notas) al abrir -->
+          <div id="notas-display" style="font-size:13px;line-height:1.7;padding:10px 0;min-height:80px;white-space:pre-wrap">${esc(u.notas)||'<span style="color:var(--text3)">Sin notas registradas.</span>'}</div>
+          <!-- notas-display se actualiza async desde Supabase si hay notas más recientes -->
           <button class="act-btn" onclick="UI._addNote('${esc(num)}','${esc(emp)}')">✏ Editar notas</button>
         </div>
       </div>
@@ -1088,14 +1082,18 @@ const UI = (() => {
         </div>`);
     };
 
-    // Buscar nota más reciente en Supabase — fuente de verdad: gps_notas
+    // Buscar nota más reciente en Supabase (fuente de verdad)
     if (window.GPS_SB) {
-      GPS_SB._getRaw('gps_notas',
-        'num_economico=eq.'+encodeURIComponent(num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&limit=1'
+      GPS_SB._getRaw('gps_barridos',
+        'num_economico=eq.'+encodeURIComponent(num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&notas=not.is.null&limit=1'
       ).then(rows => {
-        const notaSupa = (rows && rows.length > 0) ? (rows[0].nota || '') : '';
-        if (notaSupa !== notasLocal) DB.upsertUnidad(num, { notas: notaSupa }, emp);
-        _abrirModalNotas(notaSupa || notasLocal);
+        const notaSupa = (rows && rows.length > 0) ? (rows[0].notas || '') : '';
+        const notaFinal = notaSupa || notasLocal;
+        // Actualizar localStorage si Supabase tiene algo más reciente
+        if (notaSupa && notaSupa !== notasLocal) {
+          DB.upsertUnidad(num, { notas: notaSupa }, emp);
+        }
+        _abrirModalNotas(notaFinal);
       }).catch(() => _abrirModalNotas(notasLocal));
     } else {
       _abrirModalNotas(notasLocal);
@@ -1106,30 +1104,23 @@ const UI = (() => {
     const txt = (document.getElementById('modal-notas')?.value || '').trim();
     // 1. Guardar en localStorage
     DB.upsertUnidad(num, { notas: txt, _fuente: 'edit_notas_modal' }, emp);
-    // 2. Sincronizar notas a Supabase — fuente de verdad: gps_notas
+    // 2. Sincronizar notas a Supabase
+    // Usamos PATCH con return=minimal — si falla, loguear en consola
     if (window.GPS_SB) {
       const _sbCfg = window.CCTV_SUPABASE_CONFIG || {};
       const _sbUrl = (_sbCfg.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
       const _sbKey = _sbCfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
       const _sbHdr = { 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
-
-      // 2a. UPSERT gps_notas con on_conflict explícito (único método confiable en PostgREST)
-      fetch(_sbUrl + '/gps_notas?on_conflict=empresa_id,num_economico', {
-        method: 'POST',
-        headers: { ..._sbHdr, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-        body: JSON.stringify({ empresa_id: emp, num_economico: num, nota: txt || null, updated_at: new Date().toISOString() })
-      }).then(r => {
-        if (r.ok) console.log('[notas gps_notas UPSERT] OK ✓', num, '"' + txt + '"');
-        else r.text().then(t => console.error('[notas gps_notas UPSERT] FAIL', r.status, t));
-      }).catch(e => console.error('[notas gps_notas UPSERT] ERROR', e));
-
-      // 2b. PATCH gps_barridos — sincronía con registros de plataforma
+      // PATCH todas las filas de esta unidad en todas las plataformas
       fetch(_sbUrl + '/gps_barridos?num_economico=eq.' + encodeURIComponent(num) + '&empresa_id=eq.' + encodeURIComponent(emp), {
         method: 'PATCH', headers: _sbHdr, body: JSON.stringify({ notas: txt || null })
       }).then(r => {
-        if (r.ok) console.log('[notas gps_barridos PATCH] OK ✓', num);
-        else r.text().then(t => console.error('[notas gps_barridos PATCH] FAIL', r.status, t));
-      }).catch(e => console.error('[notas gps_barridos PATCH] ERROR', e));
+        if (r.ok) {
+          console.log('[notas PATCH] OK ✓', num, '"' + txt + '"');
+        } else {
+          r.text().then(t => console.error('[notas PATCH] FAIL', r.status, t));
+        }
+      }).catch(e => console.error('[notas PATCH] ERROR', e));
     }
     UI.closeModal();
     UI.toast('Notas guardadas', 'success');
@@ -1834,7 +1825,7 @@ const UI = (() => {
       const conFechaGPS=conFecha.filter(u=>!_tieneSiniestroActivo(u));
       const enLinea=conFechaGPS.filter(u=>Math.floor((hoy-new Date(u[k]))/86400000)<=cfg.diasLinea).length;
       const fuera=conFechaGPS.length-enLinea;
-      const esManual=true; // Captura manual habilitada para todas las plataformas
+      const esManual=true;
       const COLS_MAP={
         CEIBA:'Plate No. | GPS time | Serial No.',
         SAMSARA:'Nombre | Última hora de registro | N° serie',
@@ -1915,18 +1906,10 @@ const UI = (() => {
     //   en el archivo de esa plataforma (tienen ultima_act_<plat> o fueron cargadas por barrido).
     //   Esto evita que por ejemplo el filtro TAPA muestre unidades sin Samsara.
     // - Plataformas manuales (VOLVO, MOTIVE): solo las que tienen captura manual (ultima_act_<plat>).
-    // MOTIVE y VOLVO pueden tener unidades en múltiples empresas — cargar de todas
-    let scopeUns;
-    if (plat === 'MOTIVE' || plat === 'VOLVO') {
-      const todasEmpresas = DB.getEmpresasList();
-      scopeUns = todasEmpresas.flatMap(e => DB.getUnidadesList(e)).filter(u =>
-        u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-      );
-    } else {
-      scopeUns = DB.getUnidadesList(emp).filter(u =>
-        u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-      );
-    }
+    // Siempre filtrar por empresa activa — sin datos cruzados entre empresas
+    let scopeUns = DB.getUnidadesList(emp).filter(u =>
+      u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+    );
     scopeUns = scopeUns.filter(u => !!u[k]);
 
     // Los selects se pueblan SOLO con valores presentes en el scope (unidades de esta plataforma).
@@ -2055,6 +2038,7 @@ const UI = (() => {
           ${filtroEstadoSam}
           <input id="pf-search" oninput="UI._debouncePlatSearch('${plat}')" placeholder="🔍 Buscar (separa con espacios: 2280 2275)..." class="plat-filter-search">
           <button class="act-btn" onclick="UI._resetPlatFilters('${plat}')">↺ Reset</button>
+          <button id="plat-btn-del-sel" style="display:none;padding:6px 10px;border-radius:6px;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.4);font-size:11px;cursor:pointer" onclick="UI._eliminarSeleccionadas('${plat}')">🗑 Eliminar selec. (<span id="plat-sel-count">0</span>)</button>
         </div>
         <div id="plat-table-wrap"></div>
       </div>
@@ -2132,13 +2116,9 @@ const UI = (() => {
     // TAPA aunque no estuvieran en el archivo de Samsara.
     // Unidades "Para venta" se excluyen de los conteos operativos.
     // VOLVO/MOTIVE son captura manual — pueden tener unidades de cualquier empresa
-    let uns = (plat === 'VOLVO' || plat === 'MOTIVE')
-      ? DB.getEmpresasList().flatMap(e => DB.getUnidadesList(e)).filter(u =>
-          u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-        )
-      : DB.getUnidadesList(emp).filter(u =>
-          u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-        );
+    let uns = DB.getUnidadesList(emp).filter(u =>
+      u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
+    );
     uns = uns.filter(u => !!u[k]);
 
     // Siniestros activos NO aparecen en tabla de Plataformas GPS.
@@ -2254,6 +2234,7 @@ const UI = (() => {
     const esMotive = (plat === 'MOTIVE');
 
     const th = `
+      <th style="width:28px;text-align:center;padding:4px 6px"><input type="checkbox" id="plat-chk-all" title="Selec. todas" onclick="event.stopPropagation();UI._platCheckAll(this,'${plat}')" style="cursor:pointer;width:14px;height:14px"></th>
       <th>UNIDAD</th><th>BASE</th><th>CROMÁTICA</th><th>MODELO</th>
       <th>ESTATUS</th>
       ${incluyeEstadoCol ? '<th>ESTADO SAMSARA</th>' : ''}
@@ -2353,7 +2334,7 @@ const UI = (() => {
           return `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${c}22;color:${c};border:1px solid ${c}44">${motiveEstado||'—'}</span>`;
         })() : '';
 
-        const esManualRow = true; // Editar fecha disponible en todas
+        const esManualRow = true;
         const rowStyle = estaDesinstalada
           ? 'cursor:pointer;opacity:.55;filter:grayscale(.8);background:rgba(80,80,80,.08)'
           : 'cursor:pointer';
@@ -2361,6 +2342,7 @@ const UI = (() => {
           ? `<span style="display:inline-block;margin-left:4px;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;background:rgba(120,120,120,.25);color:#999;border:1px solid #555" title="Desinstalado el ${desInfo.fecha||'?'}">DESINSTAL.</span>`
           : '';
         return `<tr data-num="${esc(safeU.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(safeU.num)}','${plat}')" ondblclick="UI._editarCapturaManuaRow('${esc(safeU.num)}','${plat}')" style="${rowStyle}" title="${esManualRow?'Doble clic para editar fecha':''}">
+          <td style="text-align:center;padding:4px 6px" onclick="event.stopPropagation()"><input type="checkbox" class="plat-row-chk" data-num="${esc(safeU.num)}" onchange="UI._platUpdateSelCount()" style="cursor:pointer;width:14px;height:14px" onclick="event.stopPropagation()"></td>
           <td style="font-weight:700">${esc(safeU.num)}${desBadge}</td>
           <td>${esc(safeU.base||'—')}</td>
           <td>${esc(safeU.cromatica||'—')}</td>
@@ -2368,24 +2350,19 @@ const UI = (() => {
           <td>${estatusCell}</td>
           ${incluyeEstadoCol ? `<td>${estadoSamsaraCell}</td>` : ''}
           ${esMotive ? `<td>${motiveEstadoCell}</td><td style="font-size:11px">${esc(motiveEmpresa||'—')}</td>` : ''}
-          <td style="font-size:11px;cursor:pointer" onclick="event.stopPropagation();UI._editarFechaInline('${esc(safeU.num)}','${plat}',this)" title="Click para editar fecha de última actividad">${fecha?Parsers.fmtDate(fecha):'<span style="color:var(--text3)">Sin datos</span>'}<span style="opacity:0;margin-left:3px;font-size:9px" class="plat-obs-pencil">✎</span></td>
+          <td style="font-size:11px;cursor:pointer" onclick="event.stopPropagation();UI._editarFechaInline('${esc(safeU.num)}','${plat}',this)" title="Click para editar fecha">${fecha?Parsers.fmtDate(fecha):'<span style="color:var(--text3)">Sin datos</span>'}<span style="opacity:0;font-size:9px;margin-left:3px" class="plat-obs-pencil">✎</span></td>
           <td>${diasBadge(d)}</td>
           ${esMotive
             ? `<td style="font-family:monospace;font-size:10px">${esc(motiveSerieVG||'—')}</td><td style="font-family:monospace;font-size:10px">${esc(motiveSerieCam||'—')}</td>`
             : `<td style="font-family:monospace;font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(idValue)}</td>`
           }
-          <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarObsRapido('${esc(safeU.num)}','${emp}','${plat}')" title="Click para editar — ${esc(obsTexto||'sin observación')}">
+          <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarObsRapido('${esc(safeU.num)}','${esc(safeU.empresa_asig)}','${plat}')" title="Click para editar — ${esc(obsTexto||'sin observación')}">
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${esc(obsTexto)||'<span style="color:var(--text3);font-style:italic">+ agregar…</span>'}</span>
             <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
           </td>
-          <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarNotasRapido('${esc(safeU.num)}','${emp}')" title="Click para editar notas — ${esc(safeU.notas||'sin notas')}">
+          <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarNotasRapido('${esc(safeU.num)}','${esc(safeU.empresa_asig)}')" title="Click para editar notas — ${esc(safeU.notas||'sin notas')}">
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${esc(safeU.notas)||'<span style="color:var(--text3);font-style:italic">+ nota…</span>'}</span>
             <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
-          </td>
-          <td style="text-align:center" onclick="event.stopPropagation()">
-            <button title="Eliminar unidad de esta plataforma" onclick="UI._eliminarDeBarrido('${esc(safeU.num)}','${emp}','${plat}')"
-              style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:2px 5px;border-radius:4px;transition:color .15s"
-              onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='var(--text3)'">🗑</button>
           </td>
         </tr>`;
       } catch(rowErr) {
@@ -2447,8 +2424,7 @@ const UI = (() => {
    * - Observaciones editables in-situ
    */
   function _renderPlatDetailInline(u, plat) {
-    // IMPORTANTE: para notas/obs siempre usar empresa activa (no u.empresa que puede ser empresa_asig)
-    const emp = DB.getEmpresaActiva();
+    const emp = u.empresa || DB.getEmpresaActiva();
     const cfg = DB.getConfig();
     const hoy = Date.now();
     const k = 'ultima_act_' + plat.toLowerCase();
@@ -2575,9 +2551,9 @@ const UI = (() => {
         </div>`;
       }
     } else if (tab === 'notas') {
-      // Observaciones EDITABLES in-situ — nota se carga desde Supabase (gps_notas)
+      // Observaciones EDITABLES in-situ
       const obsActual = u.observaciones || '';
-      // Iniciar con placeholder; se actualizará async desde gps_notas
+      const notasAct = u.notas || '';
       tabContent = `
         <div style="display:flex;flex-direction:column;gap:10px;max-height:280px;overflow-y:auto">
           <div>
@@ -2585,28 +2561,14 @@ const UI = (() => {
             <textarea id="pid-obs-${esc(u.num)}" rows="3" placeholder="Escribe una observación..." style="width:100%;background:var(--bg-panel);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-family:var(--font);font-size:12px;resize:vertical" onclick="event.stopPropagation()">${esc(obsActual)}</textarea>
           </div>
           <div>
-            <label style="display:block;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">NOTAS</label>
-            <textarea id="pid-notas-${esc(u.num)}" rows="3" placeholder="Cargando..." style="width:100%;background:var(--bg-panel);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-family:var(--font);font-size:12px;resize:vertical" onclick="event.stopPropagation()"></textarea>
+            <label style="display:block;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">NOTAS ADICIONALES</label>
+            <textarea id="pid-notas-${esc(u.num)}" rows="3" placeholder="Notas internas sobre esta unidad..." style="width:100%;background:var(--bg-panel);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-family:var(--font);font-size:12px;resize:vertical" onclick="event.stopPropagation()">${esc(notasAct)}</textarea>
           </div>
           <div style="display:flex;gap:6px">
             <button class="act-btn act-btn-primary" onclick="event.stopPropagation();UI._guardarObsInline('${esc(u.num)}','${esc(emp)}','${plat}')">💾 Guardar cambios</button>
             <div style="font-size:10px;color:var(--text3);align-self:center">Los cambios quedan guardados en la unidad</div>
           </div>
         </div>`;
-      // Cargar nota fresca desde gps_notas de forma async
-      if (window.GPS_SB) {
-        GPS_SB._getRaw('gps_notas',
-          'num_economico=eq.'+encodeURIComponent(u.num)+'&empresa_id=eq.'+encodeURIComponent(emp)+'&limit=1'
-        ).then(rows => {
-          const notaSupa = (rows && rows.length > 0) ? (rows[0].nota || '') : '';
-          DB.upsertUnidad(u.num, { notas: notaSupa }, emp);
-          const ta = document.getElementById('pid-notas-'+u.num);
-          if (ta) ta.value = notaSupa;
-        }).catch(() => {
-          const ta = document.getElementById('pid-notas-'+u.num);
-          if (ta) ta.placeholder = 'Sin notas';
-        });
-      }
     }
 
     // ══ LAYOUT GENERAL ══
@@ -2854,31 +2816,6 @@ const UI = (() => {
     const obs = $('pid-obs-'+num)?.value || '';
     const notas = $('pid-notas-'+num)?.value || '';
     DB.upsertUnidad(num, { observaciones: obs, notas: notas, _fuente: 'edit_inline' }, emp);
-
-    // Persistir notas en Supabase (misma lógica que _guardarNotaModal)
-    if (window.GPS_SB) {
-      const _sbCfg = window.CCTV_SUPABASE_CONFIG || {};
-      const _sbUrl = (_sbCfg.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
-      const _sbKey = _sbCfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
-      const _sbHdr = { 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
-      const _sbHdrUpsert = { ..._sbHdr, 'Prefer': 'resolution=merge-duplicates,return=minimal' };
-
-      // UPSERT gps_notas con on_conflict explícito
-      fetch(_sbUrl + '/gps_notas?on_conflict=empresa_id,num_economico', {
-        method: 'POST',
-        headers: { ..._sbHdr, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-        body: JSON.stringify({ empresa_id: emp, num_economico: num, nota: notas || null, updated_at: new Date().toISOString() })
-      }).then(r => {
-        if (r.ok) console.log('[obs_inline gps_notas UPSERT] OK ✓', num, '"' + notas + '"');
-        else r.text().then(t => console.error('[obs_inline gps_notas UPSERT] FAIL', r.status, t));
-      }).catch(e => console.error('[obs_inline gps_notas] ERROR', e));
-
-      // PATCH gps_barridos — sincronía con registros de plataforma
-      fetch(_sbUrl + '/gps_barridos?num_economico=eq.' + encodeURIComponent(num) + '&empresa_id=eq.' + encodeURIComponent(emp), {
-        method: 'PATCH', headers: _sbHdr, body: JSON.stringify({ notas: notas || null, observaciones: obs || null })
-      }).catch(e => console.error('[obs_inline gps_barridos] ERROR', e));
-    }
-
     toast('Cambios guardados','success');
     _refreshPlatTable(plat);
   }
@@ -3017,102 +2954,103 @@ const UI = (() => {
     _refreshPlatTable(plat);
   }
 
-  /**
-   * Eliminar unidad del barrido de una plataforma específica.
-   * Borra ultima_act_<plat> en localStorage y en gps_barridos de Supabase.
-   */
+  function _platCheckAll(chkAll, plat) {
+    document.querySelectorAll('.plat-row-chk').forEach(c => { c.checked = chkAll.checked; });
+    _platUpdateSelCount();
+  }
+
+  function _platUpdateSelCount() {
+    const sel = document.querySelectorAll('.plat-row-chk:checked');
+    const btn = document.getElementById('plat-btn-del-sel');
+    const cnt = document.getElementById('plat-sel-count');
+    if (btn) btn.style.display = sel.length > 0 ? '' : 'none';
+    if (cnt) cnt.textContent = sel.length;
+  }
+
+  function _eliminarSeleccionadas(plat) {
+    const chks = document.querySelectorAll('.plat-row-chk:checked');
+    if (!chks.length) return;
+    const nums = Array.from(chks).map(c => c.dataset.num);
+    if (!confirm('Eliminar ' + nums.length + ' unidad(es) de ' + plat + '? Solo se eliminan del barrido, no de la asignacion.')) return;
+    const emp = DB.getEmpresaActiva();
+    nums.forEach(num => {
+      const borrado = {};
+      borrado['ultima_act_' + plat.toLowerCase()] = null;
+      if (plat === 'SAMSARA') { borrado.estado_samsara = null; borrado.vin_samsara = null; }
+      if (plat === 'MOTIVE')  { borrado.estado_motive = null; borrado.motive_vg = null; borrado.motive_cam = null; }
+      DB.upsertUnidad(num, borrado, emp);
+      if (window.GPS_SB) {
+        const c = window.CCTV_SUPABASE_CONFIG || {};
+        const url = (c.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
+        const key = c.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
+        const h = { 'apikey': key, 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+        fetch(url + '/gps_barridos?num_economico=eq.' + encodeURIComponent(num) + '&empresa_id=eq.' + encodeURIComponent(emp) + '&plataforma=eq.' + encodeURIComponent(plat), { method: 'PATCH', headers: h, body: JSON.stringify({ activa: false, ultima_conexion: null, tiene_datos: false }) }).catch(()=>{});
+      }
+    });
+    toast(nums.length + ' unidad(es) eliminadas de ' + plat, 'info');
+    _platDetailUnit = null;
+    _refreshPlatTable(plat);
+  }
+
   function _eliminarDeBarrido(num, emp, plat) {
-    if (!confirm('¿Eliminar unidad ' + num + ' de la plataforma ' + plat + '?\nSolo se elimina de este barrido, no de la asignación.')) return;
-    const platKey = 'ultima_act_' + plat.toLowerCase();
-    // Borrar del localStorage
+    if (!confirm('Eliminar unidad ' + num + ' de ' + plat + '? Solo se elimina del barrido, no de la asignacion.')) return;
     const borrado = {};
-    borrado[platKey] = null;
-    // Si la plataforma tiene campos adicionales, limpiarlos también
+    borrado['ultima_act_' + plat.toLowerCase()] = null;
     if (plat === 'SAMSARA') { borrado.estado_samsara = null; borrado.vin_samsara = null; }
     if (plat === 'MOTIVE')  { borrado.estado_motive = null; borrado.motive_vg = null; borrado.motive_cam = null; }
     DB.upsertUnidad(num, borrado, emp);
     toast('Unidad ' + num + ' eliminada de ' + plat, 'info');
-
-    // Borrar de Supabase (gps_barridos)
     if (window.GPS_SB) {
-      const _sbCfg = window.CCTV_SUPABASE_CONFIG || {};
-      const _sbUrl = (_sbCfg.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
-      const _sbKey = _sbCfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
-      const hdrs = { 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
-      // Eliminar filas de gps_barridos para esta unidad+empresa+plataforma
-      fetch(_sbUrl + '/gps_barridos?num_economico=eq.' + encodeURIComponent(num)
-        + '&empresa_id=eq.' + encodeURIComponent(emp)
-        + '&plataforma=eq.' + encodeURIComponent(plat), {
-        method: 'DELETE', headers: hdrs
-      }).then(r => {
-        if (r.ok) console.log('[_eliminarDeBarrido] Supabase DELETE OK', num, plat);
-        else r.text().then(t => console.error('[_eliminarDeBarrido] FAIL', r.status, t));
-      }).catch(e => console.error('[_eliminarDeBarrido] ERROR', e));
+      const c = window.CCTV_SUPABASE_CONFIG || {};
+      const url = (c.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
+      const key = c.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
+      const h = { 'apikey': key, 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+      fetch(url + '/gps_barridos?num_economico=eq.' + encodeURIComponent(num) + '&empresa_id=eq.' + encodeURIComponent(emp) + '&plataforma=eq.' + encodeURIComponent(plat), { method: 'PATCH', headers: h, body: JSON.stringify({ activa: false, ultima_conexion: null, tiene_datos: false }) }).catch(()=>{});
     }
     _platDetailUnit = null;
     _refreshPlatTable(plat);
   }
 
-  /**
-   * Click en celda de fecha — abre editor inline de fecha en esa misma celda.
-   * Al confirmar, guarda en localStorage + Supabase + refresca la fila.
-   */
   function _editarFechaInline(num, plat, tdEl) {
     if (!tdEl) return;
-    const emp    = DB.getEmpresaActiva();
-    const u      = DB.getUnidad(num, emp);
-    const platKey= 'ultima_act_' + plat.toLowerCase();
-    const fechaActual = u && u[platKey] ? u[platKey] : (u && u.ultima_act ? u.ultima_act : '');
-
-    // Convertir ISO a datetime-local
+    const emp = DB.getEmpresaActiva();
+    const u = DB.getUnidad(num, emp);
+    const platKey = 'ultima_act_' + plat.toLowerCase();
+    const fechaActual = u && u[platKey] ? u[platKey] : '';
     const toLocal = iso => {
       if (!iso) return '';
       const d = new Date(iso);
-      const pad = n => String(n).padStart(2,'0');
-      return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate())
-        + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      const p = n => String(n).padStart(2,'0');
+      return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
     };
-
-    // Reemplazar contenido de la celda con input
-    const oldHtml = tdEl.innerHTML;
     tdEl.innerHTML = [
-      '<input type="datetime-local" style="font-size:11px;background:var(--bg-base);border:1px solid var(--blue);border-radius:4px;padding:2px 4px;color:var(--text);font-family:var(--font);width:160px" value="' + toLocal(fechaActual) + '">',
-      '<button style="margin-left:4px;padding:2px 6px;border-radius:4px;background:var(--blue);color:#fff;border:none;cursor:pointer;font-size:10px" onclick="event.stopPropagation();UI._confirmarFechaInline(this,&quot;' + num + '&quot;,&quot;' + plat + '&quot;)">\u2713</button>',
-      '<button style="margin-left:2px;padding:2px 6px;border-radius:4px;background:var(--bg-card);color:var(--text2);border:1px solid var(--border);cursor:pointer;font-size:10px" onclick="event.stopPropagation();UI._refreshPlatTable(&quot;' + plat + '&quot;)">\u2715</button>'
+      '<input type="datetime-local" style="font-size:11px;background:var(--bg-base);border:1px solid var(--blue);border-radius:4px;padding:2px 4px;color:var(--text);width:160px" value="' + toLocal(fechaActual) + '">',
+      '<button style="margin-left:4px;padding:2px 6px;border-radius:4px;background:var(--blue);color:#fff;border:none;cursor:pointer;font-size:10px" onclick="event.stopPropagation();UI._confirmarFechaInline(this,&quot;' + num + '&quot;,&quot;' + plat + '&quot;)">✓</button>',
+      '<button style="margin-left:2px;padding:2px 6px;border-radius:4px;background:var(--bg-card);color:var(--text2);border:1px solid var(--border);cursor:pointer;font-size:10px" onclick="event.stopPropagation();UI._refreshPlatTable(&quot;' + plat + '&quot;)">✕</button>'
     ].join('');
+    tdEl.querySelector('input') && tdEl.querySelector('input').focus();
   }
 
   function _confirmarFechaInline(btnEl, num, plat) {
     const td = btnEl.closest('td');
     if (!td) return;
     const inp = td.querySelector('input');
-    if (!inp || !inp.value) { toast('Ingresa una fecha válida', 'warn'); return; }
-    const emp    = DB.getEmpresaActiva();
-    const iso    = new Date(inp.value).toISOString();
-    const platKey= 'ultima_act_' + plat.toLowerCase();
-    const datos  = {};
+    if (!inp || !inp.value) { toast('Fecha inválida', 'warn'); return; }
+    const emp = DB.getEmpresaActiva();
+    const iso = new Date(inp.value).toISOString();
+    const platKey = 'ultima_act_' + plat.toLowerCase();
+    const datos = {};
     datos[platKey] = iso;
-    // Actualizar ultima_act global si es más reciente
     const u = DB.getUnidad(num, emp);
     if (!u || !u.ultima_act || new Date(iso) > new Date(u.ultima_act)) datos.ultima_act = iso;
     DB.upsertUnidad(num, datos, emp);
-    toast('Fecha actualizada para ' + num, 'success');
-
-    // Sincronizar a Supabase (PATCH en gps_barridos)
+    toast('Fecha actualizada: ' + num, 'success');
     if (window.GPS_SB) {
-      const _sbCfg = window.CCTV_SUPABASE_CONFIG || {};
-      const _sbUrl = (_sbCfg.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
-      const _sbKey = _sbCfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
-      const hdrs = { 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
-      const patchBody = { fecha: iso, updated_at: iso };
-      fetch(_sbUrl + '/gps_barridos?num_economico=eq.' + encodeURIComponent(num)
-        + '&empresa_id=eq.' + encodeURIComponent(emp)
-        + '&plataforma=eq.' + encodeURIComponent(plat), {
-        method: 'PATCH', headers: hdrs, body: JSON.stringify(patchBody)
-      }).then(r => {
-        if (r.ok) console.log('[_confirmarFechaInline] Supabase PATCH OK', num, plat, iso);
-        else r.text().then(t => console.error('[_confirmarFechaInline] FAIL', r.status, t));
-      }).catch(e => console.error('[_confirmarFechaInline] ERROR', e));
+      const c = window.CCTV_SUPABASE_CONFIG || {};
+      const url = (c.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
+      const key = c.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
+      const h = { 'apikey': key, 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+      fetch(url + '/gps_barridos?num_economico=eq.' + encodeURIComponent(num) + '&empresa_id=eq.' + encodeURIComponent(emp) + '&plataforma=eq.' + encodeURIComponent(plat), { method: 'PATCH', headers: h, body: JSON.stringify({ ultima_conexion: iso, tiene_datos: true, activa: true }) }).catch(()=>{});
     }
     _refreshPlatTable(plat);
   }
@@ -5597,6 +5535,7 @@ const UI = (() => {
     // plataformas v7: detalle inline, búsqueda multi-token, captura manual
     _onPlatRowClick, _cerrarPlatDetailInline,
     _abrirCapturaManualPlat, _autocompletarCapturaManual,
+    _platCheckAll, _platUpdateSelCount, _eliminarSeleccionadas,
     _eliminarDeBarrido, _editarFechaInline, _confirmarFechaInline,
     _recalcularDiasManual, _guardarCapturaManualPlat, _editarCapturaManuaRow,
     _modalDesinstalacion, _liberarDesinstalacion,
