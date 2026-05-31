@@ -524,45 +524,11 @@ const App = (() => {
     // Polling de desinstalaciones — sync entre navegadores cada 30s
     setTimeout(_startDesinstalacionesSync, 8000);
 
-    // Polling de barridos GPS — detecta si otro navegador subió un archivo y refresca
-    setTimeout(_startBarridosSync, 12000);
+    // Sin polling de barridos — los barridos se guardan en Supabase al subir el archivo
+    // Para ver cambios de otro navegador: recargar la página o usar el botón de sync manual
   }
 
-  let _barridosLastCargadoAt = null;
-
-  async function _syncBarridosFromSupabase() {
-    if (!window.GPS_SB) return;
-    try {
-      const emp = DB.getEmpresaActiva();
-      // Consultar el cargado_at más reciente de barridos en Supabase
-      const rows = await GPS_SB._getRaw('gps_barridos',
-        `empresa_id=eq.${encodeURIComponent(emp)}&activa=eq.true&order=cargado_at.desc&limit=1`
-      );
-      if (!rows || rows.length === 0) return;
-      const latestCargadoAt = rows[0].cargado_at;
-      if (!_barridosLastCargadoAt) {
-        // Primera vez — guardar referencia
-        _barridosLastCargadoAt = latestCargadoAt;
-        return;
-      }
-      if (latestCargadoAt && latestCargadoAt !== _barridosLastCargadoAt) {
-        // Hay datos nuevos en Supabase — recargar barridos
-        console.log('[App] Barridos actualizados en Supabase — recargando...', latestCargadoAt);
-        _barridosLastCargadoAt = latestCargadoAt;
-        await DB.initFromSupabase();
-        UI.renderResumen();
-        const panelPlat = document.getElementById('panel-plataformas');
-        if (panelPlat && panelPlat.classList.contains('active')) {
-          UI.renderPlataformas();
-        }
-      }
-    } catch(e) { /* silencioso */ }
-  }
-
-  function _startBarridosSync() {
-    _syncBarridosFromSupabase();
-    setInterval(_syncBarridosFromSupabase, 60000); // cada 60 segundos
-  }
+  let _barridosSyncBloqueadoHasta = 0; // reservado para compatibilidad
 
   async function _syncDesinstalaciones() {
     if (!window.GPS_SB) return;
@@ -755,6 +721,11 @@ const App = (() => {
   return {
     nav, populateEmpresaSelect, renderManual, renderConfig, _filterManual, _syncFallasDesdeInicio,
     _editarEmpresa, _eliminarEmpresa, _nuevaEmpresa,
-    _eliminarHistorialAsignaciones, _eliminarDatosPlataforma, _borrarEmpresa
+    _eliminarHistorialAsignaciones, _eliminarDatosPlataforma, _borrarEmpresa,
+    _bloquearBarridosSync: function() {
+      _barridosSyncBloqueadoHasta = Date.now() + 180000;
+      console.log('[App] Polling bloqueado 3min tras upload local');
+    },
+    forzarRecargaSupabase
   };
 })();
