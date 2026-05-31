@@ -111,7 +111,8 @@ const GPS_SB = (() => {
     ).catch(() => {});
 
     for (let i = 0; i < rows.length; i += BATCH) {
-      await _upsert('gps_asignaciones', rows.slice(i, i + BATCH));
+      await _upsert('gps_asignaciones', rows.slice(i, i + BATCH),
+        'empresa_id,num_economico,mes_label');
     }
     return { total: rows.length };
   }
