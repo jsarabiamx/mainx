@@ -489,25 +489,26 @@ const App = (() => {
     const hayDatos = DB.getUnidadesList(DB.getEmpresaActiva()).length > 0;
 
     if (!hayDatos) {
-      // Sin datos locales: carga completa desde Supabase
+      // Sin datos locales: carga completa bloqueante con banner
       _showSyncBanner('⏳ Cargando datos desde Supabase...');
-      DB.initFromSupabase().then(() => {
+      DB.initFromSupabase().then(ok => {
         _hideSyncBanner();
-        UI.renderResumen();
-        populateEmpresaSelect();
-      }).catch(e => {
-        _hideSyncBanner();
-        console.error('[App] initFromSupabase error:', e);
-        UI.renderResumen();
+        if (ok) { UI.renderResumen(); populateEmpresaSelect(); }
       });
     } else {
-      // Hay datos locales: sincronizar en background
+      // Hay datos locales: sincronizar en background (no bloquea UI)
+      // Incluye asignaciones + barridos GPS + fallas — siempre frescos desde Supabase
+      console.log('[App] Datos locales detectados — sincronizando barridos GPS desde Supabase en background...');
       setTimeout(() => {
-        DB.initFromSupabase().then(() => {
-          UI.renderResumen();
-          const panelPlat = document.getElementById('panel-plataformas');
-          if (panelPlat && panelPlat.classList.contains('active')) UI.renderPlataformas();
-        }).catch(e => console.error('[App] bg sync error:', e));
+        DB.initFromSupabase().then(ok => {
+          if (ok) {
+            UI.renderResumen();
+            const panelPlat = document.getElementById('panel-plataformas');
+            if (panelPlat && panelPlat.classList.contains('active')) {
+              UI.renderPlataformas();
+            }
+          }
+        });
       }, 500);
     }
 
@@ -522,6 +523,45 @@ const App = (() => {
 
     // Polling de desinstalaciones — sync entre navegadores cada 30s
     setTimeout(_startDesinstalacionesSync, 8000);
+
+    // Polling de barridos GPS — detecta si otro navegador subió un archivo y refresca
+    setTimeout(_startBarridosSync, 12000);
+  }
+
+  let _barridosLastCargadoAt = null;
+
+  async function _syncBarridosFromSupabase() {
+    if (!window.GPS_SB) return;
+    try {
+      const emp = DB.getEmpresaActiva();
+      // Consultar el cargado_at más reciente de barridos en Supabase
+      const rows = await GPS_SB._getRaw('gps_barridos',
+        `empresa_id=eq.${encodeURIComponent(emp)}&activa=eq.true&order=cargado_at.desc&limit=1`
+      );
+      if (!rows || rows.length === 0) return;
+      const latestCargadoAt = rows[0].cargado_at;
+      if (!_barridosLastCargadoAt) {
+        // Primera vez — guardar referencia
+        _barridosLastCargadoAt = latestCargadoAt;
+        return;
+      }
+      if (latestCargadoAt && latestCargadoAt !== _barridosLastCargadoAt) {
+        // Hay datos nuevos en Supabase — recargar barridos
+        console.log('[App] Barridos actualizados en Supabase — recargando...', latestCargadoAt);
+        _barridosLastCargadoAt = latestCargadoAt;
+        await DB.initFromSupabase();
+        UI.renderResumen();
+        const panelPlat = document.getElementById('panel-plataformas');
+        if (panelPlat && panelPlat.classList.contains('active')) {
+          UI.renderPlataformas();
+        }
+      }
+    } catch(e) { /* silencioso */ }
+  }
+
+  function _startBarridosSync() {
+    _syncBarridosFromSupabase();
+    setInterval(_syncBarridosFromSupabase, 60000); // cada 60 segundos
   }
 
   async function _syncDesinstalaciones() {
@@ -712,32 +752,9 @@ const App = (() => {
 
   document.addEventListener('DOMContentLoaded', init);
 
-  function forzarRecargaSupabase() {
-    if (!window.GPS_SB) {
-      alert('Supabase no disponible. Verifica la conexión.');
-      return;
-    }
-    _showSyncBanner('⏳ Recargando datos desde Supabase...');
-    DB.initFromSupabase().then(ok => {
-      _hideSyncBanner();
-      if (ok) {
-        UI.renderResumen();
-        populateEmpresaSelect();
-        console.log('[App] Recarga forzada desde Supabase completada');
-      } else {
-        alert('Error al recargar desde Supabase. Revisa la consola (F12).');
-      }
-    }).catch(e => {
-      _hideSyncBanner();
-      console.error('[App] forzarRecargaSupabase error:', e);
-      alert('Error: ' + e.message);
-    });
-  }
-
   return {
     nav, populateEmpresaSelect, renderManual, renderConfig, _filterManual, _syncFallasDesdeInicio,
     _editarEmpresa, _eliminarEmpresa, _nuevaEmpresa,
-    _eliminarHistorialAsignaciones, _eliminarDatosPlataforma, _borrarEmpresa,
-    forzarRecargaSupabase
+    _eliminarHistorialAsignaciones, _eliminarDatosPlataforma, _borrarEmpresa
   };
 })();
