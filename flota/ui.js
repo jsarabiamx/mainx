@@ -3053,7 +3053,8 @@ const UI = (() => {
         fetch(_sbUrl + '/gps_barridos?num_economico=eq.' + encodeURIComponent(num)
           + '&empresa_id=eq.' + encodeURIComponent(emp)
           + '&plataforma=eq.' + encodeURIComponent(plat), {
-          method: 'DELETE', headers: hdrs
+          method: 'PATCH', headers: hdrs,
+          body: JSON.stringify({ tiene_datos: false, ultima_conexion: null, activa: false })
         }).catch(e => console.error('[_eliminarSeleccionadas]', num, e));
       }
     });
@@ -3085,13 +3086,15 @@ const UI = (() => {
       const _sbUrl = (_sbCfg.url || 'https://sxzhmcrpeyuqslupttby.supabase.co') + '/rest/v1';
       const _sbKey = _sbCfg.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4emhtY3JwZXl1cXNsdXB0dGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MjQ5MDgsImV4cCI6MjA5MzAwMDkwOH0.-muAjBKc2PekqbgRltLVBnUCdxfQlHNxmVruXrw_sl8';
       const hdrs = { 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
-      // Eliminar filas de gps_barridos para esta unidad+empresa+plataforma
+      // PATCH tiene_datos=false + ultima_conexion=null para que initFromSupabase
+      // sepa que esta unidad fue eliminada de esta plataforma (persiste al recargar)
       fetch(_sbUrl + '/gps_barridos?num_economico=eq.' + encodeURIComponent(num)
         + '&empresa_id=eq.' + encodeURIComponent(emp)
         + '&plataforma=eq.' + encodeURIComponent(plat), {
-        method: 'DELETE', headers: hdrs
+        method: 'PATCH', headers: hdrs,
+        body: JSON.stringify({ tiene_datos: false, ultima_conexion: null, activa: false })
       }).then(r => {
-        if (r.ok) console.log('[_eliminarDeBarrido] Supabase DELETE OK', num, plat);
+        if (r.ok) console.log('[_eliminarDeBarrido] Supabase PATCH inactivo OK', num, plat);
         else r.text().then(t => console.error('[_eliminarDeBarrido] FAIL', r.status, t));
       }).catch(e => console.error('[_eliminarDeBarrido] ERROR', e));
     }
