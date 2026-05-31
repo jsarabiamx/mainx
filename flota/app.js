@@ -713,9 +713,32 @@ const App = (() => {
 
   document.addEventListener('DOMContentLoaded', init);
 
+  function forzarRecargaSupabase() {
+    if (!window.GPS_SB) {
+      alert('Supabase no disponible. Verifica la conexión.');
+      return;
+    }
+    _showSyncBanner('⏳ Recargando datos desde Supabase...');
+    DB.initFromSupabase().then(ok => {
+      _hideSyncBanner();
+      if (ok) {
+        UI.renderResumen();
+        populateEmpresaSelect();
+        console.log('[App] Recarga forzada desde Supabase completada');
+      } else {
+        alert('Error al recargar desde Supabase. Revisa la consola (F12).');
+      }
+    }).catch(e => {
+      _hideSyncBanner();
+      console.error('[App] forzarRecargaSupabase error:', e);
+      alert('Error: ' + e.message);
+    });
+  }
+
   return {
     nav, populateEmpresaSelect, renderManual, renderConfig, _filterManual, _syncFallasDesdeInicio,
     _editarEmpresa, _eliminarEmpresa, _nuevaEmpresa,
-    _eliminarHistorialAsignaciones, _eliminarDatosPlataforma, _borrarEmpresa
+    _eliminarHistorialAsignaciones, _eliminarDatosPlataforma, _borrarEmpresa,
+    forzarRecargaSupabase
   };
 })();
