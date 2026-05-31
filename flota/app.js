@@ -383,12 +383,15 @@ const App = (() => {
 
       if (huboNuevas) {
         DB.save && DB.save();
-        // Re-renderizar la vista activa para reflejar cambios de siniestro
+        // Solo re-renderizar el panel que esté activo en este momento
         if (typeof UI !== 'undefined') {
-          UI.renderResumen && UI.renderResumen();
-          // Si Plataformas está visible, también refrescarla
-          const platGrid = document.getElementById('plataformas-grid');
-          if (platGrid) UI.renderPlataformas && UI.renderPlataformas();
+          const panelRes = document.getElementById('panel-resumen');
+          const panelPlat = document.getElementById('panel-plataformas');
+          if (panelRes && panelRes.classList.contains('active')) {
+            UI.renderResumen && UI.renderResumen();
+          } else if (panelPlat && panelPlat.classList.contains('active')) {
+            UI.renderPlataformas && UI.renderPlataformas();
+          }
         }
       }
     } catch(e) {
@@ -456,10 +459,16 @@ const App = (() => {
 
       if (huboNuevas) {
         DB.save && DB.save();
-        // Re-renderizar todo para reflejar siniestros
-        UI.renderResumen && UI.renderResumen();
-        const platGrid = document.getElementById('plataformas-grid');
-        if (platGrid) UI.renderPlataformas && UI.renderPlataformas();
+        // Un solo render al final — solo el panel activo
+        setTimeout(() => {
+          const panelRes = document.getElementById('panel-resumen');
+          const panelPlat = document.getElementById('panel-plataformas');
+          if (panelRes && panelRes.classList.contains('active')) {
+            UI.renderResumen && UI.renderResumen();
+          } else if (panelPlat && panelPlat.classList.contains('active')) {
+            UI.renderPlataformas && UI.renderPlataformas();
+          }
+        }, 200);
       }
     } catch(e) {
       console.warn('[FallaInit]', e.message);
@@ -512,17 +521,10 @@ const App = (() => {
       }, 500);
     }
 
-    // Siempre sincronizar fallas activas (siniestros, AFR) desde Supabase
-    // Esto garantiza que cualquier dispositivo vea siniestros registrados en otro
-    setTimeout(() => {
-      _syncFallasDesdeInicio();
-    }, 3000);
-
-    // Iniciar sincronización en tiempo real de fallas
-    setTimeout(_startFallasSync, 5000);
-
-    // Polling de desinstalaciones — sync entre navegadores cada 30s
-    setTimeout(_startDesinstalacionesSync, 8000);
+    // Escalonar syncs para no amontonar renders al arrancar
+    setTimeout(() => { _syncFallasDesdeInicio(); },    8000);  // 8s — después de que todo cargó
+    setTimeout(_startFallasSync,                       15000); // 15s — polling cada 15s
+    setTimeout(_startDesinstalacionesSync,             20000); // 20s — polling cada 30s
 
     // Sin polling de barridos — los barridos se guardan en Supabase al subir el archivo
     // Para ver cambios de otro navegador: recargar la página o usar el botón de sync manual
