@@ -147,7 +147,6 @@ const App = (() => {
 
     el.innerHTML = `
       <div style="max-width:640px;display:flex;flex-direction:column;gap:12px">
-        <!-- Umbrales GPS -->
         <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:16px">
           <div style="font-size:13px;font-weight:600;margin-bottom:12px">⚙ Umbrales de estado GPS</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
@@ -167,7 +166,6 @@ const App = (() => {
             else{UI.toast('Valores inválidos','error');}">Guardar configuración</button>
         </div>
 
-        <!-- Gestión de empresas (editar, agregar, eliminar, seleccionar) -->
         <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:16px">
           <div style="font-size:13px;font-weight:600;margin-bottom:12px">🏢 Gestión de empresas</div>
           ${DB.getEmpresasList().map(e=>{
@@ -185,7 +183,6 @@ const App = (() => {
           <button class="act-btn" style="margin-top:10px" onclick="App._nuevaEmpresa()">+ Nueva empresa</button>
         </div>
 
-        <!-- Gestión de asignaciones -->
         <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:16px">
           <div style="font-size:13px;font-weight:600;margin-bottom:8px">📋 Historial de asignaciones</div>
           <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Historial de cargas mensuales de ${empActiva}: ${DB.getAsignaciones(empActiva).length} registros</div>
@@ -193,7 +190,6 @@ const App = (() => {
           <div style="font-size:10px;color:var(--text3);margin-top:5px">(Esto NO elimina las unidades, solo el log del historial)</div>
         </div>
 
-        <!-- Eliminar datos por plataforma (doble confirmación) -->
         <div style="background:var(--bg-panel);border:1px solid var(--yellow-border);border-radius:12px;padding:16px">
           <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--yellow)">📡 Eliminar datos de plataforma GPS</div>
           <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Borra todas las fechas de conexión registradas para la plataforma seleccionada en ${empActiva}. Las unidades se mantienen.</div>
@@ -205,7 +201,6 @@ const App = (() => {
           </div>
         </div>
 
-        <!-- Zona de peligro -->
         <div style="background:var(--bg-panel);border:1px solid var(--red-border);border-radius:12px;padding:16px">
           <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--red)">⚠ Zona de peligro</div>
           <button class="act-btn" style="color:var(--red)" onclick="App._borrarEmpresa('${empActiva}')">🗑 Borrar todos los datos de ${empActiva}</button>
@@ -263,22 +258,17 @@ const App = (() => {
     if (!confirm(`¿Eliminar TODOS los datos GPS de la plataforma ${plataforma} en ${emp}?\n\nSe borrarán todas las fechas de última conexión registradas para esta plataforma.`)) return;
     if (!confirm(`CONFIRMACIÓN FINAL\n\nEsta acción NO se puede deshacer.\n¿Estás completamente seguro de eliminar los datos de ${plataforma}?`)) return;
 
-    // ✅ FIX: primero borrar en Supabase (await real), luego limpiar localStorage
-    // Así si el usuario recarga, initFromSupabase no restaura los datos borrados
     if (window.GPS_SB) {
       try {
         await GPS_SB._delete('gps_barridos',
           `empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${encodeURIComponent(plataforma)}`
         );
-        console.log(`[GPS] Supabase: borrados barridos de ${plataforma} en ${emp}`);
       } catch(e) {
-        console.warn('[GPS_SB eliminarDatosPlataforma]', e);
         UI.toast(`Error al eliminar en Supabase: ${e.message}`, 'error');
         return;
       }
     }
 
-    // Ahora limpiar localStorage
     const afectadas = DB.eliminarDatosPlataforma(plataforma, emp);
     UI.toast(`${afectadas} unidades actualizadas. Datos de ${plataforma} eliminados.`, 'warn', 4500);
     nav(null, 'panel-config');
@@ -288,16 +278,13 @@ const App = (() => {
     if (!confirm(`¿BORRAR TODOS los datos de ${emp}?\n\nEsto incluye unidades, barridos, asignaciones y viajes.`)) return;
     if (!confirm(`CONFIRMACIÓN FINAL\n\nEsta acción NO se puede deshacer.\n¿Seguro que deseas borrar toda la información de ${emp}?`)) return;
     DB.resetEmpresa();
-    // ✅ FIX: también borrar de Supabase para evitar que initFromSupabase restaure datos zombi
     if (window.GPS_SB) {
       Promise.all([
         GPS_SB._delete('gps_barridos',     `empresa_id=eq.${encodeURIComponent(emp)}`),
         GPS_SB._delete('gps_asignaciones', `empresa_id=eq.${encodeURIComponent(emp)}`),
         GPS_SB._delete('gps_unidades',     `empresa_id=eq.${encodeURIComponent(emp)}`),
         GPS_SB._delete('gps_fallas',       `empresa_id=eq.${encodeURIComponent(emp)}`)
-      ]).then(() => {
-        console.log(`[GPS_SB] Datos de ${emp} eliminados de Supabase`);
-      }).catch(e => console.warn('[GPS_SB _borrarEmpresa]', e));
+      ]).catch(e => console.warn('[GPS_SB _borrarEmpresa]', e));
     }
     UI.toast('Datos eliminados', 'error');
     nav(null, 'panel-resumen');
@@ -309,255 +296,181 @@ const App = (() => {
     sel.innerHTML = DB.getEmpresasList().map(e => `<option value="${e}" ${e===DB.getEmpresaActiva()?'selected':''}>${e}</option>`).join('');
   }
 
-  // ── Sincronización en tiempo real de fallas desde Supabase ───────────────
+  // ── Sync fallas ───────────────────────────────────────────────────────────
   let _fallasSyncTimer = null;
-  let _fallasSyncHash = '';
+  let _fallasSyncHash  = '';
 
   async function _syncFallasFromSupabase() {
     if (!window.GPS_SB) return;
     try {
-      const emp = DB.getEmpresaActiva();
+      const emp  = DB.getEmpresaActiva();
       if (!emp) return;
       const rows = await GPS_SB.getFallasActivas(emp);
       if (!rows || !rows.length) return;
 
-      // Hash simple para detectar cambios
       const hash = rows.map(r => r.id + ':' + r.activa + ':' + r.resuelta).join('|');
       if (hash === _fallasSyncHash) return;
       _fallasSyncHash = hash;
 
-      // Sincronizar cada falla al estado local
       let huboNuevas = false;
       rows.forEach(row => {
         const num = row.num_economico;
         let u = DB.getUnidad(num, emp);
-        // Si la unidad no existe local, crear stub para que el siniestro sea visible
         if (!u) {
-          DB.upsertUnidad(num, {
-            activa: true, siniestro: false, fallas: [], _fuente: 'supabase_falla_sync'
-          }, emp);
+          DB.upsertUnidad(num, { activa:true, siniestro:false, fallas:[], _fuente:'supabase_falla_sync' }, emp);
           u = DB.getUnidad(num, emp);
           if (!u) return;
         }
-
         u.fallas = u.fallas || [];
-        const existe = u.fallas.find(f => f._sbId === row.id || String(f.id) === String(row.datos_extra?.id));
+        const existe      = u.fallas.find(f => f._sbId === row.id || String(f.id) === String(row.datos_extra?.id));
         const esSiniestro = row.tipo === 'SINIESTRO';
 
         if (!existe) {
-          // Falla nueva desde otro dispositivo
-          const falla = {
-            ...(row.datos_extra || {}),
-            id: row.datos_extra?.id || Date.now(),
-            _sbId: row.id,
-            motivo: row.etiqueta || row.datos_extra?.motivo || '',
-            descripcion: row.descripcion || row.datos_extra?.descripcion || '',
-            esSiniestro,
-            resuelta: false,
-            fecha: row.created_at
-          };
+          const falla = { ...(row.datos_extra||{}), id: row.datos_extra?.id||Date.now(), _sbId: row.id,
+            motivo: row.etiqueta||row.datos_extra?.motivo||'',
+            descripcion: row.descripcion||row.datos_extra?.descripcion||'',
+            esSiniestro, resuelta:false, fecha:row.created_at };
           u.fallas.push(falla);
-          if (esSiniestro) { u.siniestro = true; u.siniestroDesc = falla.motivo; }
+          if (esSiniestro) { u.siniestro=true; u.siniestroDesc=falla.motivo; }
           huboNuevas = true;
         } else {
-          // Falla ya existe — asegurar que _sbId y siniestro estén actualizados
-          if (!existe._sbId) { existe._sbId = row.id; }
-          // CRÍTICO: si la falla es siniestro pero la unidad no tiene el flag, corregirlo
-          if (esSiniestro && !u.siniestro) {
-            u.siniestro = true;
-            u.siniestroDesc = existe.motivo || row.etiqueta || '';
-            huboNuevas = true;
-          }
+          if (!existe._sbId) existe._sbId = row.id;
+          if (esSiniestro && !u.siniestro) { u.siniestro=true; u.siniestroDesc=existe.motivo||row.etiqueta||''; huboNuevas=true; }
           if (row.resuelta && !existe.resuelta) {
-            existe.resuelta = true;
-            existe.fechaResolucion = row.updated_at;
-            // Si se resolvió el siniestro, limpiar flag si no quedan más siniestros activos
-            if (esSiniestro) {
-              const quedanSiniestros = u.fallas.some(f => f.esSiniestro && !f.resuelta);
-              if (!quedanSiniestros) { u.siniestro = false; u.siniestroDesc = ''; }
-            }
-            huboNuevas = true;
+            existe.resuelta=true; existe.fechaResolucion=row.updated_at;
+            if (esSiniestro && !u.fallas.some(f=>f.esSiniestro&&!f.resuelta)) { u.siniestro=false; u.siniestroDesc=''; }
+            huboNuevas=true;
           }
         }
       });
 
-      if (huboNuevas) {
-        DB.save && DB.save();
-        // No re-renderizar automáticamente — evita congelamiento con muchas unidades
-        // Los cambios de fallas se verán al navegar a la pantalla
-      }
-    } catch(e) {
-      console.debug('[FallaSync]', e.message);
-    }
+      if (huboNuevas) { DB.save && DB.save(); }
+    } catch(e) { console.debug('[FallaSync]', e.message); }
   }
 
-  // Sincronización inicial de fallas — siempre corre al inicio aunque haya datos locales
   async function _syncFallasDesdeInicio() {
     if (!window.GPS_SB) return;
     try {
       const empresas = DB.getEmpresasList();
       let huboNuevas = false;
-
       for (const emp of empresas) {
         const rows = await GPS_SB.getFallasActivas(emp);
         if (!rows || !rows.length) continue;
-
         rows.forEach(row => {
           const num = String(row.num_economico);
           let u = DB.getUnidad(num, emp);
-
-          // Crear stub si la unidad no existe
           if (!u) {
-            DB.upsertUnidad(num, { activa: true, siniestro: false, fallas: [], _fuente: 'supabase_falla_init' }, emp);
+            DB.upsertUnidad(num, { activa:true, siniestro:false, fallas:[], _fuente:'supabase_falla_init' }, emp);
             u = DB.getUnidad(num, emp);
             if (!u) return;
           }
-
           u.fallas = u.fallas || [];
           const esSiniestro = row.tipo === 'SINIESTRO';
           const existe = u.fallas.find(f => f._sbId === row.id);
-
           if (!existe) {
             const extra = row.datos_extra || {};
-            const falla = {
-              id: extra.id || row.id,
-              _sbId: row.id,
-              motivo: row.etiqueta || extra.motivo || '',
-              descripcion: row.descripcion || extra.descripcion || '',
-              ubicacion: extra.ubicacion || '',
-              esSiniestro,
-              resuelta: false,
-              fecha: row.created_at,
-              fechaOcurrencia: extra.fechaOcurrencia || row.created_at
-            };
-            u.fallas.push(falla);
+            u.fallas.push({ id:extra.id||row.id, _sbId:row.id, motivo:row.etiqueta||extra.motivo||'',
+              descripcion:row.descripcion||extra.descripcion||'', ubicacion:extra.ubicacion||'',
+              esSiniestro, resuelta:false, fecha:row.created_at, fechaOcurrencia:extra.fechaOcurrencia||row.created_at });
             u.fallaCount = u.fallas.length;
             huboNuevas = true;
           }
-
-          // SIEMPRE corregir el flag de siniestro si corresponde
-          if (esSiniestro && !u.siniestro) {
-            u.siniestro = true;
-            u.siniestroDesc = row.etiqueta || '';
-            huboNuevas = true;
-          }
-          // Si tenía siniestro marcado pero ya no hay falla activa de tipo SINIESTRO, limpiarlo
-          if (!esSiniestro && u.siniestro) {
-            const tieneSiniestroActivo = u.fallas.some(f => f.esSiniestro && !f.resuelta);
-            if (!tieneSiniestroActivo) { u.siniestro = false; u.siniestroDesc = ''; huboNuevas = true; }
-          }
+          if (esSiniestro && !u.siniestro) { u.siniestro=true; u.siniestroDesc=row.etiqueta||''; huboNuevas=true; }
+          if (!esSiniestro && u.siniestro && !u.fallas.some(f=>f.esSiniestro&&!f.resuelta)) { u.siniestro=false; u.siniestroDesc=''; huboNuevas=true; }
         });
       }
-
-      if (huboNuevas) {
-        DB.save && DB.save();
-        // No re-renderizar — evita congelamiento con muchas unidades
-      }
-    } catch(e) {
-      console.warn('[FallaInit]', e.message);
-    }
+      if (huboNuevas) { DB.save && DB.save(); }
+    } catch(e) { console.warn('[FallaInit]', e.message); }
   }
 
   function _startFallasSync() {
     _syncFallasFromSupabase();
-    _fallasSyncTimer = setInterval(_syncFallasFromSupabase, 15000); // cada 15 seg
+    _fallasSyncTimer = setInterval(_syncFallasFromSupabase, 15000);
+  }
+
+  // ── forzarRecargaSupabase ─────────────────────────────────────────────────
+  function forzarRecargaSupabase() {
+    if (!window.GPS_SB) { alert('Supabase no disponible.'); return; }
+    _showSyncBanner('⏳ Recargando datos desde Supabase...');
+    DB.initFromSupabase().then(ok => {
+      _hideSyncBanner();
+      if (ok) {
+        UI.renderResumen();
+        populateEmpresaSelect();
+        console.log('[App] Recarga forzada completada');
+      } else {
+        alert('Error al recargar desde Supabase. Revisa la consola (F12).');
+      }
+    }).catch(e => {
+      _hideSyncBanner();
+      console.error('[App] forzarRecargaSupabase error:', e);
+      alert('Error: ' + e.message);
+    });
   }
 
   function init() {
     populateEmpresaSelect();
     injectStyles();
 
-    // Aplicar tema de empresa desde el inicio
     if (UI._applyEmpresaTheme) UI._applyEmpresaTheme(DB.getEmpresaActiva());
-    if (UI._initNavGroups) UI._initNavGroups();
+    if (UI._initNavGroups)     UI._initNavGroups();
 
     UI.renderResumen();
     document.getElementById('tb-date').textContent = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
 
-    // ── Carga desde Supabase ──────────────────────────────────────────────
-    // SIEMPRE sincronizar desde Supabase al iniciar.
-    // Esto garantiza que los barridos GPS (ultima_act_<plat>) estén aplicados
-    // en cualquier dispositivo/sesión, sin depender de localStorage previo.
     const hayDatos = DB.getUnidadesList(DB.getEmpresaActiva()).length > 0;
 
     if (!hayDatos) {
-      // Sin datos locales: carga completa bloqueante con banner
       _showSyncBanner('⏳ Cargando datos desde Supabase...');
       DB.initFromSupabase().then(ok => {
         _hideSyncBanner();
         if (ok) { UI.renderResumen(); populateEmpresaSelect(); }
       });
     } else {
-      // Hay datos locales: sincronizar en background (no bloquea UI)
-      // Incluye asignaciones + barridos GPS + fallas — siempre frescos desde Supabase
-      console.log('[App] Datos locales detectados — sincronizando barridos GPS desde Supabase en background...');
       setTimeout(() => {
         DB.initFromSupabase().then(ok => {
-          if (ok) {
-            // Solo refrescar si no hay interacción activa del usuario
-            if (!document.hidden) {
-              UI.renderResumen();
-              const panelPlat = document.getElementById('panel-plataformas');
-              if (panelPlat && panelPlat.classList.contains('active')) {
-                UI.renderPlataformas();
-              }
-            }
+          if (ok && !document.hidden) {
+            UI.renderResumen();
+            const panelPlat = document.getElementById('panel-plataformas');
+            if (panelPlat && panelPlat.classList.contains('active')) UI.renderPlataformas();
           }
         });
       }, 2000);
     }
 
-    // Escalonar syncs para no amontonar renders al arrancar
-    setTimeout(() => { _syncFallasDesdeInicio(); },    8000);  // 8s — después de que todo cargó
-    setTimeout(_startFallasSync,                       15000); // 15s — polling cada 15s
-    setTimeout(_startDesinstalacionesSync,             20000); // 20s — polling cada 30s
-
-    // Sin polling de barridos — los barridos se guardan en Supabase al subir el archivo
-    // Para ver cambios de otro navegador: recargar la página o usar el botón de sync manual
+    setTimeout(() => { _syncFallasDesdeInicio(); },    8000);
+    setTimeout(_startFallasSync,                       15000);
+    setTimeout(_startDesinstalacionesSync,             20000);
   }
 
-  let _barridosSyncBloqueadoHasta = 0; // reservado para compatibilidad
+  let _barridosSyncBloqueadoHasta = 0;
 
   async function _syncDesinstalaciones() {
     if (!window.GPS_SB) return;
     try {
       const rows = await GPS_SB._getRaw('gps_barridos', 'desinstalado=eq.true');
-      if (!rows || !rows.length) {
-        // Si no hay desinstalados en Supabase, limpiar los locales que no estén en SB
-        _limpiarDesinstalacionesLocales([]);
-        return;
-      }
+      if (!rows || !rows.length) { _limpiarDesinstalacionesLocales([]); return; }
       let cambio = false;
       rows.forEach(r => {
-        const emp = String(r.empresa_id || '');
-        const num = String(r.num_economico || '');
-        const plat = String(r.plataforma || '').toLowerCase();
-        const desKey = 'desinstalacion_' + plat;
-        const u = DB.getUnidad(num, emp);
+        const emp    = String(r.empresa_id || '');
+        const num    = String(r.num_economico || '');
+        const desKey = 'desinstalacion_' + String(r.plataforma||'').toLowerCase();
+        const u      = DB.getUnidad(num, emp);
         if (!u) return;
-        const nuevoVal = {
-          fecha:      r.desinstalacion_fecha      || null,
-          comentario: r.desinstalacion_comentario || '',
-          ts:         r.desinstalacion_ts         || null
-        };
-        const actual = u[desKey];
+        const nuevoVal = { fecha: r.desinstalacion_fecha||null, comentario: r.desinstalacion_comentario||'', ts: r.desinstalacion_ts||null };
+        const actual   = u[desKey];
         if (!actual || actual.fecha !== nuevoVal.fecha || actual.comentario !== nuevoVal.comentario) {
           DB.upsertUnidad(num, { [desKey]: nuevoVal }, emp);
           cambio = true;
         }
       });
-      // También limpiar las que fueron liberadas en Supabase
       _limpiarDesinstalacionesLocales(rows);
       if (cambio) {
-        // Refrescar UI si hay paneles activos
         const panelPlat = document.getElementById('panel-plataformas');
-        if (panelPlat && panelPlat.classList.contains('active') && UI._platExpandida) {
-          UI._refreshPlatTable(UI._platExpandida);
-        }
-        const panelDetalle = document.getElementById('panel-detalle');
-        if (panelDetalle && panelDetalle.classList.contains('active')) {
-          // Re-renderizar solo si hay cambio en la unidad actual
-          const numActual = panelDetalle.querySelector('[data-num]')?.dataset?.num;
+        if (panelPlat && panelPlat.classList.contains('active') && UI._platExpandida) UI._refreshPlatTable(UI._platExpandida);
+        const panelDet  = document.getElementById('panel-detalle');
+        if (panelDet && panelDet.classList.contains('active')) {
+          const numActual = panelDet.querySelector('[data-num]')?.dataset?.num;
           if (numActual) UI.renderDetalle(numActual, DB.getEmpresaActiva());
         }
       }
@@ -565,19 +478,15 @@ const App = (() => {
   }
 
   function _limpiarDesinstalacionesLocales(rowsDesinstalados) {
-    // Quita desinstalacion_* de unidades locales que ya no están desinstaladas en Supabase
-    const sbSet = new Set(rowsDesinstalados.map(r => `${r.empresa_id}|${r.num_economico}|${r.plataforma?.toLowerCase()}`));
+    const sbSet = new Set(rowsDesinstalados.map(r => `${r.empresa_id}|${r.num_economico}|${(r.plataforma||'').toLowerCase()}`));
     const ALL_P = ['ceiba','samsara','avl','scania','man','volvo','motive'];
     DB.getEmpresasList().forEach(emp => {
       DB.getUnidadesList(emp).forEach(u => {
         ALL_P.forEach(p => {
           const desKey = 'desinstalacion_' + p;
-          if (u[desKey]) {
-            const key = `${emp}|${u.num}|${p}`;
-            if (!sbSet.has(key)) {
-              delete u[desKey];
-              DB.upsertUnidad(u.num, { updatedAt: new Date().toISOString() }, emp);
-            }
+          if (u[desKey] && !sbSet.has(`${emp}|${u.num}|${p}`)) {
+            delete u[desKey];
+            DB.upsertUnidad(u.num, { updatedAt: new Date().toISOString() }, emp);
           }
         });
       });
@@ -682,7 +591,6 @@ const App = (() => {
       .hidden{display:none!important}
       input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue)!important}
       @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-      /* Responsive */
       @media(max-width:900px){
         .plat-grid{grid-template-columns:repeat(2,1fr)!important}
         .det-bottom-grid{grid-template-columns:1fr!important}
@@ -707,13 +615,21 @@ const App = (() => {
   document.addEventListener('DOMContentLoaded', init);
 
   return {
-    nav, populateEmpresaSelect, renderManual, renderConfig, _filterManual, _syncFallasDesdeInicio,
-    _editarEmpresa, _eliminarEmpresa, _nuevaEmpresa,
-    _eliminarHistorialAsignaciones, _eliminarDatosPlataforma, _borrarEmpresa,
+    nav,
+    populateEmpresaSelect,
+    renderManual,
+    renderConfig,
+    _filterManual,
+    _syncFallasDesdeInicio,
+    _editarEmpresa,
+    _eliminarEmpresa,
+    _nuevaEmpresa,
+    _eliminarHistorialAsignaciones,
+    _eliminarDatosPlataforma,
+    _borrarEmpresa,
+    forzarRecargaSupabase,
     _bloquearBarridosSync: function() {
       _barridosSyncBloqueadoHasta = Date.now() + 180000;
-      console.log('[App] Polling bloqueado 3min tras upload local');
-    },
-    forzarRecargaSupabase
+    }
   };
 })();
