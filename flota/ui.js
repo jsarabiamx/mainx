@@ -3194,8 +3194,13 @@ const UI = (() => {
       }
       _barridosPending[plat]={parsed,filename:file.name,val:Parsers.validarResultado(parsed),sheetName};
       const emp = DB.getEmpresaActiva();
+      const totalArchivo = rows.length - 1; // descontar header
       const res = DB.saveBarrido(plat, parsed, emp);
-      toast(`✓ ${plat} (hoja: ${sheetName}): ${parsed.length} registros → ${res.actualizadas} unidades actualizadas`, 'success', 5000);
+      const descartados = totalArchivo - parsed.length;
+      const msgDesc = descartados > 0 ? ` (${descartados} sin número económico)` : '';
+      toast(`✓ ${plat} (hoja: ${sheetName}): ${parsed.length} registros${msgDesc} → ${res.actualizadas} actualizadas en ETN/GHO`, 'success', 7000);
+      // Bloquear polling de barridos 3 min — evita que Supabase sobreescriba datos recién cargados
+      if (typeof App !== 'undefined' && App._bloquearBarridosSync) App._bloquearBarridosSync();
       renderPlataformas();
       renderResumen();
     }catch(err){
