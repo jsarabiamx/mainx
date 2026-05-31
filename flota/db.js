@@ -138,7 +138,7 @@ const DB = (() => {
   // Se llama desde app.js después de que GPS_SB esté disponible.
   // Reconstruye unidades a partir de asignaciones en Supabase (misma lógica que saveAsignacion).
   async function initFromSupabase() {
-    if (!window.GPS_SB) return;
+    if (!window.GPS_SB) { console.warn('[DB] GPS_SB no disponible'); return false; }
     try {
       // Asegurar que las empresas base siempre existan en el schema
       if (!_s.empresas || Object.keys(_s.empresas).length === 0) {
