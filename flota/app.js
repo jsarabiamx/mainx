@@ -383,16 +383,8 @@ const App = (() => {
 
       if (huboNuevas) {
         DB.save && DB.save();
-        // Solo re-renderizar el panel que esté activo en este momento
-        if (typeof UI !== 'undefined') {
-          const panelRes = document.getElementById('panel-resumen');
-          const panelPlat = document.getElementById('panel-plataformas');
-          if (panelRes && panelRes.classList.contains('active')) {
-            UI.renderResumen && UI.renderResumen();
-          } else if (panelPlat && panelPlat.classList.contains('active')) {
-            UI.renderPlataformas && UI.renderPlataformas();
-          }
-        }
+        // No re-renderizar automáticamente — evita congelamiento con muchas unidades
+        // Los cambios de fallas se verán al navegar a la pantalla
       }
     } catch(e) {
       console.debug('[FallaSync]', e.message);
@@ -459,16 +451,7 @@ const App = (() => {
 
       if (huboNuevas) {
         DB.save && DB.save();
-        // Un solo render al final — solo el panel activo
-        setTimeout(() => {
-          const panelRes = document.getElementById('panel-resumen');
-          const panelPlat = document.getElementById('panel-plataformas');
-          if (panelRes && panelRes.classList.contains('active')) {
-            UI.renderResumen && UI.renderResumen();
-          } else if (panelPlat && panelPlat.classList.contains('active')) {
-            UI.renderPlataformas && UI.renderPlataformas();
-          }
-        }, 200);
+        // No re-renderizar — evita congelamiento con muchas unidades
       }
     } catch(e) {
       console.warn('[FallaInit]', e.message);
@@ -511,14 +494,17 @@ const App = (() => {
       setTimeout(() => {
         DB.initFromSupabase().then(ok => {
           if (ok) {
-            UI.renderResumen();
-            const panelPlat = document.getElementById('panel-plataformas');
-            if (panelPlat && panelPlat.classList.contains('active')) {
-              UI.renderPlataformas();
+            // Solo refrescar si no hay interacción activa del usuario
+            if (!document.hidden) {
+              UI.renderResumen();
+              const panelPlat = document.getElementById('panel-plataformas');
+              if (panelPlat && panelPlat.classList.contains('active')) {
+                UI.renderPlataformas();
+              }
             }
           }
         });
-      }, 500);
+      }, 2000);
     }
 
     // Escalonar syncs para no amontonar renders al arrancar
