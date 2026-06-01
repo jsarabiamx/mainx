@@ -471,7 +471,7 @@ const APP = (() => {
         const topOffset = hH + nH;
         const iframe = document.createElement('iframe');
         iframe.id    = 'flotaFrame';
-        iframe.src   = 'flota/index.html';
+        iframe.src   = 'flota/html/index.html';
         iframe.style.cssText = 'position:fixed;top:'+topOffset+'px;left:0;width:100vw;height:calc(100vh - '+topOffset+'px);border:none;display:block;z-index:100';
         document.body.appendChild(iframe);
       }
