@@ -3214,13 +3214,9 @@ const UI = (() => {
       if (window.GPS_SB) {
         toast(`⏳ Enviando ${parsed.length} registros de ${plat} a Supabase...`, 'info', 4000);
         try {
-          // Agrupar por empresa real del registro (para MOTIVE con múltiples empresas)
-          const grupos = {};
-          parsed.forEach(r => {
-            const e = (plat === 'MOTIVE' && r.empresa) ? r.empresa : emp;
-            if (!grupos[e]) grupos[e] = [];
-            grupos[e].push(r);
-          });
+          // MOTIVE: r.empresa = fabricante (SCANIA, VOLVO...) no la empresa de la flota.
+          // Siempre usar emp (empresa activa) como empresa_id para todos los barridos.
+          const grupos = { [emp]: parsed };
           for (const [e, regs] of Object.entries(grupos)) {
             await GPS_SB.saveBarrido(plat, regs, e);
           }
