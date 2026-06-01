@@ -401,27 +401,46 @@ const Parsers = (() => {
   function parseVOLVO(rows) {
     if (!rows||rows.length<2) return [];
     const normH=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
-    // Buscar fila de headers (buscar "Vehículo"/"Vehicle" o "Tiempo"/"Time")
-    let hIdx=0;
-    for (let i=0;i<Math.min(rows.length,10);i++) {
-      const r=rows[i]; if (!Array.isArray(r)) continue;
+
+    // Buscar fila de headers — buscar "Vehículo"/"Vehicle"/"Tiempo"/"Time"
+    // O detectar la primera fila donde col A tiene formato "XXX-NNNNN" (datos reales)
+    let hIdx=-1;
+    for (let i=0;i<Math.min(rows.length,15);i++) {
+      const r=rows[i]; if (!Array.isArray(r)||!r.length) continue;
       const norm=r.map(c=>normH(c));
-      if (norm.some(n=>n==='vehiculo'||n==='vehicle'||n.includes('vehicu'))
-          ||norm.some(n=>n==='tiempo'||n==='time'||n.includes('fecha')||n.includes('hora'))) {
+      // Detectar por header textual
+      if (norm.some(n=>n==='vehiculo'||n==='vehicle'||n==='vehic'||n.includes('ehicul'))
+          ||norm.some(n=>n==='tiempo'||n==='time')) {
         hIdx=i;
-        console.log('[VOLVO] Headers encontrados en fila',i,':',r.slice(0,5));
+        console.log('[VOLVO] Headers por nombre en fila',i,':',r.slice(0,4));
+        break;
+      }
+      // Detectar directamente por datos: si col A tiene "XXX-NNNNN" y col B parece fecha
+      const colA=String(r[0]||'').trim();
+      const colB=String(r[1]||'').trim();
+      const esVehiculo=/^[A-Z]{2,5}-\d{3,6}$/.test(colA)||/^\d{4,6}$/.test(colA);
+      const esFecha=/\d{4}-\d{2}-\d{2}/.test(colB)||/\d{2}\/\d{2}\/\d{4}/.test(colB);
+      if (esVehiculo&&esFecha) {
+        hIdx=i-1; // la fila anterior sería el header (o -1 si i=0)
+        console.log('[VOLVO] Datos detectados directamente en fila',i,'— hIdx=',(i-1));
         break;
       }
     }
-    console.log('[VOLVO] Total filas:',rows.length,' hIdx:',hIdx,' primera fila:',rows[0]?.slice?.(0,4));
-    // Detectar columnas
+    // Si no encontró headers, asumir que la fila 1 es header (fila 0 es nota)
+    if (hIdx<0) hIdx=1;
+    console.log('[VOLVO] hIdx final:',hIdx,' total filas:',rows.length,' muestra col0:',rows[Math.min(hIdx+1,rows.length-1)]?.slice?.(0,3));
+
+    // Detectar columnas — fallback a posiciones 0,1 si no hay headers claros
     const hRow=rows[hIdx]||[];
     let colVeh=0,colFecha=1;
     hRow.forEach((h,i)=>{
       const n=normH(h);
-      if (n==='vehiculo'||n==='vehicle'||n.includes('vehicu')) colVeh=i;
-      else if (n==='tiempo'||n==='time') colFecha=i;
+      if (n==='vehiculo'||n==='vehicle'||n.includes('ehicul')) colVeh=i;
+      else if (n==='tiempo'||n==='time'||n.includes('fecha')||n.includes('hora')) {
+        if (colFecha===1||i>0) colFecha=i; // preferir la primera col de tiempo encontrada
+      }
     });
+    console.log('[VOLVO] colVeh=',colVeh,' colFecha=',colFecha);
     // Agrupar por unidad → conservar fecha más reciente
     const grupos={};
     for (let i=hIdx+1;i<rows.length;i++) {
