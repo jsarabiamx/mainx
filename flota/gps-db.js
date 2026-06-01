@@ -1,6 +1,6 @@
 /**
  * gps-db.js — Módulo Supabase para Mesa de Control GPS
- * v4.2 — Fix: saveBarrido simplifica datos_raw, mejor logging de errores
+ * v4.3 — Fix: deduplicar registros antes de upsert (ON CONFLICT row second time)
  */
 const GPS_SB = (() => {
   const BASE_URL = 'https://sxzhmcrpeyuqslupttby.supabase.co';
@@ -11,8 +11,6 @@ const GPS_SB = (() => {
     'Authorization': 'Bearer ' + ANON_KEY,
     'Content-Type':  'application/json'
   };
-
-  // ── Primitivas REST ───────────────────────────────────────────────────────
 
   async function _getRaw(table, query) {
     const res = await fetch(`${BASE_URL}/rest/v1/${table}?${query}`, {
@@ -38,9 +36,7 @@ const GPS_SB = (() => {
   }
 
   async function _upsert(table, rows, onConflict) {
-    const qs = onConflict
-      ? `?on_conflict=${encodeURIComponent(onConflict)}`
-      : '';
+    const qs = onConflict ? `?on_conflict=${encodeURIComponent(onConflict)}` : '';
     const res = await fetch(`${BASE_URL}/rest/v1/${table}${qs}`, {
       method:  'POST',
       headers: {
@@ -71,8 +67,6 @@ const GPS_SB = (() => {
     return res.json().catch(() => null);
   }
 
-  // ── Empresa activa ────────────────────────────────────────────────────────
-
   async function setEmpresaActiva(emp) {
     try {
       return await _patch('gps_config', 'id=eq.singleton', {
@@ -83,8 +77,6 @@ const GPS_SB = (() => {
       console.warn('[GPS_SB.setEmpresaActiva]', e.message);
     }
   }
-
-  // ── Asignaciones ─────────────────────────────────────────────────────────
 
   async function saveAsignacion(mesLabel, filas, emp) {
     const BATCH = 200;
@@ -116,16 +108,13 @@ const GPS_SB = (() => {
     return { total: rows.length };
   }
 
-  // ── Barridos GPS ─────────────────────────────────────────────────────────
-  // datos_raw simplificado — solo campos clave para no exceder payload
-
   async function saveBarrido(plataforma, registros, emp) {
     if (!emp || !emp.trim()) {
       console.error('[GPS_SB.saveBarrido] empresa vacía — abortando');
       return { total: 0 };
     }
 
-    const BATCH = 150; // batch más pequeño para evitar límite de payload
+    const BATCH = 150;
 
     const toISOSafe = fecha => {
       if (!fecha) return null;
@@ -135,28 +124,26 @@ const GPS_SB = (() => {
       } catch { return null; }
     };
 
-    // Construir datos_raw mínimo (solo campos útiles, sin raw completo)
     const buildRaw = r => {
       const raw = {};
-      if (r.serie)          raw.serie = r.serie;
-      if (r.estadoSamsara)  raw.estadoSamsara = r.estadoSamsara;
-      if (r.estado)         raw.estado = r.estado;
-      if (r.serieGateway)   raw.serieGateway = r.serieGateway;
-      if (r.serieDashcam)   raw.serieDashcam = r.serieDashcam;
-      if (r.empresa)        raw.empresa = r.empresa;
+      if (r.serie)         raw.serie = r.serie;
+      if (r.estadoSamsara) raw.estadoSamsara = r.estadoSamsara;
+      if (r.estado)        raw.estado = r.estado;
+      if (r.serieGateway)  raw.serieGateway = r.serieGateway;
+      if (r.serieDashcam)  raw.serieDashcam = r.serieDashcam;
+      if (r.empresa)       raw.empresa = r.empresa;
       return raw;
     };
 
-    const rows = registros
+    // Construir filas
+    const rawRows = registros
       .map(r => ({
         empresa_id:      emp,
         plataforma:      plataforma,
         num_economico:   String(r.num || '').trim(),
         ultima_conexion: (() => {
           const iso = toISOSafe(r.fecha);
-          if (!iso) return null;
-          // Convertir a "YYYY-MM-DD HH:MM:SS" (timestamp sin zona)
-          return iso.replace('T', ' ').slice(0, 19);
+          return iso ? iso.replace('T', ' ').slice(0, 19) : null;
         })(),
         tiene_datos: !!r.fecha,
         datos_raw:   buildRaw(r),
@@ -165,28 +152,51 @@ const GPS_SB = (() => {
       }))
       .filter(r => r.num_economico);
 
-    if (!rows.length) {
+    if (!rawRows.length) {
       console.warn(`[GPS_SB.saveBarrido] 0 filas válidas para ${plataforma}/${emp}`);
       return { total: 0 };
     }
 
+    // ── DEDUPLICAR por (empresa_id, plataforma, num_economico) ───────────
+    // Si el archivo tiene la misma unidad dos veces, Supabase falla con
+    // "ON CONFLICT DO UPDATE command cannot affect row a second time"
+    // Solución: conservar solo la fila con fecha más reciente por num_economico
+    const deduped = Object.values(
+      rawRows.reduce((map, row) => {
+        const key = `${row.empresa_id}|${row.plataforma}|${row.num_economico}`;
+        const prev = map[key];
+        if (!prev) {
+          map[key] = row;
+        } else {
+          // Conservar la fila con ultima_conexion más reciente
+          const prevDate = prev.ultima_conexion ? new Date(prev.ultima_conexion) : new Date(0);
+          const curDate  = row.ultima_conexion  ? new Date(row.ultima_conexion)  : new Date(0);
+          if (curDate > prevDate) map[key] = row;
+        }
+        return map;
+      }, {})
+    );
+
+    const duplicados = rawRows.length - deduped.length;
+    if (duplicados > 0) {
+      console.warn(`[GPS_SB.saveBarrido] ${duplicados} duplicados eliminados en ${plataforma}/${emp}`);
+    }
+
     let enviados = 0;
-    for (let i = 0; i < rows.length; i += BATCH) {
-      const batch = rows.slice(i, i + BATCH);
+    for (let i = 0; i < deduped.length; i += BATCH) {
+      const batch = deduped.slice(i, i + BATCH);
       try {
         await _upsert('gps_barridos', batch, 'empresa_id,plataforma,num_economico');
         enviados += batch.length;
-        console.log(`[GPS_SB.saveBarrido] ${plataforma}/${emp} — batch ${i/BATCH+1}: ${batch.length} filas OK (total: ${enviados}/${rows.length})`);
+        console.log(`[GPS_SB.saveBarrido] ${plataforma}/${emp} batch ${Math.floor(i/BATCH)+1}: ${batch.length} OK (${enviados}/${deduped.length})`);
       } catch(e) {
-        console.error(`[GPS_SB.saveBarrido] ERROR batch ${i/BATCH+1} — ${plataforma}/${emp}:`, e.message);
-        throw e; // propagar para que db.js lo muestre en consola
+        console.error(`[GPS_SB.saveBarrido] ERROR ${plataforma}/${emp} batch ${Math.floor(i/BATCH)+1}:`, e.message);
+        throw e;
       }
     }
 
-    return { total: rows.length };
+    return { total: deduped.length };
   }
-
-  // ── Fallas ────────────────────────────────────────────────────────────────
 
   async function registrarFalla(num, falla, emp) {
     return _upsert('gps_fallas', [{
@@ -221,8 +231,6 @@ const GPS_SB = (() => {
     );
   }
 
-  // ── Observaciones / Notas ─────────────────────────────────────────────────
-
   async function patchObservacionesBarrido(num, emp, obs) {
     try {
       await _patch('gps_barridos',
@@ -240,8 +248,6 @@ const GPS_SB = (() => {
       );
     } catch(e) { console.warn('[GPS_SB.patchNotas]', e.message); }
   }
-
-  // ── SIMs ──────────────────────────────────────────────────────────────────
 
   async function saveSim(simData, emp) {
     const row = {
@@ -271,8 +277,6 @@ const GPS_SB = (() => {
     });
   }
 
-  // ── Unidades ──────────────────────────────────────────────────────────────
-
   async function upsertUnidad(num, emp, datos) {
     return _upsert('gps_unidades', [{
       num_economico: String(num),
@@ -281,8 +285,6 @@ const GPS_SB = (() => {
       updated_at:    new Date().toISOString()
     }], 'empresa_id,num_economico');
   }
-
-  // ── Notas de unidad ───────────────────────────────────────────────────────
 
   async function saveNota(num, emp, nota, usuario) {
     try {
@@ -305,7 +307,6 @@ const GPS_SB = (() => {
     } catch(e) { console.warn('[GPS_SB.saveNota]', e.message); }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   return {
     _getRaw, _delete, _upsert, _patch,
     setEmpresaActiva,
