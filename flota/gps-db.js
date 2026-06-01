@@ -1,6 +1,6 @@
 /**
  * gps-db.js — Módulo Supabase para Mesa de Control GPS
- * v4.3 — Fix: deduplicar registros antes de upsert (ON CONFLICT row second time)
+ * v4.4 — Fix: paginación en _getRaw para tablas con +1000 filas
  */
 const GPS_SB = (() => {
   const BASE_URL = 'https://sxzhmcrpeyuqslupttby.supabase.co';
@@ -12,15 +12,47 @@ const GPS_SB = (() => {
     'Content-Type':  'application/json'
   };
 
-  async function _getRaw(table, query) {
-    const res = await fetch(`${BASE_URL}/rest/v1/${table}?${query}`, {
-      headers: { ...HEADERS, 'Range': '0-9999', 'Prefer': 'return=representation' }
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`[GPS_SB._getRaw] ${table} ${res.status}: ${body}`);
+  // ── _getRaw con paginación automática ─────────────────────────────────────
+  // Supabase Free tier limita a 1000 filas por request.
+  // Esta función pagina automáticamente hasta traer TODAS las filas.
+  async function _getRaw(table, query, pageSize = 1000) {
+    const allRows = [];
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const rangeEnd = offset + pageSize - 1;
+      const res = await fetch(`${BASE_URL}/rest/v1/${table}?${query}`, {
+        headers: {
+          ...HEADERS,
+          'Range':  `${offset}-${rangeEnd}`,
+          'Prefer': 'count=none'
+        }
+      });
+
+      // 416 = Range Not Satisfiable → no hay más filas
+      if (res.status === 416) break;
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`[GPS_SB._getRaw] ${table} ${res.status}: ${body}`);
+      }
+
+      const rows = await res.json();
+      if (!Array.isArray(rows) || rows.length === 0) break;
+
+      allRows.push(...rows);
+
+      // Si devolvió menos de pageSize → ya no hay más
+      if (rows.length < pageSize) {
+        hasMore = false;
+      } else {
+        offset += pageSize;
+      }
     }
-    return res.json();
+
+    console.log(`[GPS_SB._getRaw] ${table}: ${allRows.length} filas totales (paginado)`);
+    return allRows;
   }
 
   async function _delete(table, query) {
@@ -135,7 +167,6 @@ const GPS_SB = (() => {
       return raw;
     };
 
-    // Construir filas
     const rawRows = registros
       .map(r => ({
         empresa_id:      emp,
@@ -157,10 +188,7 @@ const GPS_SB = (() => {
       return { total: 0 };
     }
 
-    // ── DEDUPLICAR por (empresa_id, plataforma, num_economico) ───────────
-    // Si el archivo tiene la misma unidad dos veces, Supabase falla con
-    // "ON CONFLICT DO UPDATE command cannot affect row a second time"
-    // Solución: conservar solo la fila con fecha más reciente por num_economico
+    // Deduplicar por (empresa_id, plataforma, num_economico)
     const deduped = Object.values(
       rawRows.reduce((map, row) => {
         const key = `${row.empresa_id}|${row.plataforma}|${row.num_economico}`;
@@ -168,7 +196,6 @@ const GPS_SB = (() => {
         if (!prev) {
           map[key] = row;
         } else {
-          // Conservar la fila con ultima_conexion más reciente
           const prevDate = prev.ultima_conexion ? new Date(prev.ultima_conexion) : new Date(0);
           const curDate  = row.ultima_conexion  ? new Date(row.ultima_conexion)  : new Date(0);
           if (curDate > prevDate) map[key] = row;
