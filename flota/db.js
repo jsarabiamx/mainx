@@ -138,6 +138,10 @@ const DB = (() => {
         const asigRows = await GPS_SB._getRaw('gps_asignaciones',
           `empresa_id=eq.${encodeURIComponent(emp)}&activa=eq.true&order=mes_label.desc,num_economico`
         );
+        // Siempre inicializar unidades para esta empresa — incluso si no hay asignaciones
+        // (GHO puede tener solo barridos sin asignación subida aún)
+        if (!_s.unidades) _s.unidades = {};
+        if (!_s.unidades[emp]) _s.unidades[emp] = {};
         if (asigRows && asigRows.length > 0) {
           const meses = {};
           asigRows.forEach(r => {
@@ -146,9 +150,7 @@ const DB = (() => {
           });
           const mesReciente = Object.keys(meses).sort().reverse()[0];
           const filas = meses[mesReciente];
-
-          if (!_s.unidades) _s.unidades = {};
-          _s.unidades[emp] = {};
+          _s.unidades[emp] = {};  // reiniciar solo si hay asignación
 
           filas.forEach(r => {
             const extra = r.datos_extra || {};
