@@ -401,13 +401,19 @@ const Parsers = (() => {
   function parseVOLVO(rows) {
     if (!rows||rows.length<2) return [];
     const normH=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
-    // Buscar fila de headers
+    // Buscar fila de headers (buscar "Vehículo"/"Vehicle" o "Tiempo"/"Time")
     let hIdx=0;
-    for (let i=0;i<Math.min(rows.length,5);i++) {
+    for (let i=0;i<Math.min(rows.length,10);i++) {
       const r=rows[i]; if (!Array.isArray(r)) continue;
-      if (r.some(c=>normH(c)==='vehiculo'||normH(c)==='vehicle'||normH(c).includes('vehicu'))
-          ||r.some(c=>normH(c)==='tiempo'||normH(c)==='time')) {hIdx=i;break;}
+      const norm=r.map(c=>normH(c));
+      if (norm.some(n=>n==='vehiculo'||n==='vehicle'||n.includes('vehicu'))
+          ||norm.some(n=>n==='tiempo'||n==='time'||n.includes('fecha')||n.includes('hora'))) {
+        hIdx=i;
+        console.log('[VOLVO] Headers encontrados en fila',i,':',r.slice(0,5));
+        break;
+      }
     }
+    console.log('[VOLVO] Total filas:',rows.length,' hIdx:',hIdx,' primera fila:',rows[0]?.slice?.(0,4));
     // Detectar columnas
     const hRow=rows[hIdx]||[];
     let colVeh=0,colFecha=1;
@@ -567,8 +573,12 @@ const Parsers = (() => {
     }
     if (plat==='VOLVO') {
       // Hoja: "Actividades del vehículo" (Volvo Connect tracking-report)
+      // Priorizar por nombre, fallback a primera hoja
       const sh=sheetNames.find(n=>normalize(n).includes('actividad')||normalize(n).includes('vehicle')||normalize(n).includes('vehiculo'));
-      return sh||sheetNames[0];
+      if (sh) { console.log('[selectSheet VOLVO] Elegida:', sh); return sh; }
+      // Si no hay hoja por nombre, usar la primera (puede ser la única)
+      console.log('[selectSheet VOLVO] Usando primera hoja:', sheetNames[0]);
+      return sheetNames[0];
     }
     return sheetNames[0];
   }
