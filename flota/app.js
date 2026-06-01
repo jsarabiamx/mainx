@@ -444,36 +444,29 @@ const App = (() => {
     UI.renderResumen();
     document.getElementById('tb-date').textContent = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
 
-    const hayDatos = DB.getUnidadesList(DB.getEmpresaActiva()).length > 0;
-
-    if (!hayDatos) {
-      _showSyncBanner('⏳ Cargando datos desde Supabase...');
-      DB.initFromSupabase().then(ok => {
-        _hideSyncBanner();
-        if (ok) { UI.renderResumen(); populateEmpresaSelect(); }
-      });
-    } else {
-      setTimeout(() => {
-        DB.initFromSupabase().then(ok => {
-          if (ok && !document.hidden) {
-            // Refrescar el panel activo con datos frescos de Supabase
-            const panelActivo = document.querySelector('.panel.active');
-            const panelId = panelActivo ? panelActivo.id : 'panel-resumen';
-            if (panelId === 'panel-resumen')     UI.renderResumen();
-            if (panelId === 'panel-plataformas') UI.renderPlataformas();
-            if (panelId === 'panel-maestra')     UI.renderMaestra();
-            if (panelId === 'panel-graficas')    UI.renderGraficas();
-            // Siempre actualizar el badge de alertas
-            UI.renderResumen && (() => {
-              const emp = DB.getEmpresaActiva();
-              const st = DB.getStats(emp);
-              const badge = document.getElementById('nav-alertas-badge');
-              if (badge) badge.textContent = st.sinVIN + st.sinPlaca + st.sinDatos + st.siniestros;
-            })();
-          }
-        });
-      }, 2000);
-    }
+    // ── SIEMPRE cargar desde Supabase al iniciar ─────────────────────────────
+    // localStorage solo se usa como caché temporal para no mostrar pantalla en blanco.
+    // La fuente de verdad es Supabase — cualquier navegador verá los datos actuales
+    // al recargar la página, independientemente de su localStorage previo.
+    _showSyncBanner('⏳ Sincronizando datos...');
+    DB.initFromSupabase().then(ok => {
+      _hideSyncBanner();
+      if (ok) {
+        UI.renderResumen();
+        populateEmpresaSelect();
+        // Refrescar el panel activo si no es Resumen
+        const panelActivo = document.querySelector('.panel.active');
+        const panelId = panelActivo ? panelActivo.id : 'panel-resumen';
+        if (panelId === 'panel-plataformas') UI.renderPlataformas();
+        if (panelId === 'panel-maestra')     UI.renderMaestra();
+        if (panelId === 'panel-graficas')    UI.renderGraficas();
+      }
+    }).catch(e => {
+      _hideSyncBanner();
+      console.warn('[App.init] Error al cargar desde Supabase:', e);
+      // Si Supabase falla, al menos renderizar lo que hay en localStorage
+      UI.renderResumen();
+    });
 
     setTimeout(() => { _syncFallasDesdeInicio(); },    8000);
     setTimeout(_startFallasSync,                       15000);
