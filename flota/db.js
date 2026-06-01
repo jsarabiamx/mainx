@@ -240,18 +240,29 @@ const DB = (() => {
       }
 
       // ── PASO 2: Barridos GPS — Supabase es fuente de verdad ──────────────
-      // Limpiar fechas GPS del localStorage ANTES de aplicar las de Supabase.
-      // Garantiza que cualquier navegador al recargar vea exactamente lo que tiene Supabase.
-      const _PLATS_GPS = ['ceiba','samsara','avl','scania','man','volvo','motive'];
-      Object.keys(_s.empresas).forEach(empLimp => {
-        if (!_s.unidades[empLimp]) return;
-        Object.values(_s.unidades[empLimp]).forEach(u => {
-          _PLATS_GPS.forEach(p => { delete u['ultima_act_' + p]; });
-          u.ultima_act = null;
-        });
-      });
+      // Carga Supabase primero, luego limpia solo las plataformas que vienen de Supabase.
+      // El usuario ve datos del localStorage durante la carga, no 0.
       try {
         const barridoRows = await GPS_SB._getRaw('gps_barridos', 'activa=eq.true');
+        // Registrar qué plataformas tiene Supabase y limpiarlas antes de aplicar
+        const _sbPlats = {}; // { ETN: Set(['ceiba','samsara',...]) }
+        if (barridoRows && barridoRows.length > 0) {
+          barridoRows.forEach(r => {
+            const _eR = String(r.empresa_id || ''), _pR = (r.plataforma||'').toLowerCase();
+            if (_eR && _pR) { if (!_sbPlats[_eR]) _sbPlats[_eR] = new Set(); _sbPlats[_eR].add(_pR); }
+          });
+          // Limpiar solo las plataformas que Supabase va a reemplazar
+          const _ALL_P = ['ceiba','samsara','avl','scania','man','volvo','motive'];
+          Object.entries(_sbPlats).forEach(([_eR, _plats]) => {
+            if (!_s.unidades[_eR]) return;
+            Object.values(_s.unidades[_eR]).forEach(u => {
+              _plats.forEach(p => { delete u['ultima_act_' + p]; });
+              let _maxF = null;
+              _ALL_P.forEach(pp => { const f = u['ultima_act_'+pp]; if (f && (!_maxF || new Date(f)>new Date(_maxF))) _maxF=f; });
+              u.ultima_act = _maxF;
+            });
+          });
+        }
         if (barridoRows && barridoRows.length > 0) {
           const idFieldByPlat = { CEIBA:'dvr_ceiba', SAMSARA:'vin_samsara', MAN:'placa_man', SCANIA:'placa_scania' };
           barridoRows.forEach(r => {
