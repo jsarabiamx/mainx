@@ -426,8 +426,8 @@ const Parsers = (() => {
         break;
       }
     }
-    // Si no encontró headers, asumir que la fila 1 es header (fila 0 es nota)
-    if (hIdx<0) hIdx=1;
+    // Si no encontró headers, asumir fila 0 (headers directamente al inicio)
+    if (hIdx<0) hIdx=0;
     console.log('[VOLVO] hIdx final:',hIdx,' total filas:',rows.length,' muestra col0:',rows[Math.min(hIdx+1,rows.length-1)]?.slice?.(0,3));
 
     // Detectar columnas — fallback a posiciones 0,1 si no hay headers claros
