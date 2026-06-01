@@ -3202,12 +3202,38 @@ const UI = (() => {
       }
       _barridosPending[plat]={parsed,filename:file.name,val:Parsers.validarResultado(parsed),sheetName};
       const emp = DB.getEmpresaActiva();
-      const totalArchivo = rows.length - 1; // descontar header
-      const res = DB.saveBarrido(plat, parsed, emp);
+      const totalArchivo = rows.length - 1;
       const descartados = totalArchivo - parsed.length;
       const msgDesc = descartados > 0 ? ` (${descartados} sin número económico)` : '';
-      toast(`✓ ${plat} (hoja: ${sheetName}): ${parsed.length} registros${msgDesc} → ${res.actualizadas} actualizadas en ETN/GHO`, 'success', 7000);
-      // Bloquear polling de barridos 3 min — evita que Supabase sobreescriba datos recién cargados
+
+      // ── Guardar local (sincrono) ──────────────────────────────────────────
+      const res = DB.saveBarrido(plat, parsed, emp);
+
+      // ── Guardar en Supabase (await — toast muestra resultado real) ────────
+      let sbOk = false;
+      if (window.GPS_SB) {
+        toast(`⏳ Enviando ${parsed.length} registros de ${plat} a Supabase...`, 'info', 4000);
+        try {
+          // Agrupar por empresa real del registro (para MOTIVE con múltiples empresas)
+          const grupos = {};
+          parsed.forEach(r => {
+            const e = (plat === 'MOTIVE' && r.empresa) ? r.empresa : emp;
+            if (!grupos[e]) grupos[e] = [];
+            grupos[e].push(r);
+          });
+          for (const [e, regs] of Object.entries(grupos)) {
+            await GPS_SB.saveBarrido(plat, regs, e);
+          }
+          sbOk = true;
+          toast(`✓ ${plat} (${sheetName}): ${parsed.length} registros${msgDesc} → ${res.actualizadas} act. locales · Supabase ✓`, 'success', 7000);
+        } catch(sbErr) {
+          console.error('[saveBarrido Supabase]', sbErr);
+          toast(`⚠ ${plat}: guardado local OK pero falló Supabase: ${sbErr.message}`, 'error', 8000);
+        }
+      } else {
+        toast(`✓ ${plat} (${sheetName}): ${parsed.length} registros${msgDesc} → ${res.actualizadas} actualizadas en ${emp}`, 'success', 7000);
+      }
+
       if (typeof App !== 'undefined' && App._bloquearBarridosSync) App._bloquearBarridosSync();
       renderPlataformas();
       renderResumen();
