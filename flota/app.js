@@ -456,9 +456,20 @@ const App = (() => {
       setTimeout(() => {
         DB.initFromSupabase().then(ok => {
           if (ok && !document.hidden) {
-            UI.renderResumen();
-            const panelPlat = document.getElementById('panel-plataformas');
-            if (panelPlat && panelPlat.classList.contains('active')) UI.renderPlataformas();
+            // Refrescar el panel activo con datos frescos de Supabase
+            const panelActivo = document.querySelector('.panel.active');
+            const panelId = panelActivo ? panelActivo.id : 'panel-resumen';
+            if (panelId === 'panel-resumen')     UI.renderResumen();
+            if (panelId === 'panel-plataformas') UI.renderPlataformas();
+            if (panelId === 'panel-maestra')     UI.renderMaestra();
+            if (panelId === 'panel-graficas')    UI.renderGraficas();
+            // Siempre actualizar el badge de alertas
+            UI.renderResumen && (() => {
+              const emp = DB.getEmpresaActiva();
+              const st = DB.getStats(emp);
+              const badge = document.getElementById('nav-alertas-badge');
+              if (badge) badge.textContent = st.sinVIN + st.sinPlaca + st.sinDatos + st.siniestros;
+            })();
           }
         });
       }, 2000);
