@@ -11,6 +11,12 @@
         autoRefreshToken: true,
         detectSessionInUrl: false,
         storageKey: 'cctv_supabase_auth'
+      },
+      realtime: {
+        params: { eventsPerSecond: -1 }
+      },
+      global: {
+        headers: {}
       }
     }
   };
