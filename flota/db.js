@@ -150,12 +150,14 @@ const DB = (() => {
           });
           const mesReciente = Object.keys(meses).sort().reverse()[0];
           const filas = meses[mesReciente];
-          _s.unidades[emp] = {};  // reiniciar solo si hay asignación
+          // NO limpiar _s.unidades[emp] aquí — construir nuevo objeto y asignar al final
+          // Esto evita que el usuario vea 0 mientras Supabase carga
+          const _nuevasUnidades = {};
 
           filas.forEach(r => {
             const extra = r.datos_extra || {};
             const num = String(r.num_economico);
-            _s.unidades[emp][num] = {
+            _nuevasUnidades[num] = {
               num,
               economico:    extra.economico || num,
               cromatica:    r.cromatica || extra.cromatica || '',
@@ -182,6 +184,8 @@ const DB = (() => {
             };
           });
 
+          // Asignación atómica: reemplazar solo cuando todo está listo
+          _s.unidades[emp] = _nuevasUnidades;
           if (!_s.asignaciones) _s.asignaciones = {};
           if (!_s.asignaciones[emp]) _s.asignaciones[emp] = [];
           if (_s.asignaciones[emp].length === 0) {
