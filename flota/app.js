@@ -441,30 +441,30 @@ const App = (() => {
     if (UI._applyEmpresaTheme) UI._applyEmpresaTheme(DB.getEmpresaActiva());
     if (UI._initNavGroups)     UI._initNavGroups();
 
-    UI.renderResumen();
     document.getElementById('tb-date').textContent = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
 
-    // ── SIEMPRE cargar desde Supabase al iniciar ─────────────────────────────
-    // localStorage solo se usa como caché temporal para no mostrar pantalla en blanco.
-    // La fuente de verdad es Supabase — cualquier navegador verá los datos actuales
-    // al recargar la página, independientemente de su localStorage previo.
+    // ── Mostrar datos locales inmediatamente si existen ──────────────────────
+    const _hayDatosLocales = DB.getUnidadesList(DB.getEmpresaActiva()).length > 0;
+    if (_hayDatosLocales) UI.renderResumen();
+
+    // ── Siempre sincronizar con Supabase (fuente de verdad) ──────────────────
     _showSyncBanner('⏳ Sincronizando datos...');
     DB.initFromSupabase().then(ok => {
       _hideSyncBanner();
       if (ok) {
         UI.renderResumen();
         populateEmpresaSelect();
-        // Refrescar el panel activo si no es Resumen
         const panelActivo = document.querySelector('.panel.active');
         const panelId = panelActivo ? panelActivo.id : 'panel-resumen';
         if (panelId === 'panel-plataformas') UI.renderPlataformas();
         if (panelId === 'panel-maestra')     UI.renderMaestra();
         if (panelId === 'panel-graficas')    UI.renderGraficas();
+      } else {
+        if (!_hayDatosLocales) UI.renderResumen();
       }
     }).catch(e => {
       _hideSyncBanner();
       console.warn('[App.init] Error al cargar desde Supabase:', e);
-      // Si Supabase falla, al menos renderizar lo que hay en localStorage
       UI.renderResumen();
     });
 
