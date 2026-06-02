@@ -451,16 +451,23 @@ const App = (() => {
     _showSyncBanner('⏳ Sincronizando datos...');
     DB.initFromSupabase().then(ok => {
       _hideSyncBanner();
-      if (ok) {
-        UI.renderResumen();
-        populateEmpresaSelect();
-        const panelActivo = document.querySelector('.panel.active');
-        const panelId = panelActivo ? panelActivo.id : 'panel-resumen';
-        if (panelId === 'panel-plataformas') UI.renderPlataformas();
-        if (panelId === 'panel-maestra')     UI.renderMaestra();
-        if (panelId === 'panel-graficas')    UI.renderGraficas();
-      } else {
-        if (!_hayDatosLocales) UI.renderResumen();
+      populateEmpresaSelect();
+      // Re-renderizar el panel activo en ese momento (no siempre Resumen)
+      const panelActivo = document.querySelector('.panel.active');
+      const panelId = panelActivo ? panelActivo.id : 'panel-resumen';
+      switch (panelId) {
+        case 'panel-resumen':       UI.renderResumen();       break;
+        case 'panel-plataformas':   UI.renderPlataformas();   break;
+        case 'panel-maestra':       UI.renderMaestra();       break;
+        case 'panel-graficas':      UI.renderGraficas();      break;
+        case 'panel-viajes':        UI.renderViajes();        break;
+        case 'panel-barrido-manual':UI.renderBarridoManual(); break;
+        case 'panel-fallas':        UI.renderFallasPanel();   break;
+        case 'panel-historial':     UI.renderHistorial();     break;
+        case 'panel-alertas':       UI.renderAlertas && UI.renderAlertas(); break;
+        case 'panel-asignacion':    UI.renderAsignacion();    break;
+        case 'panel-barridos':      UI.renderBarridos();      break;
+        default:                    UI.renderResumen();       break;
       }
     }).catch(e => {
       _hideSyncBanner();
