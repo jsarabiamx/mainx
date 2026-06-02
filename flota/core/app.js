@@ -476,7 +476,11 @@ const App = (() => {
 
     // ── Mostrar datos locales inmediatamente si existen ──────────────────────
     const _hayDatosLocales = DB.getUnidadesList(DB.getEmpresaActiva()).length > 0;
-    if (_hayDatosLocales) UI.renderResumen();
+    // Si hay datos locales, permitir navegación inmediata sin esperar Supabase
+    if (_hayDatosLocales) {
+      _datosListos = true;
+      UI.renderResumen();
+    }
 
     // ── Siempre sincronizar con Supabase (fuente de verdad) ──────────────────
     _showSyncBanner('⏳ Sincronizando datos...');

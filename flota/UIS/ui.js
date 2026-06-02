@@ -1720,12 +1720,13 @@ const UI = (() => {
 
 
   return {
-    // render panels
+    // render panels — funciones definidas en ui.js
     renderResumen, renderUnitList, renderDetalle,
-    renderAsignacion, renderAsigTable,
-    renderBarridos, renderPlataformas,
-    renderReportes, renderHistorial, renderAlertas,
-    renderViajes, renderGraficas, renderFallasPanel, renderBarridoManual, renderMaestra,
+    renderBarridos,
+    // Las siguientes funciones se inyectan vía Object.assign desde sus módulos:
+    // ui-plataformas.js → renderPlataformas
+    // ui-analisis.js    → renderAsignacion, renderAsigTable, renderHistorial, renderAlertas, renderViajes, renderGraficas
+    // ui-fallas.js      → renderFallasPanel, renderBarridoManual, renderMaestra
     // unit actions
     openUnitDetail, openEditarUnidad, openRegistrarFalla,
     _guardarUnidad, _guardarFalla, _abrirFormNuevaFalla,
