@@ -557,7 +557,6 @@ const UI = (() => {
     }
   };
 
-})();
         const _simColor = _simInfo ? {
           'SIM INSTALADA':    { text:'#1a9e6e', bg:'rgba(26,158,110,.13)' },
           'SIM RETIRADA':     { text:'#c0392b', bg:'rgba(192,57,43,.13)' },
