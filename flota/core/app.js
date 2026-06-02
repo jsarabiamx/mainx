@@ -22,6 +22,54 @@ const App = (() => {
     'panel-sims':       { title:'MESA DE CONTROL', sub:'Control de SIMs',           nav:'nav-sims'       },
   };
 
+  // Flag global: true cuando initFromSupabase terminó
+  let _datosListos = false;
+
+  function _renderPanel(panelId, extra) {
+    switch(panelId) {
+      case 'panel-resumen':        UI.renderResumen();           break;
+      case 'panel-detalle':        if(extra) UI.renderDetalle(extra.num, extra.emp); break;
+      case 'panel-asignacion':     UI.renderAsignacion();        break;
+      case 'panel-barridos':       UI.renderBarridos();          break;
+      case 'panel-reportes':       UI.renderReportes();          break;
+      case 'panel-maestra':        UI.renderMaestra();           break;
+      case 'panel-historial':      UI.renderHistorial();         break;
+      case 'panel-plataformas':    UI.renderPlataformas();       break;
+      case 'panel-viajes':         UI.renderViajes();            break;
+      case 'panel-barrido-manual': UI.renderBarridoManual();     break;
+      case 'panel-graficas':       UI.renderGraficas();          break;
+      case 'panel-fallas':         UI.renderFallasPanel();       break;
+      case 'panel-alertas':        UI.renderAlertas && UI.renderAlertas(); break;
+      case 'panel-manual':         renderManual();               break;
+      case 'panel-config':         renderConfig();               break;
+      case 'panel-sims':           SimsUI.render();              break;
+      case 'panel-carga-asig':
+        for(let i=1;i<=5;i++){const e=document.getElementById('cstep-'+i);if(e){e.classList.remove('done','active');if(i===1)e.classList.add('active');}}
+        ['asig-det-banner','asig-preview-section'].forEach(id=>{const e=document.getElementById(id);if(e)e.classList.add('hidden');});
+        const bp=document.getElementById('btn-procesar-asig');if(bp)bp.disabled=true;
+        break;
+    }
+  }
+
+  function _showPanelSpinner(panelId) {
+    // Paneles que tienen un contenedor conocido donde mostrar el spinner
+    const contenedores = {
+      'panel-plataformas':    'plataformas-grid',
+      'panel-maestra':        'maestra-content',
+      'panel-graficas':       'graficas-content',
+      'panel-viajes':         'viajes-content',
+      'panel-fallas':         'fallas-content',
+      'panel-barrido-manual': 'barridomanual-content',
+      'panel-historial':      'historial-list',
+      'panel-alertas':        'alertas-content',
+      'panel-sims':           'sims-content',
+    };
+    const cid = contenedores[panelId];
+    if (!cid) return;
+    const el = document.getElementById(cid);
+    if (el) el.innerHTML = '<div style="text-align:center;padding:60px;color:var(--text3);font-size:13px">⏳ Cargando datos...</div>';
+  }
+
   function nav(el, panelId, extra) {
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     const meta = META[panelId];
@@ -41,28 +89,11 @@ const App = (() => {
     if (sw) sw.style.display = panelId === 'panel-resumen' ? 'flex' : 'none';
     if (tr) tr.style.display = panelId !== 'panel-resumen' ? 'flex' : 'none';
 
-    switch(panelId) {
-      case 'panel-resumen':    UI.renderResumen();    break;
-      case 'panel-detalle':    if(extra) UI.renderDetalle(extra.num, extra.emp); break;
-      case 'panel-asignacion': UI.renderAsignacion(); break;
-      case 'panel-barridos':   UI.renderBarridos();   break;
-      case 'panel-reportes':   UI.renderReportes();   break;
-      case 'panel-maestra':    UI.renderMaestra();    break;
-      case 'panel-historial':  UI.renderHistorial();  break;
-      case 'panel-plataformas':UI.renderPlataformas();break;
-      case 'panel-viajes':     UI.renderViajes();     break;
-      case 'panel-barrido-manual': UI.renderBarridoManual(); break;
-      case 'panel-graficas':   UI.renderGraficas();   break;
-      case 'panel-fallas':     UI.renderFallasPanel();break;
-      case 'panel-alertas':    UI.renderAlertas();    break;
-      case 'panel-manual':     renderManual();        break;
-      case 'panel-config':     renderConfig();        break;
-      case 'panel-sims':       SimsUI.render();       break;
-      case 'panel-carga-asig':
-        for(let i=1;i<=5;i++){const e=document.getElementById('cstep-'+i);if(e){e.classList.remove('done','active');if(i===1)e.classList.add('active');}}
-        ['asig-det-banner','asig-preview-section'].forEach(id=>{const e=document.getElementById(id);if(e)e.classList.add('hidden');});
-        const bp=document.getElementById('btn-procesar-asig');if(bp)bp.disabled=true;
-        break;
+    if (_datosListos) {
+      _renderPanel(panelId, extra);
+    } else {
+      // Datos aún cargando — mostrar spinner, el init re-renderizará cuando termine
+      _showPanelSpinner(panelId);
     }
   }
 
@@ -451,26 +482,15 @@ const App = (() => {
     _showSyncBanner('⏳ Sincronizando datos...');
     DB.initFromSupabase().then(ok => {
       _hideSyncBanner();
+      _datosListos = true;
       populateEmpresaSelect();
-      // Re-renderizar el panel activo en ese momento (no siempre Resumen)
+      // Re-renderizar el panel activo en ese momento
       const panelActivo = document.querySelector('.panel.active');
       const panelId = panelActivo ? panelActivo.id : 'panel-resumen';
-      switch (panelId) {
-        case 'panel-resumen':       UI.renderResumen();       break;
-        case 'panel-plataformas':   UI.renderPlataformas();   break;
-        case 'panel-maestra':       UI.renderMaestra();       break;
-        case 'panel-graficas':      UI.renderGraficas();      break;
-        case 'panel-viajes':        UI.renderViajes();        break;
-        case 'panel-barrido-manual':UI.renderBarridoManual(); break;
-        case 'panel-fallas':        UI.renderFallasPanel();   break;
-        case 'panel-historial':     UI.renderHistorial();     break;
-        case 'panel-alertas':       UI.renderAlertas && UI.renderAlertas(); break;
-        case 'panel-asignacion':    UI.renderAsignacion();    break;
-        case 'panel-barridos':      UI.renderBarridos();      break;
-        default:                    UI.renderResumen();       break;
-      }
+      _renderPanel(panelId);
     }).catch(e => {
       _hideSyncBanner();
+      _datosListos = true; // aun con error, permitir interacción
       console.warn('[App.init] Error al cargar desde Supabase:', e);
       UI.renderResumen();
     });
