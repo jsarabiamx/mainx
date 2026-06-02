@@ -7,6 +7,19 @@
   const UI_P = window.UI;
   if (!UI_P) { console.error('ui-fallas: UI no disponible'); return; }
 
+  // Helpers compartidos desde ui.js
+  const { $, esc, toast, openModal, closeModal, openDatePicker,
+    _multiTokenMatch, _multiSelectChipsDropdown,
+    _msToggle, _msOnCheck, _msUpdateTriggerText, _msSelectAll,
+    _msFilterOptions, _readMultiSelectValues,
+    platIcon, PLAT_STYLE, ALL_PLATS, platsSortedByData,
+    comboWithOther, _onComboChange, readComboValue,
+    renderEtiquetasUnidad, estatusBadge, diasBadge,
+    renderPagination, PAGE_SIZE,
+    fmtDate, fmtDateShort, diasDesde, statusClass
+  } = window.UI_HELPERS;
+
+
   /* ══════════════════════════════════════════════════════
      PANEL: FALLAS v2 (AFR, Siniestros, Liberadas, Reincidencias — control completo)
   ══════════════════════════════════════════════════════ */
