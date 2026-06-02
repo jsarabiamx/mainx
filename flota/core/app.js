@@ -89,12 +89,8 @@ const App = (() => {
     if (sw) sw.style.display = panelId === 'panel-resumen' ? 'flex' : 'none';
     if (tr) tr.style.display = panelId !== 'panel-resumen' ? 'flex' : 'none';
 
-    if (_datosListos) {
-      _renderPanel(panelId, extra);
-    } else {
-      // Datos aún cargando — mostrar spinner, el init re-renderizará cuando termine
-      _showPanelSpinner(panelId);
-    }
+    // Siempre renderizar — cada panel muestra su propio estado vacío si no hay datos
+    _renderPanel(panelId, extra);
   }
 
   function renderManual() {
@@ -474,13 +470,9 @@ const App = (() => {
 
     document.getElementById('tb-date').textContent = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
 
-    // ── Mostrar datos locales inmediatamente si existen ──────────────────────
-    const _hayDatosLocales = DB.getUnidadesList(DB.getEmpresaActiva()).length > 0;
-    // Si hay datos locales, permitir navegación inmediata sin esperar Supabase
-    if (_hayDatosLocales) {
-      _datosListos = true;
-      UI.renderResumen();
-    }
+    // Permitir navegación inmediata — cada panel maneja su propio estado vacío
+    _datosListos = true;
+    UI.renderResumen();
 
     // ── Siempre sincronizar con Supabase (fuente de verdad) ──────────────────
     _showSyncBanner('⏳ Sincronizando datos...');

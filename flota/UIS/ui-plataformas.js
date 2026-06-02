@@ -7,6 +7,7 @@
   if (!UI_P) { console.error('ui-plataformas: UI no disponible'); return; }
 
   // Helpers compartidos desde ui.js
+  if (!window.UI_HELPERS) { console.error('ui-plataformas: UI_HELPERS no disponible'); return; }
   const { $, esc, toast, openModal, closeModal, openDatePicker,
     _multiTokenMatch, _multiSelectChipsDropdown,
     _msToggle, _msOnCheck, _msUpdateTriggerText, _msSelectAll,
