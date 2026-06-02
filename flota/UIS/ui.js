@@ -1583,22 +1583,50 @@ const UI = (() => {
     if($('br-errores'))   $('br-errores').textContent  ='0';
   }
 
-  function integrarBarridos(){
+  async function integrarBarridos(){
     const emp=DB.getEmpresaActiva();
     const entries=Object.entries(_barridosPending);
     if(!entries.length){toast('No hay archivos pendientes','warn');return;}
+
     let totalAct=0,totalNoEnc=0;
+
+    // 1) Guardar en localStorage (siempre, sin importar conexión)
     entries.forEach(([plat,{parsed}])=>{
       const res=DB.saveBarrido(plat,parsed,emp);
       totalAct+=res.actualizadas;
       totalNoEnc+=res.noEncontradas;
     });
+
     _barridosPending={};
     _refreshLog();
-    toast(`✓ Integrados: ${totalAct} unidades actualizadas${totalNoEnc?' · '+totalNoEnc+' sin asignación (creadas)':''}`,'success',5000);
+    toast(`✓ Local: ${totalAct} unidades actualizadas${totalNoEnc?' · '+totalNoEnc+' sin asignación':''}`,'success',4000);
     _setStep('bstep-',1);
     _renderPlatDetectCards();
     _updateBarridoResumen();
+
+    // 2) Sincronizar con Supabase en background (si hay conexión)
+    if(window.GPS_SB){
+      toast('⏳ Sincronizando con Supabase...','info',3000);
+      let sbOk=0, sbErr=0;
+      for(const [plat,{parsed}] of entries){
+        try{
+          const res = await GPS_SB.saveBarrido(plat, parsed, emp);
+          sbOk += res.total || 0;
+          console.log(`[integrarBarridos] Supabase ${plat}/${emp}: ${res.total} registros OK`);
+        }catch(e){
+          sbErr++;
+          console.warn(`[integrarBarridos] Supabase error en ${plat}:`, e.message);
+        }
+      }
+      if(sbErr===0){
+        toast(`☁ Supabase: ${sbOk} registros sincronizados`,'success',4000);
+      } else {
+        toast(`⚠ Supabase: ${sbOk} OK · ${sbErr} plataforma(s) con error (datos guardados localmente)`,'warn',6000);
+      }
+    } else {
+      toast('📴 Sin conexión — datos guardados localmente, se sincronizarán al reconectar','warn',5000);
+    }
+
     setTimeout(()=>App.nav(null,'panel-resumen'),1200);
   }
 
