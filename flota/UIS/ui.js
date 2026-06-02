@@ -2789,11 +2789,25 @@ const UI = (() => {
         toast(`No se encontraron datos válidos en ${plat} (hoja: ${sheetName})`,'warn',5000);
         return;
       }
+      const emp = DB.getEmpresaActiva();
       _barridosPending[plat]={parsed,filename:file.name,val:Parsers.validarResultado(parsed),sheetName};
-      const res=DB.saveBarrido(plat,parsed,DB.getEmpresaActiva());
-      toast(`✓ ${plat} (hoja: ${sheetName}): ${parsed.length} registros → ${res.actualizadas} unidades actualizadas`,'success',5000);
+
+      // 1) Guardar en localStorage siempre
+      const res=DB.saveBarrido(plat,parsed,emp);
+      toast(`✓ ${plat}: ${parsed.length} registros → ${res.actualizadas} actualizadas`,'success',4000);
       renderPlataformas();
       renderResumen();
+
+      // 2) Sincronizar con Supabase en background
+      if(window.GPS_SB){
+        toast(`⏳ Sincronizando ${plat} con Supabase...`,'info',3000);
+        GPS_SB.saveBarrido(plat, parsed, emp)
+          .then(r => toast(`☁ Supabase ${plat}: ${r.total} registros sincronizados`,'success',4000))
+          .catch(e => {
+            console.warn(`[_cargarArchivoPlat] Supabase error ${plat}:`, e.message);
+            toast(`⚠ ${plat} guardado local — Supabase: ${e.message}`,'warn',5000);
+          });
+      }
     }catch(err){
       toast(`Error en ${plat}: `+err.message,'error');
       console.error(err);
