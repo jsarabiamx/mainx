@@ -878,11 +878,14 @@
   }
 
   Object.assign(UI_P, {
-    renderAsignacion, renderAsigTable,
-    renderHistorial, renderAlertas,
+    renderAsignacion, renderAsigTable, renderReportes, exportarReporte,
+    renderHistorial, renderAlertas, _filtrarPorAlerta, _exportarAlerta,
     renderViajes, renderGraficas,
-    renderMaestra,
-    _onMaestraFilterChange, _setMaestraPlatFilter,
-    _resetMaestraFilters, _exportarMaestra
+    _renderViajeRow, _debounce,
+    _onViajesFilterChange, _debounceViajesSearch,
+    _debounceResumenSearch, _debounceAsigSearch,
+    _resetViajesFilters, _pickViajeDt, _autoSaveViajeRow,
+    _guardarViajeRow, _toggleObsEditor, _saveObsViaje,
+    _eliminarViajeRow, _exportarViajes
   });
 })();

@@ -1450,8 +1450,12 @@
     renderFallasPanel, renderBarridoManual,
     _renderTabActivas, _renderTabLiberadas, _renderTabMetricas,
     _liberarFalla, openRegistrarFallaGlobal, _guardarFallaGlobal,
-    renderBarridoManual, _procesarBarridoManual, _enviarAFinalBarridoManual,
+    _procesarBarridoManual, _enviarAFinalBarridoManual,
     _guardarBarridoManualEnSistema, _limpiarBarridoManual,
+    _copiarBarridoManual, _copiarReporteFinalBarrido,
+    _procesarFinalBarridoManual, _cargarBarridoManualEjemplo,
+    renderMaestra, _onMaestraFilterChange, _setMaestraPlatFilter,
+    _resetMaestraFilters, _exportarMaestra,
     cambiarEmpresa, _applyEmpresaTheme,
     _toggleNavGroup, _initNavGroups,
     exportarCSV, exportarDatos, importarDatos
