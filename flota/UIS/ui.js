@@ -3,9 +3,6 @@
  * Extendido por: ui-plataformas.js, ui-panels.js
  */
 const UI = (() => {
-dos los paneles corregidos según retroalimentación del PDF
- */
-const UI = (() => {
   const $ = id => document.getElementById(id);
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const PAGE_SIZE = 12;
