@@ -93,19 +93,7 @@
     const el=$('plataformas-grid');
     if(!el)return;
 
-    // Sincronizar fallas activas de Supabase antes de renderizar
-    // para garantizar que u.siniestro esté correcto en todos los dispositivos
-    if (window.GPS_SB && !renderPlataformas._syncDone) {
-      renderPlataformas._syncDone = true;
-      App._syncFallasDesdeInicio && App._syncFallasDesdeInicio().then(() => {
-        renderPlataformas();
-        // Si hay una plataforma expandida, volver a renderizar su tabla tras el sync
-        if (_platExpandida) {
-          setTimeout(() => _refreshPlatTable(_platExpandida), 100);
-        }
-      });
-      // Renderizar con datos actuales mientras llega el sync (no bloquear UI)
-    }
+    // Renderizar con datos actuales (fallas se sincronizan en background por app.js)
 
     const uns=DB.getUnidadesList(emp).filter(u=>u.activa);
 
