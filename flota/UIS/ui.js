@@ -534,28 +534,7 @@ const UI = (() => {
           const sims = DB.getSims ? DB.getSims(_simEmp) : [];
           // Buscar la SIM más reciente asignada a esta unidad
           return sims.find(s => s.unidad === String(u.num)) || null;
-        
-  // ── Helpers compartidos con módulos externos ─────────────────────────────
-  // ui-plataformas.js, ui-analisis.js, ui-fallas.js los usan via window.UI_HELPERS
-  window.UI_HELPERS = {
-    $: id => document.getElementById(id),
-    esc, toast, openModal, closeModal, openDatePicker,
-    _multiTokenMatch, _multiSelectChipsDropdown,
-    _msToggle, _msOnCheck, _msUpdateTriggerText, _msSelectAll,
-    _msFilterOptions, _readMultiSelectValues,
-    platIcon, PLAT_STYLE, ALL_PLATS, platsSortedByData,
-    comboWithOther, _onComboChange, readComboValue,
-    renderEtiquetasUnidad, estatusBadge, diasBadge,
-    renderPagination, PAGE_SIZE,
-    fmtDate: Parsers.fmtDate,
-    fmtDateShort: Parsers.fmtDateShort,
-    diasDesde: Parsers.diasDesde,
-    statusClass: (d) => {
-      if (d===null||d===undefined) return 'sin';
-      try { const cfg=DB.getConfig(); if(d<=cfg.diasLinea)return 'enlinea'; if(d<=cfg.diasAtencion)return 'atencion'; } catch(e) {}
-      return 'critico';
-    }
-  };
+        })();
 
         const _simColor = _simInfo ? {
           'SIM INSTALADA':    { text:'#1a9e6e', bg:'rgba(26,158,110,.13)' },
@@ -1825,4 +1804,26 @@ const UI = (() => {
     get _histFiltro(){return _histFiltro;},
     set _histFiltro(v){Object.assign(_histFiltro,v);}
   };
+  // ── Helpers compartidos con módulos externos ─────────────────────────────
+  // ui-plataformas.js, ui-analisis.js, ui-fallas.js los usan via window.UI_HELPERS
+  window.UI_HELPERS = {
+    $: id => document.getElementById(id),
+    esc, toast, openModal, closeModal, openDatePicker,
+    _multiTokenMatch, _multiSelectChipsDropdown,
+    _msToggle, _msOnCheck, _msUpdateTriggerText, _msSelectAll,
+    _msFilterOptions, _readMultiSelectValues,
+    platIcon, PLAT_STYLE, ALL_PLATS, platsSortedByData,
+    comboWithOther, _onComboChange, readComboValue,
+    renderEtiquetasUnidad, estatusBadge, diasBadge,
+    renderPagination, PAGE_SIZE,
+    fmtDate: Parsers.fmtDate,
+    fmtDateShort: Parsers.fmtDateShort,
+    diasDesde: Parsers.diasDesde,
+    statusClass: (d) => {
+      if (d===null||d===undefined) return 'sin';
+      try { const cfg=DB.getConfig(); if(d<=cfg.diasLinea)return 'enlinea'; if(d<=cfg.diasAtencion)return 'atencion'; } catch(e) {}
+      return 'critico';
+    }
+  };
+
 })();
