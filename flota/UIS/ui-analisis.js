@@ -7,9 +7,6 @@
   const UI_P = window.UI;
   if (!UI_P) { console.error('ui-analisis: UI no disponible'); return; }
 
-  const UI_P = window.UI;
-  if (!UI_P) { console.error('ui-panels: UI no disponible'); return; }
-
 
   /* ══════════════════════════════════════════════════════
      PANEL: ASIGNACIÓN CONCENTRADO
