@@ -999,7 +999,81 @@ const Parsers = (() => {
       const sh = sheetNames.find(n => normalize(n).includes('devices_report') || normalize(n).includes('devices report'));
       return sh || sheetNames[0];
     }
+    if (plat === 'VOLVO') {
+      // Hoja: "Actividades del vehículo" o la primera disponible
+      const sh = sheetNames.find(n =>
+        normalize(n).includes('actividades') ||
+        normalize(n).includes('vehiculo') ||
+        normalize(n).includes('vehículo') ||
+        normalize(n).includes('tracking')
+      );
+      return sh || sheetNames[0];
+    }
     return sheetNames[0];
+  }
+
+
+  /* ══════════════════════════════════════════════════════
+     PARSER: VOLVO Connect — tracking-report
+     Hoja: "Actividades del vehículo"
+     Columnas: A=Vehículo (ETN-8101 o 20175), B=Tiempo, C=Evento, ...
+     Estrategia: agrupar por unidad, tomar la fecha MÁS RECIENTE de sus eventos
+  ══════════════════════════════════════════════════════ */
+  function parseVOLVO(rows) {
+    if (!rows || rows.length < 2) return [];
+
+    // Detectar columnas dinámicamente por encabezado
+    const hdr = rows[0].map(c => String(c||'').toLowerCase().trim());
+    const iVeh    = hdr.findIndex(h => h.includes('veh'));
+    const iTiempo = hdr.findIndex(h => h.includes('tiempo') || h.includes('time') || h.includes('fecha'));
+
+    // Si no hay encabezados reconocibles, usar posiciones fijas (A=0, B=1)
+    const colVeh    = iVeh    >= 0 ? iVeh    : 0;
+    const colTiempo = iTiempo >= 0 ? iTiempo : 1;
+
+    const map = {}; // num → fecha más reciente
+
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (!row || !row[colVeh]) continue;
+
+      const rawVeh = String(row[colVeh]).trim();
+      if (!rawVeh) continue;
+
+      // Extraer número económico:
+      // ETN-8101 → 8101 | GHO-20175 → 20175 | 20175 → 20175
+      let num;
+      const matchPrefijo = rawVeh.match(/^[A-Z]{2,5}-?(\d{4,6})$/i);
+      if (matchPrefijo) {
+        num = matchPrefijo[1];
+      } else if (/^\d{4,6}$/.test(rawVeh)) {
+        num = rawVeh;
+      } else {
+        // Intentar extraer números al final: "EMPRESA-12345" 
+        const matchNum = rawVeh.match(/(\d{4,6})$/);
+        num = matchNum ? matchNum[1] : null;
+      }
+      if (!num) continue;
+
+      // Parsear fecha
+      let fecha = null;
+      const rawFecha = row[colTiempo];
+      if (rawFecha) {
+        if (rawFecha instanceof Date) {
+          fecha = rawFecha;
+        } else {
+          const parsed = new Date(String(rawFecha).trim());
+          if (!isNaN(parsed)) fecha = parsed;
+        }
+      }
+
+      // Guardar la fecha más reciente por unidad
+      if (!map[num] || (fecha && fecha > map[num])) {
+        map[num] = fecha;
+      }
+    }
+
+    return Object.entries(map).map(([num, fecha]) => ({ num, fecha }));
   }
 
   function parsearPorPlataforma(plat, rows) {
@@ -1009,6 +1083,7 @@ const Parsers = (() => {
       case 'AVL':     return parseAVL(rows);
       case 'SCANIA':  return parseScania(rows);
       case 'MAN':     return parseMAN(rows);
+      case 'VOLVO':   return parseVOLVO(rows);
       case 'MOTIVE':  return parseMOTIVE(rows);
       default:        return [];
     }
@@ -1065,6 +1140,7 @@ const Parsers = (() => {
     diasDesde, statusClass,
     parseAsignacion, parseCeiba, parseSamsara, parseMAN, parseAVL, parseScania,
     readXLSX, detectarPlataforma, selectSheet, parsearPorPlataforma, validarResultado,
+    parseVOLVO,
     normalizarCromatica, normalizarEstatus, categorizarEstatus
   };
 })();
