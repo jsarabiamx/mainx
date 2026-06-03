@@ -243,6 +243,28 @@ const DB = (() => {
             }
           });
         }
+
+        // ── 4. Notas de unidades ─────────────────────────────────────────────
+        try {
+          const notaRows = await GPS_SB._getRaw('gps_notas',
+            `empresa_id=eq.${encodeURIComponent(emp)}`
+          );
+          if (notaRows && notaRows.length > 0) {
+            notaRows.forEach(r => {
+              if (!r.nota) return;
+              const num = String(r.num_economico);
+              if (!_s.unidades[emp]) _s.unidades[emp] = {};
+              if (!_s.unidades[emp][num]) {
+                _s.unidades[emp][num] = {
+                  num, activa: true, fallas: [], historial: [],
+                  base: '', cromatica: '', estatus: '', modelo: '',
+                  empresa_asig: emp, _fuente: 'supabase_nota'
+                };
+              }
+              _s.unidades[emp][num].notas = r.nota;
+            });
+          }
+        } catch(en) { console.warn('[DB] initFromSupabase notas:', en); }
       }
 
       // ── PASO 2: Barridos GPS — Supabase es fuente de verdad ──────────────
