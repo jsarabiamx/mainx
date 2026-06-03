@@ -2304,12 +2304,16 @@ const UI = (() => {
       // Identificador SEGÚN la plataforma (desde el campo específico del barrido)
       const idValue = _idValorUnidad(u, plat);
       const selected = _platDetailUnit === u.num ? 'background:rgba(59,130,246,.12)' : '';
-      // obsTexto: primero observaciones manuales, si no la etiqueta de la falla activa
+      // obsTexto: solo observaciones escritas por usuario + fallas activas
+      // Excluir valores que parecen seriales/DVR (hexadecimales o números puros de barrido)
       const _fallaActiva = (u.fallas||[]).find(f => !f.resuelta);
       const _etiquetaFalla = _fallaActiva ? (_fallaActiva.motivo || _fallaActiva.etiqueta || '') : '';
       const _siniestroLabel = u.siniestro ? (u.siniestroDesc ? `🚨 ${u.siniestroDesc}` : '🚨 SINIESTRO') : '';
-      const _obsRaw = u.observaciones || _siniestroLabel || _etiquetaFalla || '';
-      // Formatear etiquetas conocidas como chips visuales
+      // Filtrar observaciones que parecen seriales técnicos (solo hex/números sin letras legibles)
+      const _obsRawBruta = u.observaciones || '';
+      const _esSerial = _obsRawBruta && /^[0-9A-Fa-f]{6,}$/.test(_obsRawBruta.trim());
+      const _obsManual = _esSerial ? '' : _obsRawBruta;
+      const _obsRaw = _obsManual || _siniestroLabel || _etiquetaFalla || '';
       const obsTexto = _obsRaw;
       const _obsChip = (() => {
         if (!_obsRaw) return '';
@@ -2360,7 +2364,7 @@ const UI = (() => {
           : `<td style="font-family:monospace;font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(idValue)}</td>`
         }
         <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarObsRapido('${esc(u.num)}','${esc(u.empresa||emp)}','${plat}')" title="Click para editar — ${esc(obsTexto||'sin observación')}">
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${_obsChip||'<span style="color:var(--text3);font-style:italic">+ agregar…</span>'}</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${_obsChip||'<span style="color:var(--text3);font-style:italic;font-size:11px">+ agregar observación</span>'}</span>
           <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
         </td>
         <td style="width:32px;text-align:center" onclick="event.stopPropagation()">
@@ -2670,8 +2674,14 @@ const UI = (() => {
       }
     }
 
+    // Sincronizar observación a Supabase en background
+    if (window.GPS_SB && GPS_SB.saveNota) {
+      GPS_SB.saveNota(num, emp, texto)
+        .catch(e => console.warn('[editarObsRapido] Supabase sync:', e.message));
+    }
     toast('Observación guardada','success');
     if (_platExpandida === plat) _refreshPlatTable(plat);
+    renderResumen();
   }
 
   /**
