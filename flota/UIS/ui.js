@@ -2304,21 +2304,21 @@ const UI = (() => {
       // Identificador SEGÚN la plataforma (desde el campo específico del barrido)
       const idValue = _idValorUnidad(u, plat);
       const selected = _platDetailUnit === u.num ? 'background:rgba(59,130,246,.12)' : '';
-      // obsTexto: fallas activas (de Supabase o local) + observaciones manuales del usuario
-      // Obtener fallas buscando también en DB por si la unidad tiene fallas en otro objeto
+      // OBSERVACIONES: solo fallas activas de Supabase/local o lo que el usuario escribió manualmente
+      // NO mostrar datos de asignación (técnico, responsable) ni seriales del barrido
       const _uConFallas = DB.getUnidad(u.num, emp) || u;
       const _fallaActiva = (_uConFallas.fallas||[]).find(f => !f.resuelta);
       const _etiquetaFalla = _fallaActiva ? (_fallaActiva.motivo || _fallaActiva.etiqueta || '') : '';
       const _siniestroLabel = (_uConFallas.siniestro || u.siniestro)
         ? ((_uConFallas.siniestroDesc||u.siniestroDesc) ? `🚨 ${_uConFallas.siniestroDesc||u.siniestroDesc}` : '🚨 SINIESTRO') : '';
-      // Excluir observaciones que son seriales técnicos: solo hex 6+chars, o solo dígitos, o "0"
-      const _obsRawBruta = (_uConFallas.observaciones || u.observaciones || '').trim();
-      const _esSerial = _obsRawBruta && (
-        /^[0-9A-Fa-f]{6,}$/.test(_obsRawBruta) ||  // hex puro 6+ chars
-        /^\d+$/.test(_obsRawBruta)                  // solo números (0, 123, etc.)
-      );
-      const _obsManual = _esSerial ? '' : _obsRawBruta;
-      const _obsRaw = _obsManual || _siniestroLabel || _etiquetaFalla || '';
+      // u.observaciones_manual: campo exclusivo para lo que el usuario escribe desde la tabla
+      // u.observaciones: puede venir de asignación (nombre técnico) — NO usar para este display
+      // Solo usar _obsManual si fue escrito via _editarObsRapido (marcado con _fuente)
+      const _uFuente = _uConFallas._fuente || u._fuente || '';
+      const _obsRawBruta = (_uConFallas.observaciones_manual || 
+        (_uFuente.includes('edit_obs') ? (_uConFallas.observaciones || u.observaciones || '') : '')
+      ).trim();
+      const _obsRaw = _obsRawBruta || _siniestroLabel || _etiquetaFalla || '';
       const obsTexto = _obsRaw;
       const _obsChip = (() => {
         if (!_obsRaw) return '';
@@ -2664,7 +2664,7 @@ const UI = (() => {
     );
     if (nuevo === null) return; // canceló
     const texto = nuevo.trim();
-    DB.upsertUnidad(num, { observaciones: texto, _fuente: 'edit_obs_inline' }, emp);
+    DB.upsertUnidad(num, { observaciones: texto, observaciones_manual: texto, _fuente: 'edit_obs_inline' }, emp);
 
     // Sincronizar con fallas:
     if (texto) {
