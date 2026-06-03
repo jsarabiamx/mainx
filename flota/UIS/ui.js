@@ -1028,9 +1028,45 @@ const UI = (() => {
         <textarea id="modal-notas" rows="5" style="width:100%;background:var(--bg-card);border:1px solid var(--border2);border-radius:8px;padding:10px;color:var(--text);font-family:var(--font);font-size:13px;resize:vertical">${esc(u?.notas||'')}</textarea>
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
           <button onclick="UI.closeModal()" class="act-btn">Cancelar</button>
-          <button onclick="DB.upsertUnidad('${esc(num)}',{notas:document.getElementById('modal-notas').value},'${esc(emp)}');UI.closeModal();UI.toast('Notas guardadas','success');const nd=document.getElementById('notas-display');if(nd)nd.textContent=document.getElementById('modal-notas').value||'Sin notas'" class="act-btn-primary">Guardar</button>
+          <button onclick="UI._guardarNota('${esc(num)}','${esc(emp)}',document.getElementById('modal-notas').value)" class="act-btn-primary">Guardar</button>
         </div>
       </div>`);
+  }
+
+  function _guardarNota(num, emp, texto) {
+    // 1) localStorage
+    DB.upsertUnidad(num, { notas: texto }, emp);
+    // 2) Supabase
+    if (window.GPS_SB && GPS_SB.saveNota) {
+      GPS_SB.saveNota(num, emp, texto)
+        .catch(e => console.warn('[_guardarNota] Supabase:', e.message));
+    }
+    closeModal();
+    toast('Notas guardadas', 'success');
+    // Actualizar display en tab Notas si está visible
+    const nd = document.getElementById('notas-display');
+    if (nd) nd.textContent = texto || 'Sin notas registradas.';
+    // Actualizar celda en tabla de plataformas si está abierta
+    const notaCells = document.querySelectorAll('.plat-nota-cell');
+    notaCells.forEach(cell => {
+      const tr = cell.closest('tr');
+      if (tr && tr.dataset.num === String(num)) {
+        const span = cell.querySelector('span');
+        if (span) span.innerHTML = texto
+          ? esc(texto)
+          : '<span style="color:var(--text3);font-style:italic;font-size:11px">+ agregar nota</span>';
+      }
+    });
+  }
+
+  function _editarNotaRapido(num, plat, emp) {
+    const u = DB.getUnidad(num, emp) || {};
+    const actual = u.notas || '';
+    const nueva = prompt(`Notas para unidad ${num}:\n(Deja vacío para borrar)`, actual);
+    if (nueva === null) return; // Canceló
+    _guardarNota(num, emp, nueva);
+    // Re-renderizar la tabla para reflejar el cambio
+    if (_platExpandida === plat) _refreshPlatTable(plat);
   }
 
   function _updateManualFechaConISO(num,emp,iso){
@@ -2313,7 +2349,8 @@ const UI = (() => {
       ${esMotive ? '<th>ESTADO DISP.</th><th>EMPRESA</th>' : ''}
       <th>${plat} ÚLT. ACTIVIDAD</th><th>DÍAS</th>
       ${esMotive ? '<th>SERIE VG</th><th>SERIE CAM</th>' : `<th>${idLabel}</th>`}
-      <th>OBSERVACIONES</th>`;
+      <th>OBSERVACIONES</th>
+      <th style="min-width:140px">NOTAS</th>`;
 
     const rows = uns.map(u => {
       const fecha = u[k];
@@ -2411,8 +2448,12 @@ const UI = (() => {
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${_obsChip||'<span style="color:var(--text3);font-style:italic;font-size:11px">+ agregar observación</span>'}</span>
           <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
         </td>
+        <td class="plat-nota-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarNotaRapido('${esc(u.num)}','${plat}','${esc(u.empresa||emp)}')">
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${(() => { const _n=(DB.getUnidad('${esc(u.num)}','${esc(u.empresa||emp)}')||u).notas||''; return _n ? esc(_n) : '<span style=\"color:var(--text3);font-style:italic;font-size:11px\">+ agregar nota</span>'; })()}</span>
+          <span style="opacity:0;margin-left:4px;font-size:10px" class="plat-obs-pencil">✎</span>
+        </td>
         <td style="width:32px;text-align:center" onclick="event.stopPropagation()">
-          <button title="Eliminar unidad de ${plat}" onclick="UI._eliminarUnidadDePlat('${esc(u.num)}','${plat}','${esc(u.empresa||emp)}')" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;padding:2px 4px;border-radius:4px;opacity:0.6" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.6">✕</button>
+          <button title="Eliminar unidad de ${plat}"  onclick="UI._eliminarUnidadDePlat('${esc(u.num)}','${plat}','${esc(u.empresa||emp)}')" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;padding:2px 4px;border-radius:4px;opacity:0.6" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.6">✕</button>
         </td>
       </tr>`;
     }).join('');
@@ -5196,6 +5237,7 @@ const UI = (() => {
     _exportarFaltantesPlat, _exportarFueraLineaPlat,
     // plataformas v7: detalle inline, búsqueda multi-token, captura manual
     _onPlatRowClick, _cerrarPlatDetailInline,
+    _guardarNota, _editarNotaRapido,
     _onPlatCheckRow, _toggleSelectAllPlat, _limpiarSeleccionPlat,
     _updateBulkBar, _eliminarSeleccionadasPlat,
     _abrirCapturaManualPlat, _autocompletarCapturaManual,
