@@ -337,24 +337,14 @@ const GPS_SB = (() => {
 
   async function deleteBarridos(nums, plataforma, emp) {
     if (!nums || !nums.length || !plataforma || !emp) return { deleted: 0 };
-    const SUPABASE_URL = window.CCTV_SUPABASE_CONFIG?.url;
-    const ANON_KEY     = window.CCTV_SUPABASE_CONFIG?.anonKey;
-    if (!SUPABASE_URL || !ANON_KEY) throw new Error('Supabase no configurado');
     const BATCH = 50;
     let deleted = 0;
     for (let i = 0; i < nums.length; i += BATCH) {
       const batch = nums.slice(i, i + BATCH);
-      const inParam = batch.map(n => encodeURIComponent(n)).join(',');
-      const url = `${SUPABASE_URL}/rest/v1/gps_barridos?empresa_id=eq.${encodeURIComponent(emp)}&plataforma=eq.${encodeURIComponent(plataforma)}&num_economico=in.(${inParam})`;
-      const resp = await fetch(url, {
-        method: 'DELETE',
-        headers: {
-          'apikey': ANON_KEY,
-          'Authorization': `Bearer ${ANON_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      if (!resp.ok) { const e = await resp.text(); throw new Error(`DELETE ${resp.status}: ${e}`); }
+      // PostgREST in.() — valores separados por coma SIN encodeURIComponent dentro del paréntesis
+      const inList = batch.join(',');
+      const query = `empresa_id=eq.${emp}&plataforma=eq.${plataforma}&num_economico=in.(${inList})`;
+      await _delete('gps_barridos', query);
       deleted += batch.length;
     }
     return { deleted };
