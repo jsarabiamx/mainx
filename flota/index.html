@@ -177,7 +177,18 @@
         <option value="">Todos</option><option value="enlinea">En línea (&lt;2d)</option><option value="atencion">Atención (2-4d)</option><option value="fuera">Fuera de línea</option>
       </select>
     </div>
-    <input class="filter-select" style="min-width:170px;padding:5px 8px" placeholder="🔍 Buscar (separa espacios: 2280 2275)..." oninput="UI._debounceResumenSearch(this.value)">
+    <div class="filter-group"><span class="filter-label">Etiqueta</span>
+      <select class="filter-select" id="filter-etiqueta" onchange="UI._rf={...UI._rf,etiqueta:this.value,page:1};UI.renderUnitList()">
+        <option value="">Todas</option>
+        <option value="siniestro">🚨 Siniestro</option>
+        <option value="afr">⚠ AFR/Falla</option>
+        <option value="sim baja">📵 SIM Baja</option>
+        <option value="dvr">⚠ DVR</option>
+        <option value="gps mal">⚠ GPS Mal</option>
+        <option value="sin conexion">📡 Sin conexión</option>
+      </select>
+    </div>
+    <input class="filter-select" style="min-width:170px;padding:5px 8px" placeholder="🔍 Buscar (separa espacios: 2280 AFR SIM)..." oninput="UI._debounceResumenSearch(this.value)" id="res-search-input">
     <button class="btn-cancel" style="font-size:11px" onclick="_resetFiltros()">↺ Reset</button>
   </div>
 
