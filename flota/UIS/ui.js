@@ -1012,6 +1012,121 @@ const UI = (() => {
   }
 
 
+  // ── Multi-select helpers ────────────────────────────────────────────────
+  function _onPlatCheckRow(num, plat, checked) {
+    if (checked) {
+      _platSeleccionadas.add(num);
+    } else {
+      _platSeleccionadas.delete(num);
+    }
+    _updateBulkBar(plat);
+    // Sincronizar checkbox "select all"
+    const chkAll = document.getElementById('plat-chk-all');
+    if (chkAll) {
+      const allChks = document.querySelectorAll('.plat-row-chk');
+      chkAll.checked = allChks.length > 0 && [...allChks].every(c => c.checked);
+      chkAll.indeterminate = _platSeleccionadas.size > 0 && !chkAll.checked;
+    }
+  }
+
+  function _toggleSelectAllPlat(checked, plat) {
+    const allChks = document.querySelectorAll('.plat-row-chk');
+    allChks.forEach(chk => {
+      const num = chk.dataset.num;
+      if (checked) {
+        _platSeleccionadas.add(num);
+        chk.checked = true;
+        chk.closest('tr').classList.add('plat-row-checked');
+      } else {
+        _platSeleccionadas.delete(num);
+        chk.checked = false;
+        chk.closest('tr').classList.remove('plat-row-checked');
+      }
+    });
+    _updateBulkBar(plat);
+  }
+
+  function _limpiarSeleccionPlat() {
+    _platSeleccionadas.clear();
+    document.querySelectorAll('.plat-row-chk').forEach(c => { c.checked = false; c.closest('tr').classList.remove('plat-row-checked'); });
+    const chkAll = document.getElementById('plat-chk-all');
+    if (chkAll) { chkAll.checked = false; chkAll.indeterminate = false; }
+    _updateBulkBar('');
+  }
+
+  function _updateBulkBar(plat) {
+    const bar   = document.getElementById('plat-bulk-bar');
+    const count = document.getElementById('plat-bulk-count');
+    if (!bar) return;
+    const n = _platSeleccionadas.size;
+    if (n > 0) {
+      bar.style.display = 'flex';
+      if (count) count.textContent = `${n} unidad${n>1?'es':''} seleccionada${n>1?'s':''}`;
+    } else {
+      bar.style.display = 'none';
+    }
+  }
+
+  async function _eliminarSeleccionadasPlat(plat) {
+    const emp = DB.getEmpresaActiva();
+    const nums = [..._platSeleccionadas];
+    if (!nums.length) return;
+    if (!confirm(`¿Eliminar ${nums.length} unidad${nums.length>1?'es':''} de ${plat} en ${emp}?\n\nEsta acción borra los datos de esta plataforma y es permanente.`)) return;
+
+    toast(`⏳ Eliminando ${nums.length} unidades de ${plat}...`, 'info', 3000);
+
+    let borradasLocal = 0;
+    let borradasSB = 0;
+    let erroresSB = 0;
+
+    // 1) Borrar en localStorage
+    nums.forEach(num => {
+      const u = DB.getUnidad(num, emp);
+      if (!u) return;
+      const k = 'ultima_act_' + plat.toLowerCase();
+      const platFields = {
+        [k]: null,
+        dvr_ceiba: plat === 'CEIBA' ? null : undefined,
+        vin_samsara: plat === 'SAMSARA' ? null : undefined,
+        placa_man: plat === 'MAN' ? null : undefined,
+        placa_scania: plat === 'SCANIA' ? null : undefined,
+        motive_vg: plat === 'MOTIVE' ? null : undefined,
+        motive_cam: plat === 'MOTIVE' ? null : undefined,
+        estado_motive: plat === 'MOTIVE' ? null : undefined,
+        estado_samsara: plat === 'SAMSARA' ? null : undefined,
+      };
+      // Quitar campos undefined
+      Object.keys(platFields).forEach(key => platFields[key] === undefined && delete platFields[key]);
+      DB.upsertUnidad(num, platFields, emp);
+      borradasLocal++;
+    });
+
+    // 2) Borrar en Supabase gps_barridos
+    if (window.GPS_SB) {
+      const BATCH = 50;
+      for (let i = 0; i < nums.length; i += BATCH) {
+        const batch = nums.slice(i, i + BATCH);
+        try {
+          await GPS_SB.deleteBarridos(batch, plat, emp);
+          borradasSB += batch.length;
+        } catch(e) {
+          console.warn('[_eliminarSeleccionadasPlat] Supabase error:', e.message);
+          erroresSB += batch.length;
+        }
+      }
+    }
+
+    // 3) Limpiar selección y re-renderizar
+    _platSeleccionadas.clear();
+    renderPlataformas();
+    renderResumen();
+
+    const sbMsg = window.GPS_SB
+      ? (erroresSB === 0 ? ` · ☁ ${borradasSB} en Supabase` : ` · ⚠ ${erroresSB} sin borrar en Supabase`)
+      : '';
+    toast(`✅ ${borradasLocal} unidades eliminadas de ${plat}${sbMsg}`, 'success', 5000);
+  }
+
   function _eliminarUnidadDePlat(num, plat, emp) {
     if (!confirm(`¿Eliminar la unidad ${num} de la plataforma ${plat}?\n\nLa unidad seguirá existiendo en otras plataformas y en la asignación.`)) return;
     const platKey = 'ultima_act_' + plat.toLowerCase();
@@ -1648,8 +1763,9 @@ const UI = (() => {
 
   let _platExpandida = '';
   let _platTableFilter = { emp:[], base:[], crom:[], est:[], dias:[], estadoSam:[], search:'' };
-  let _platDetailUnit = null;  // unidad "enfocada" dentro de la tabla (detalle inline)
-  let _platDetailTab = 'conexiones'; // tab activa: conexiones / historial / fallas / notas
+  let _platDetailUnit = null;
+  let _platDetailTab = 'conexiones';
+  let _platSeleccionadas = new Set();
 
   // Helpers para leer el identificador específico por plataforma
   function _idCampoPlat(plat) {
@@ -1900,6 +2016,12 @@ const UI = (() => {
             <div style="font-size:14px;font-weight:700;letter-spacing:-.01em">Unidades con datos en ${plat}</div>
             <div id="plat-table-summary" style="font-size:11px;color:var(--text3);margin-top:2px"></div>
           </div>
+          <div id="plat-bulk-bar" style="display:none;align-items:center;gap:8px">
+            <span id="plat-bulk-count" style="font-size:12px;color:var(--text2)"></span>
+            <button style="background:#ef444422;border:1px solid #ef4444;color:#f87171;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px"
+              onclick="UI._eliminarSeleccionadasPlat('${plat}')">🗑 Eliminar seleccionadas</button>
+            <button class="act-btn" onclick="UI._limpiarSeleccionPlat()">✕ Deseleccionar</button>
+          </div>
           <button class="act-btn" onclick="UI._togglePlatDetail('${plat}')">✕ Cerrar tabla</button>
         </div>
         ${capturaManualUI}
@@ -2145,6 +2267,7 @@ const UI = (() => {
     const esMotive = (plat === 'MOTIVE');
 
     const th = `
+      <th style="width:28px;text-align:center"><input type="checkbox" id="plat-chk-all" title="Seleccionar todos" style="cursor:pointer;width:14px;height:14px" onchange="UI._toggleSelectAllPlat(this.checked,'${plat}')"></th>
       <th>UNIDAD</th><th>BASE</th><th>CROMÁTICA</th><th>MODELO</th>
       <th>ESTATUS</th>
       ${incluyeEstadoCol ? '<th>ESTADO SAMSARA</th>' : ''}
@@ -2218,7 +2341,11 @@ const UI = (() => {
         return `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${c}22;color:${c};border:1px solid ${c}44">${motiveEstado||'—'}</span>`;
       })() : '';
 
-      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" ondblclick="event.preventDefault();UI._editarCapturaManuaRow('${esc(u.num)}','${plat}')" style="cursor:pointer;user-select:none;-webkit-user-select:none;-moz-user-select:none" title="${esManual?'Doble clic para editar fecha':''}">
+      const isChecked = _platSeleccionadas.has(u.num);
+      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''} ${isChecked?'plat-row-checked':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" ondblclick="event.preventDefault();UI._editarCapturaManuaRow('${esc(u.num)}','${plat}')" style="cursor:pointer;user-select:none;-webkit-user-select:none;-moz-user-select:none" title="${esManual?'Doble clic para editar fecha':''}">
+        <td style="width:28px;text-align:center" onclick="event.stopPropagation()">
+          <input type="checkbox" class="plat-row-chk" data-num="${esc(u.num)}" ${isChecked?'checked':''} style="cursor:pointer;width:14px;height:14px" onchange="UI._onPlatCheckRow('${esc(u.num)}','${plat}',this.checked)">
+        </td>
         <td style="font-weight:700">${esc(u.num)}</td>
         <td>${esc(u.base||'—')}</td>
         <td>${esc(u.cromatica||'—')}</td>
@@ -5015,6 +5142,8 @@ const UI = (() => {
     _exportarFaltantesPlat, _exportarFueraLineaPlat,
     // plataformas v7: detalle inline, búsqueda multi-token, captura manual
     _onPlatRowClick, _cerrarPlatDetailInline,
+    _onPlatCheckRow, _toggleSelectAllPlat, _limpiarSeleccionPlat,
+    _updateBulkBar, _eliminarSeleccionadasPlat,
     _abrirCapturaManualPlat, _autocompletarCapturaManual,
     _recalcularDiasManual, _guardarCapturaManualPlat, _editarCapturaManuaRow,
     _updatePlatFechaConISO,
