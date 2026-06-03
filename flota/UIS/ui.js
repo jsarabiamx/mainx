@@ -464,11 +464,39 @@ const UI = (() => {
         return true;
       });
     }
+    if(_rf.etiqueta){
+      const _etq = _rf.etiqueta.toLowerCase();
+      uns = uns.filter(u => {
+        const _uFull = DB.getUnidad(u.num, emp) || u;
+        const _fallaMotivos = (_uFull.fallas||[])
+          .filter(f => !f.resuelta)
+          .map(f => [f.motivo, f.etiqueta].join(' ').toLowerCase())
+          .join(' ');
+        const _esSiniestro = (_uFull.siniestro || u.siniestro);
+        const _sinDesc = (_uFull.siniestroDesc || u.siniestroDesc || '').toLowerCase();
+        const _obsManual = (_uFull.observaciones_manual || '').toLowerCase();
+        const allText = [_fallaMotivos, _esSiniestro?'siniestro':'', _sinDesc, _obsManual].join(' ');
+        return allText.includes(_etq);
+      });
+    }
     if(_rf.search){
-      uns = uns.filter(u => _multiTokenMatch(_rf.search, [
-        u.num, u.base, u.modelo, u.cromatica, u.placa, u.empresa_asig,
-        u.serie, u.dvr_ceiba, u.vin_samsara, u.placa_man, u.placa_scania, u.observaciones
-      ].join(' ')));
+      uns = uns.filter(u => {
+        // Construir string de búsqueda incluyendo fallas activas y siniestro
+        const _uFull = DB.getUnidad(u.num, emp) || u;
+        const _fallaMotivos = (_uFull.fallas||[])
+          .filter(f => !f.resuelta)
+          .map(f => [f.motivo, f.etiqueta, f.descripcion].join(' '))
+          .join(' ');
+        const _sinLabel = (_uFull.siniestro||u.siniestro) ? 'siniestro' : '';
+        const _sinDesc  = _uFull.siniestroDesc || u.siniestroDesc || '';
+        const _obsManual = _uFull.observaciones_manual || '';
+        const searchStr = [
+          u.num, u.base, u.modelo, u.cromatica, u.placa, u.empresa_asig,
+          u.serie, u.dvr_ceiba, u.vin_samsara, u.placa_man, u.placa_scania,
+          _fallaMotivos, _sinLabel, _sinDesc, _obsManual
+        ].join(' ');
+        return _multiTokenMatch(_rf.search, searchStr);
+      });
     }
 
     uns.sort((a,b)=>{
@@ -2198,12 +2226,23 @@ const UI = (() => {
       uns = uns.filter(u => f.estadoSam.includes(_estadoSamsaraDe(u)));
     }
 
-    // Búsqueda multi-token usando el helper global (OR entre tokens)
+    // Búsqueda multi-token: incluye fallas activas, siniestro y observaciones manuales
     if (f.search) {
-      uns = uns.filter(u => _multiTokenMatch(f.search, [
-        u.num, u.base, u.modelo, u.placa, u.serie, u.cromatica, u.empresa_asig,
-        u.dvr_ceiba, u.vin_samsara, u.placa_man, u.placa_scania, u.observaciones
-      ].join(' ')));
+      uns = uns.filter(u => {
+        const _uFull = DB.getUnidad(u.num, emp) || u;
+        const _fallaMotivos = (_uFull.fallas||[])
+          .filter(f => !f.resuelta)
+          .map(f => [f.motivo, f.etiqueta].join(' '))
+          .join(' ');
+        const _sinLabel = (_uFull.siniestro||u.siniestro) ? 'siniestro' : '';
+        const _obsManual = _uFull.observaciones_manual || '';
+        const searchStr = [
+          u.num, u.base, u.modelo, u.placa, u.serie, u.cromatica, u.empresa_asig,
+          u.dvr_ceiba, u.vin_samsara, u.placa_man, u.placa_scania,
+          _fallaMotivos, _sinLabel, _obsManual
+        ].join(' ');
+        return _multiTokenMatch(f.search, searchStr);
+      });
     }
 
     // (Ya no se necesita el filtro especial de Volvo/Motive: el scope por plataforma se aplica
@@ -3222,7 +3261,7 @@ const UI = (() => {
       'cambios_recientes':{}
     };
     const f = map[tipo] || {};
-    _rf = { plat:'', base:'', crom:'', est:'', dias:'', search:'', sort:'dias', page:1, ...f };
+    _rf = { plat:'', base:'', crom:'', est:'', dias:'', etiqueta:'', search:'', sort:'dias', page:1, ...f };
     App.nav(null, 'panel-resumen');
     setTimeout(()=>{
       // Sincronizar UI
