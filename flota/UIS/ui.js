@@ -2304,14 +2304,19 @@ const UI = (() => {
       // Identificador SEGÚN la plataforma (desde el campo específico del barrido)
       const idValue = _idValorUnidad(u, plat);
       const selected = _platDetailUnit === u.num ? 'background:rgba(59,130,246,.12)' : '';
-      // obsTexto: solo observaciones escritas por usuario + fallas activas
-      // Excluir valores que parecen seriales/DVR (hexadecimales o números puros de barrido)
-      const _fallaActiva = (u.fallas||[]).find(f => !f.resuelta);
+      // obsTexto: fallas activas (de Supabase o local) + observaciones manuales del usuario
+      // Obtener fallas buscando también en DB por si la unidad tiene fallas en otro objeto
+      const _uConFallas = DB.getUnidad(u.num, emp) || u;
+      const _fallaActiva = (_uConFallas.fallas||[]).find(f => !f.resuelta);
       const _etiquetaFalla = _fallaActiva ? (_fallaActiva.motivo || _fallaActiva.etiqueta || '') : '';
-      const _siniestroLabel = u.siniestro ? (u.siniestroDesc ? `🚨 ${u.siniestroDesc}` : '🚨 SINIESTRO') : '';
-      // Filtrar observaciones que parecen seriales técnicos (solo hex/números sin letras legibles)
-      const _obsRawBruta = u.observaciones || '';
-      const _esSerial = _obsRawBruta && /^[0-9A-Fa-f]{6,}$/.test(_obsRawBruta.trim());
+      const _siniestroLabel = (_uConFallas.siniestro || u.siniestro)
+        ? ((_uConFallas.siniestroDesc||u.siniestroDesc) ? `🚨 ${_uConFallas.siniestroDesc||u.siniestroDesc}` : '🚨 SINIESTRO') : '';
+      // Excluir observaciones que son seriales técnicos: solo hex 6+chars, o solo dígitos, o "0"
+      const _obsRawBruta = (_uConFallas.observaciones || u.observaciones || '').trim();
+      const _esSerial = _obsRawBruta && (
+        /^[0-9A-Fa-f]{6,}$/.test(_obsRawBruta) ||  // hex puro 6+ chars
+        /^\d+$/.test(_obsRawBruta)                  // solo números (0, 123, etc.)
+      );
       const _obsManual = _esSerial ? '' : _obsRawBruta;
       const _obsRaw = _obsManual || _siniestroLabel || _etiquetaFalla || '';
       const obsTexto = _obsRaw;
