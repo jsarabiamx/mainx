@@ -403,20 +403,36 @@ const Parsers = (() => {
       }
     }
 
+    // Detectar índices de columnas dinámicamente desde headers
+    const hRow = rows[hIdx] || [];
+    const iPlate = hRow.findIndex(c => String(c||'').toLowerCase().includes('plate'));
+    const iSerial = hRow.findIndex(c => String(c||'').toLowerCase().includes('serial'));
+    const iGps = hRow.findIndex(c => String(c||'').toLowerCase().includes('gps time') || String(c||'').toLowerCase().includes('gps_time'));
+    // Fallback a posiciones fijas si no encontró
+    const colPlate  = iPlate  >= 0 ? iPlate  : 1;
+    const colSerial = iSerial >= 0 ? iSerial : 2;
+    const colGps    = iGps    >= 0 ? iGps    : 7;
+
+    const seen = new Set();
     const result = [];
+    let descartadas = 0;
     for (let i = hIdx + 1; i < rows.length; i++) {
       const row = rows[i];
-      if (!Array.isArray(row) || !row[1]) continue;
+      if (!Array.isArray(row)) continue;
 
-      // Col B(1) = Plate No. — puede traer texto como "A5220", "ROL DIRECTO A5220"
-      const rawPlate = String(row[1] || '').trim();
+      // Plate No. — buscar en la columna detectada, fallback a columna A
+      const rawPlate = String(row[colPlate] || row[0] || '').trim();
+      if (!rawPlate) { descartadas++; continue; }
+
       const num = cleanNum(rawPlate);
-      if (!num || isNaN(Number(num))) continue;
+      if (!num) { descartadas++; continue; }
       const n = Number(num);
-      if (n < 100 || n > 99999) continue;
+      if (n < 100 || n > 99999) { descartadas++; continue; }
+      if (seen.has(num)) continue; // duplicado real
+      seen.add(num);
 
-      // Col H(7) = GPS time
-      const rawDate = row[7] || row[6] || '';
+      // GPS time — columna dinámica
+      const rawDate = row[colGps] || row[7] || row[6] || '';
       const fecha = parseDate(rawDate);
 
       // FIX CEIBA (v7.3): el archivo exportado de Ceiba trae la hora adelantada 1h.
@@ -425,8 +441,8 @@ const Parsers = (() => {
       // Viajes, Barrido Manual, agrupación por días) ya queda con la hora correcta.
       if (fecha) fecha.setHours(fecha.getHours() - 1);
 
-      // Col C(2) = Serial No.
-      const serie = String(row[2] || '').trim();
+      // Serial No. — columna dinámica
+      const serie = String(row[colSerial] || '').trim();
 
       result.push({
         num,
@@ -437,7 +453,7 @@ const Parsers = (() => {
       });
     }
 
-    console.log(`[CEIBA] ${result.length} registros, con fecha: ${result.filter(r=>r.fecha).length}`);
+    console.log(`[CEIBA] ${result.length} registros OK, ${descartadas} descartadas (vacías/fuera de rango), con fecha: ${result.filter(r=>r.fecha).length}`);
     return result;
   }
 
