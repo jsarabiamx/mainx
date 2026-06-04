@@ -435,11 +435,8 @@ const Parsers = (() => {
       const rawDate = row[colGps] || row[7] || row[6] || '';
       const fecha = parseDate(rawDate);
 
-      // FIX CEIBA (v7.3): el archivo exportado de Ceiba trae la hora adelantada 1h.
-      // Restamos SOLO 1 hora al timestamp — minutos y segundos quedan intactos.
-      // Esto corrige el desfase EN ORIGEN, así que todo el sistema (Samsara cruzado,
-      // Viajes, Barrido Manual, agrupación por días) ya queda con la hora correcta.
-      if (fecha) fecha.setHours(fecha.getHours() - 1);
+      // Nota: SheetJS con cellDates:true convierte fechas a UTC correctamente
+      // No se aplica ningún ajuste de hora — la fecha se usa tal como viene del archivo
 
       // Serial No. — columna dinámica
       const serie = String(row[colSerial] || '').trim();
