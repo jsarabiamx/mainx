@@ -5144,15 +5144,30 @@ const UI = (() => {
         });
     }
 
-    // ── Sección: unidades del reporte que NO están en la asignación activa ──
-    // FIX: solo reportar unidades que NO existen en la asignación (no en sistema).
-    // Las que sí existen pero no tienen barrido de esta plataforma YA se muestran
-    // en la sección de observaciones con "(No marca fecha)".
+    // ── Sección: unidades sin equipo en la plataforma seleccionada ──
     const platActual = _barridoManualState.plataforma || 'CEIBA';
     const emp = DB.getEmpresaActiva();
+    const kPlat = 'ultima_act_' + platActual.toLowerCase();
+
+    // Grupo A: están en asignación pero NO tienen datos en esta plataforma
+    const sinEquipoPlat = filas.filter(f => {
+      const u = DB.getUnidad(f.num, emp);
+      // existe en asignación pero no tiene ultima_act para esta plataforma
+      return u && !u[kPlat];
+    });
+    if (sinEquipoPlat.length) {
+      out += `\n🚫 Sin equipo ${platActual}:\n`;
+      sinEquipoPlat
+        .sort((a,b) => Number(a.num) - Number(b.num))
+        .forEach(f => {
+          out += `${f.num} sin ${platActual.toLowerCase()}\n`;
+        });
+    }
+
+    // Grupo B: no existen en la asignación activa
     const noEnAsig = filas.filter(f => {
       const u = DB.getUnidad(f.num, emp);
-      return !u; // solo las que definitivamente no están en asignación
+      return !u;
     });
     if (noEnAsig.length) {
       out += `\n⚠ Sin asignación activa (verificar en sistema):\n`;
