@@ -308,6 +308,65 @@ const UI = (() => {
   }
   function closeModal(){const m=$('modal-overlay');if(m)m.remove();}
 
+  /* ══════════════════════════════════════════════════════════════
+     MODALES PROPIOS: _uiConfirm y _uiPrompt (sin prompt/confirm del browser)
+  ══════════════════════════════════════════════════════════════ */
+  function _uiConfirm({ title='¿Confirmar?', message='', icon='⚠', danger=false, okText='Confirmar', cancelText='Cancelar' }) {
+    return new Promise(resolve => {
+      const mid = '_uc_' + Date.now();
+      openModal(`<div style="background:var(--bg-panel);border:1px solid var(--border2);border-radius:14px;padding:28px 28px 22px;width:420px;max-width:90vw;text-align:center">
+        <div style="font-size:26px;margin-bottom:10px">${icon}</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:10px">${title}</div>
+        ${message?`<div style="font-size:13px;color:var(--text2);margin-bottom:18px;line-height:1.5">${message}</div>`:''}
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:6px">
+          <button class="act-btn" style="min-width:90px" id="${mid}_no">${cancelText}</button>
+          <button class="act-btn${danger?' act-btn-danger-soft':' act-btn-primary'}" style="min-width:90px;${danger?'background:#ef444433;border-color:#ef4444;color:#f87171':''}" id="${mid}_ok">${okText}</button>
+        </div>
+      </div>`);
+      const bind = () => {
+        const ok = document.getElementById(mid+'_ok');
+        const no = document.getElementById(mid+'_no');
+        if (!ok) { setTimeout(bind, 30); return; }
+        ok.onclick = () => { closeModal(); resolve(true); };
+        no.onclick = () => { closeModal(); resolve(false); };
+        ok.focus();
+      };
+      bind();
+    });
+  }
+
+  function _uiPrompt({ title='', message='', placeholder='', defaultValue='', icon='', okText='Guardar', cancelText='Cancelar', multiline=false }) {
+    return new Promise(resolve => {
+      const mid = '_up_' + Date.now();
+      const iid = mid + '_inp';
+      const inputHtml = multiline
+        ? `<textarea id="${iid}" rows="4" placeholder="${placeholder}" style="width:100%;background:var(--bg-card);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--font);font-size:13px;resize:vertical;box-sizing:border-box;margin-bottom:14px">${defaultValue}</textarea>`
+        : `<input id="${iid}" type="text" value="${defaultValue}" placeholder="${placeholder}" style="width:100%;background:var(--bg-card);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--font);font-size:13px;box-sizing:border-box;margin-bottom:14px">`;
+      openModal(`<div style="background:var(--bg-panel);border:1px solid var(--border2);border-radius:14px;padding:26px;width:440px;max-width:90vw">
+        ${icon?`<div style="font-size:24px;margin-bottom:10px;text-align:center">${icon}</div>`:''}
+        ${title?`<div style="font-size:15px;font-weight:700;margin-bottom:6px">${title}</div>`:''}
+        ${message?`<div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5">${message}</div>`:''}
+        ${inputHtml}
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="act-btn" id="${mid}_no">${cancelText}</button>
+          <button class="act-btn-primary" id="${mid}_ok">${okText}</button>
+        </div>
+      </div>`);
+      const bind = () => {
+        const ok = document.getElementById(mid+'_ok');
+        const no = document.getElementById(mid+'_no');
+        const inp = document.getElementById(iid);
+        if (!ok) { setTimeout(bind, 30); return; }
+        if (inp) { inp.focus(); inp.selectionStart = inp.value.length; }
+        ok.onclick = () => { const v = inp ? inp.value : ''; closeModal(); resolve(v); };
+        no.onclick = () => { closeModal(); resolve(null); };
+        if (inp) inp.onkeydown = (e) => { if (e.key==='Enter' && !multiline) ok.onclick(); };
+      };
+      bind();
+    });
+  }
+
+
   /* ══ DATE-TIME PICKER ════════════════════════════════ */
   /**
    * Abre un modal bonito de selección de fecha y hora
@@ -1079,11 +1138,16 @@ const UI = (() => {
     });
   }
 
-  function _editarNotaRapido(num, plat, emp) {
+  async function _editarNotaRapido(num, plat, emp) {
     const u = DB.getUnidad(num, emp) || {};
     const actual = u.notas || '';
-    const nueva = prompt(`Notas para unidad ${num}:\n(Deja vacío para borrar)`, actual);
-    if (nueva === null) return; // Canceló
+    const nueva = await _uiPrompt({
+      title: `Notas — Unidad ${num}`,
+      message: 'Escribe una nota interna. Deja vacío para borrar.',
+      placeholder: 'Ej: sin equipo SAMSARA, pendiente instalación...',
+      defaultValue: actual, icon: '📝', okText: 'Guardar nota', multiline: true
+    });
+    if (nueva === null) return;
     _guardarNota(num, emp, nueva);
     // Re-renderizar la tabla para reflejar el cambio
     if (_platExpandida === plat) _refreshPlatTable(plat);
@@ -1155,7 +1219,12 @@ const UI = (() => {
     const emp = DB.getEmpresaActiva();
     const nums = [..._platSeleccionadas];
     if (!nums.length) return;
-    if (!confirm(`¿Eliminar ${nums.length} unidad${nums.length>1?'es':''} de ${plat} en ${emp}?\n\nEsta acción borra los datos de esta plataforma y es permanente.`)) return;
+    const okDel = await _uiConfirm({
+      title: `Eliminar ${nums.length} unidad${nums.length>1?'es':''} de ${plat}`,
+      message: `${nums.slice(0,5).join(', ')}${nums.length>5?'...':''}<br><br>Esta acción borra los datos de esta plataforma y es permanente.`,
+      icon: '🗑', danger: true, okText: 'Sí, eliminar', cancelText: 'Cancelar'
+    });
+    if (!okDel) return;
 
     toast(`⏳ Eliminando ${nums.length} unidades de ${plat}...`, 'info', 3000);
 
@@ -1216,14 +1285,19 @@ const UI = (() => {
   // DESINSTALACIÓN DE EQUIPOS GPS POR PLATAFORMA
   // ══════════════════════════════════════════════════════════════════
 
-  function _toggleDesinstalacion(num, plat, emp) {
+  async function _toggleDesinstalacion(num, plat, emp) {
     const u = DB.getUnidad(num, emp) || {};
     const desKey = 'desinstalacion_' + plat.toLowerCase();
     const yaDesinstalado = !!u[desKey];
 
     if (yaDesinstalado) {
       // Reinstalar — quitar desinstalación
-      if (!confirm(`¿Confirmar reinstalación del equipo ${plat} en unidad ${num}?`)) return;
+      const okRe = await _uiConfirm({
+        title: `Reinstalar equipo ${plat}`,
+        message: `Unidad ${num} — ¿Confirmar reinstalación?`,
+        icon: '🔧', okText: 'Reinstalar', cancelText: 'Cancelar'
+      });
+      if (!okRe) return;
       const upd = { [desKey]: null };
       DB.upsertUnidad(num, upd, emp);
       // Supabase: limpiar campo en gps_barridos
@@ -1236,7 +1310,12 @@ const UI = (() => {
       toast(`✅ Equipo ${plat} reinstalado en unidad ${num}`, 'success', 3000);
     } else {
       // Desinstalar — pedir comentario
-      const comentario = prompt(`Desinstalar equipo ${plat} — Unidad ${num}\n\nComentario (opcional):`, '');
+      const comentario = await _uiPrompt({
+        title: `Desinstalar equipo ${plat} — Unidad ${num}`,
+        message: 'El equipo quedará marcado como desinstalado. Puedes agregar un comentario.',
+        placeholder: 'Ej: equipo en mal estado, robo, reasignación...',
+        defaultValue: '', icon: '🔧', okText: 'Confirmar desinstalación'
+      });
       if (comentario === null) return; // Canceló
       const ahora = new Date().toISOString();
       const desObj = { fecha: ahora, comentario: comentario.trim(), ts: Date.now() };
@@ -1270,9 +1349,12 @@ const UI = (() => {
   async function _desinstalarSeleccionadasPlat(plat, emp) {
     const nums = [..._platSeleccionadas];
     if (!nums.length) return;
-    const comentario = prompt(
-      `Desinstalar equipo ${plat} en ${nums.length} unidad${nums.length>1?'es':''}:\n${nums.slice(0,5).join(', ')}${nums.length>5?'...':''}\n\nComentario (opcional):`, ''
-    );
+    const comentario = await _uiPrompt({
+      title: `Desinstalar equipo ${plat} en ${nums.length} unidad${nums.length>1?'es':''}`,
+      message: `Unidades: ${nums.slice(0,5).join(', ')}${nums.length>5?'...':''}<br>Todas quedarán marcadas como desinstaladas.`,
+      placeholder: 'Comentario opcional...',
+      defaultValue: '', icon: '🔧', okText: 'Confirmar desinstalación'
+    });
     if (comentario === null) return;
     const ahora = new Date().toISOString();
     const desObj = { fecha: ahora, comentario: comentario.trim(), ts: Date.now() };
@@ -1303,8 +1385,13 @@ const UI = (() => {
     _refreshPlatTable(plat);
   }
 
-  function _eliminarUnidadDePlat(num, plat, emp) {
-    if (!confirm(`¿Eliminar la unidad ${num} de la plataforma ${plat}?\n\nLa unidad seguirá existiendo en otras plataformas y en la asignación.`)) return;
+  async function _eliminarUnidadDePlat(num, plat, emp) {
+    const okDelU = await _uiConfirm({
+      title: `Eliminar unidad ${num} de ${plat}`,
+      message: 'La unidad seguirá existiendo en otras plataformas y en la asignación.',
+      icon: '🗑', danger: true, okText: 'Eliminar', cancelText: 'Cancelar'
+    });
+    if (!okDelU) return;
     const platKey = 'ultima_act_' + plat.toLowerCase();
     DB.upsertUnidad(num, { [platKey]: null, _fuente: 'eliminar_plat' }, emp);
     if (window.GPS_SB) {
@@ -5354,6 +5441,7 @@ const UI = (() => {
     // plataformas v7: detalle inline, búsqueda multi-token, captura manual
     _onPlatRowClick, _cerrarPlatDetailInline,
     _guardarNota, _editarNotaRapido,
+    _uiConfirm, _uiPrompt,
     _toggleDesinstalacion, _desinstalarSeleccionadasPlat,
     _onPlatCheckRow, _toggleSelectAllPlat, _limpiarSeleccionPlat,
     _updateBulkBar, _eliminarSeleccionadasPlat,
