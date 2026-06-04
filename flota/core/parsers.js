@@ -52,9 +52,24 @@ const Parsers = (() => {
     if (!val && val !== 0) return null;
     if (val instanceof Date && !isNaN(val)) return val;
 
-    // Excel serial number
+    // Excel serial number → convertir a hora LOCAL del archivo (no UTC)
+    // Excel almacena fechas como días desde 1899-12-30 en hora local
     if (typeof val === 'number' && val > 25000 && val < 60000) {
-      const d = new Date((val - 25569) * 86400 * 1000);
+      // Calcular año/mes/día/hora del serial directamente sin conversión UTC
+      const totalDays = val - 25569; // días desde epoch Unix (1970-01-01)
+      const totalMs = Math.round(totalDays * 86400 * 1000);
+      // Crear fecha UTC con ese valor, luego ajustar al timezone del browser
+      // para que la hora se interprete como LOCAL (igual a lo que muestra el Excel)
+      const tmpDate = new Date(totalMs);
+      // Obtener componentes UTC del timestamp (que corresponden a la hora local del archivo)
+      const y = tmpDate.getUTCFullYear();
+      const mo = tmpDate.getUTCMonth();
+      const d2 = tmpDate.getUTCDate();
+      const h = tmpDate.getUTCHours();
+      const mi = tmpDate.getUTCMinutes();
+      const s2 = tmpDate.getUTCSeconds();
+      // Crear Date como hora local (constructor local, no UTC)
+      const d = new Date(y, mo, d2, h, mi, s2);
       return isNaN(d) ? null : d;
     }
 
@@ -173,9 +188,9 @@ const Parsers = (() => {
           const data = new Uint8Array(e.target.result);
           const wb = XLSX.read(data, {
             type: 'array',
-            cellDates: true,
+            cellDates: false,   // NO convertir fechas — nos quedamos con serial o string
             cellNF: false,
-            raw: false,
+            raw: true,          // valores raw para seriales numéricos exactos
             cellHTML: false,
             cellFormula: false,
             cellStyles: false
