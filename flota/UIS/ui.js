@@ -1205,11 +1205,33 @@ const UI = (() => {
   function _updateBulkBar(plat) {
     const bar   = document.getElementById('plat-bulk-bar');
     const count = document.getElementById('plat-bulk-count');
+    const btnDesins = document.getElementById('plat-btn-desinstalar');
     if (!bar) return;
     const n = _platSeleccionadas.size;
     if (n > 0) {
       bar.style.display = 'flex';
       if (count) count.textContent = `${n} unidad${n>1?'es':''} seleccionada${n>1?'s':''}`;
+      // Detectar si TODAS las seleccionadas ya están desinstaladas → mostrar "Instalar equipo"
+      if (btnDesins && plat) {
+        const emp = DB.getEmpresaActiva();
+        const desKey = 'desinstalacion_' + plat.toLowerCase();
+        const nums = [..._platSeleccionadas];
+        const todasDesinstaladas = nums.length > 0 && nums.every(num => !!(DB.getUnidad(num, emp)||{})[desKey]);
+        const algunaDesinstalada = nums.some(num => !!(DB.getUnidad(num, emp)||{})[desKey]);
+        if (todasDesinstaladas) {
+          btnDesins.textContent = '🔧 Instalar equipo';
+          btnDesins.style.borderColor = 'var(--green)';
+          btnDesins.style.color = 'var(--green)';
+          btnDesins.style.background = 'rgba(34,197,94,.1)';
+          btnDesins.dataset.modo = 'instalar';
+        } else {
+          btnDesins.textContent = algunaDesinstalada ? '🔧 Desinstalar equipo (mixto)' : '🔧 Desinstalar equipo';
+          btnDesins.style.borderColor = '#f59e0b';
+          btnDesins.style.color = '#fbbf24';
+          btnDesins.style.background = 'rgba(120,53,15,.15)';
+          btnDesins.dataset.modo = 'desinstalar';
+        }
+      }
     } else {
       bar.style.display = 'none';
     }
@@ -1344,6 +1366,36 @@ const UI = (() => {
     }
     renderDetalle(num, emp);
     if (_platExpandida === plat) _refreshPlatTable(plat);
+  }
+
+  async function _toggleDesinstalacionMasiva(plat, emp) {
+    const btn = document.getElementById('plat-btn-desinstalar');
+    const modo = btn?.dataset.modo || 'desinstalar';
+    if (modo === 'instalar') {
+      // Reinstalar todas las seleccionadas
+      const nums = [..._platSeleccionadas];
+      const ok = await _uiConfirm({
+        title: `Reinstalar equipo ${plat}`,
+        message: `${nums.length} unidad${nums.length>1?'es':''}: ${nums.slice(0,5).join(', ')}${nums.length>5?'...':''}`,
+        icon: '🔧', okText: 'Reinstalar', cancelText: 'Cancelar'
+      });
+      if (!ok) return;
+      const desKey = 'desinstalacion_' + plat.toLowerCase();
+      nums.forEach(num => DB.upsertUnidad(num, { [desKey]: null }, emp));
+      if (window.GPS_SB) {
+        const inList = nums.join(',');
+        GPS_SB._patch('gps_barridos',
+          `empresa_id=eq.${emp}&plataforma=eq.${plat}&num_economico=in.(${inList})`,
+          { desinstalado: false, desinstalacion_fecha: null, desinstalacion_comentario: null, desinstalacion_ts: null }
+        ).catch(e => console.warn('[_toggleDesinstalacionMasiva reinstalar]', e.message));
+      }
+      _platSeleccionadas.clear();
+      toast(`✅ ${nums.length} unidades reinstaladas en ${plat}`, 'success', 3000);
+      _refreshPlatTable(plat);
+    } else {
+      // Desinstalar
+      await _desinstalarSeleccionadasPlat(plat, emp);
+    }
   }
 
   async function _desinstalarSeleccionadasPlat(plat, emp) {
@@ -2281,8 +2333,8 @@ const UI = (() => {
           </div>
           <div id="plat-bulk-bar" style="display:none;align-items:center;gap:8px">
             <span id="plat-bulk-count" style="font-size:12px;color:var(--text2)"></span>
-            <button style="background:#78350f22;border:1px solid #f59e0b;color:#fbbf24;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px"
-              onclick="UI._desinstalarSeleccionadasPlat('${plat}','${esc(emp)}')">🔧 Desinstalar equipo</button>
+            <button id="plat-btn-desinstalar" style="background:#78350f22;border:1px solid #f59e0b;color:#fbbf24;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px"
+              onclick="UI._toggleDesinstalacionMasiva('${plat}','${esc(emp)}')">🔧 Desinstalar equipo</button>
             <button style="background:#ef444422;border:1px solid #ef4444;color:#f87171;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px"
               onclick="UI._eliminarSeleccionadasPlat('${plat}')">🗑 Eliminar seleccionadas</button>
             <button class="act-btn" onclick="UI._limpiarSeleccionPlat()">✕ Deseleccionar</button>
@@ -5467,7 +5519,7 @@ const UI = (() => {
     _onPlatRowClick, _cerrarPlatDetailInline,
     _guardarNota, _editarNotaRapido,
     _uiConfirm, _uiPrompt,
-    _toggleDesinstalacion, _desinstalarSeleccionadasPlat,
+    _toggleDesinstalacion, _desinstalarSeleccionadasPlat, _toggleDesinstalacionMasiva,
     _onPlatCheckRow, _toggleSelectAllPlat, _limpiarSeleccionPlat,
     _updateBulkBar, _eliminarSeleccionadasPlat,
     _abrirCapturaManualPlat, _autocompletarCapturaManual,
