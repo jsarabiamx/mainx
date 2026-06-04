@@ -4635,41 +4635,106 @@ const UI = (() => {
     dirtyEtiquetas: false
   };
 
-  // Palabras clave para detectar etiquetas (matching se hace sobre el texto DESPUÉS del número)
+  // Palabras clave para detectar etiquetas (matching sobre texto DESPUÉS del número)
+  // Orden importa: las más específicas/largas primero para evitar falsos positivos.
   const _BM_KEYWORDS = {
-    'siniestro':     'SINIESTRO',
-    'siniestr':      'SINIESTRO',
-    'alineacion':    'ALINEACION',
-    'alineación':    'ALINEACION',
-    'alineado':      'ALINEACION',
-    'afr':           'AFR',
-    'taller':        'TALLER',
-    'sin energia':   'SIN_ENERGIA',
-    'sin energía':   'SIN_ENERGIA',
-    'candado':       'CANDADO',
-    'con candado':   'CANDADO',
-    'parado':        'PARADO',
-    'sin sim':       'SIN_SIM',
-    'sim':           'SIN_SIM',
-    'sin vin':       'SIN_VIN',
-    'sin datos':     'SIN_DATOS',
-    'venta':         'VENTA',
-    'para venta':    'VENTA'
+    // ── Siniestro ──────────────────────────────────────────────
+    'siniestro':          'SINIESTRO',
+    'siniestr':           'SINIESTRO',
+    'accidente':          'SINIESTRO',
+    // ── Alineación / carrocería ────────────────────────────────
+    'en alineacion':      'ALINEACION',
+    'en alineación':      'ALINEACION',
+    'alineacion':         'ALINEACION',
+    'alineación':         'ALINEACION',
+    'alineado':           'ALINEACION',
+    'en carroceria':      'CARROCERIA',
+    'en carrocería':      'CARROCERIA',
+    'carroceria':         'CARROCERIA',
+    'carrocería':         'CARROCERIA',
+    // ── Pintura ────────────────────────────────────────────────
+    'en pintura':         'PINTURA',
+    'pintura':            'PINTURA',
+    // ── Taller (incluye "en taller") ──────────────────────────
+    'en taller':          'TALLER',
+    'taller':             'TALLER',
+    // ── AFR ────────────────────────────────────────────────────
+    'afr':                'AFR',
+    // ── Energía ────────────────────────────────────────────────
+    'sin energia':        'SIN_ENERGIA',
+    'sin energía':        'SIN_ENERGIA',
+    'sin luz':            'SIN_ENERGIA',
+    // ── Candado / inmovilizado ─────────────────────────────────
+    'con candado':        'CANDADO',
+    'candado':            'CANDADO',
+    'inmovilizado':       'CANDADO',
+    // ── Parado / patio ─────────────────────────────────────────
+    'en patio':           'PARADO',
+    'parado':             'PARADO',
+    'sin operar':         'PARADO',
+    // ── SIM ────────────────────────────────────────────────────
+    'sin sim':            'SIN_SIM',
+    'sim baja':           'SIN_SIM',
+    'sim sin datos':      'SIN_SIM',
+    'sim sd':             'SIN_SIM',
+    'sim bloqueada':      'SIN_SIM',
+    'sim':                'SIN_SIM',
+    'sin baja':           'SIN_SIM',   // "sin baja" = SIM dada de baja
+    // ── VIN / placa ────────────────────────────────────────────
+    'sin vin':            'SIN_VIN',
+    'sin placa':          'SIN_VIN',
+    // ── Sin datos GPS ──────────────────────────────────────────
+    'sin datos':          'SIN_DATOS',
+    'sin gps':            'SIN_DATOS',
+    'sin señal':          'SIN_DATOS',
+    'sin senal':          'SIN_DATOS',
+    // ── Venta ──────────────────────────────────────────────────
+    'para venta':         'VENTA',
+    'en venta':           'VENTA',
+    'venta':              'VENTA',
+    // ── Mecánica / motor ───────────────────────────────────────
+    'en mecanica':        'MECANICA',
+    'en mecánica':        'MECANICA',
+    'mecanica':           'MECANICA',
+    'mecánica':           'MECANICA',
+    'en motor':           'MECANICA',
+    'motor':              'MECANICA',
+    // ── MAN (plataforma diferente) ─────────────────────────────
+    'en man':             'EN_MAN',
+    'con man':            'EN_MAN',
+    // ── Desinstalado / sin equipo ──────────────────────────────
+    'desinstalado':       'DESINSTALADO',
+    'sin equipo':         'DESINSTALADO',
+    'sin dispositivo':    'DESINSTALADO',
+    // ── Robo ───────────────────────────────────────────────────
+    'robado':             'ROBO',
+    'robo':               'ROBO',
+    // ── Baja ───────────────────────────────────────────────────
+    'de baja':            'BAJA',
+    'baja':               'BAJA'
   };
 
   // Etiqueta → texto legible en el reporte
   const _BM_ETIQUETA_LABEL = {
-    'SINIESTRO':   'siniestro',
-    'ALINEACION':  'en alineación',
-    'AFR':         'AFR',
-    'TALLER':      'taller',
-    'SIN_ENERGIA': 'sin energía',
-    'CANDADO':     'con candado',
-    'PARADO':      'parado',
-    'SIN_SIM':     'sin SIM',
-    'SIN_VIN':     'sin VIN',
-    'SIN_DATOS':   'sin datos',
-    'VENTA':       'para venta'
+    'SINIESTRO':     'siniestro',
+    'ALINEACION':    'en alineación',
+    'CARROCERIA':    'en carrocería',
+    'PINTURA':       'en pintura',
+    'TALLER':        'en taller',
+    'AFR':           'AFR',
+    'SIN_ENERGIA':   'sin energía',
+    'CANDADO':       'con candado',
+    'PARADO':        'parado',
+    'SIN_SIM':       'sin SIM',
+    'SIN_VIN':       'sin VIN',
+    'SIN_DATOS':     'sin datos GPS',
+    'VENTA':         'para venta',
+    'MECANICA':      'en mecánica',
+    'EN_MAN':        'en MAN',
+    'DESINSTALADO':  'desinstalado',
+    'ROBO':          'robo',
+    'BAJA':          'de baja',
+    'OTRO':          '' // texto libre — se usa etiquetaTextoLibre directamente
   };
 
   function _fechaSistemaParaBarridoManual(num, plataforma) {
@@ -4886,7 +4951,7 @@ const UI = (() => {
                               : f.etiqueta === 'CANDADO' ? '#6b7280'
                               : f.etiqueta ? '#a78bfa' : 'var(--text3)';
                 const fechaFuente = !f.fecha && f.fechaSistemaFuente ? ` <span style="color:var(--text3)">(${esc(f.fechaSistemaFuente)})</span>` : '';
-                const etiquetaTxt = f.etiqueta ? (_BM_ETIQUETA_LABEL[f.etiqueta] || f.etiqueta) : '';
+                const etiquetaTxt = f.etiqueta ? (f.etiqueta === 'OTRO' ? (f.etiquetaTextoLibre || f.etiqueta) : (_BM_ETIQUETA_LABEL[f.etiqueta] || f.etiqueta)) : '';
                 return `<tr style="cursor:${u?'pointer':'default'}" ${u?`onclick="UI.openUnitDetail('${esc(f.num)}')"`:''}>
                   <td style="font-weight:700">${esc(f.num)}</td>
                   <td>${f.etiqueta ? `<span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:${colorEt}22;color:${colorEt}">${esc(etiquetaTxt)}</span>` : '<span style="color:var(--text3)">—</span>'}</td>
@@ -4957,10 +5022,12 @@ const UI = (() => {
 
       const enLinea = /\ben\s+l[ií]nea\b/i.test(line) || /\bon[-\s]?line\b/i.test(line);
 
-      // REGLA CLAVE v7.4:
+      // REGLA CLAVE v7.4 + v7.5:
       //   etiqueta solo se asigna si hay TEXTO después del número
       //   (no solo número, no solo fecha)
+      //   Si hay texto pero NO coincide con ningún keyword → etiqueta OTRO con texto original
       let etiqueta = null;
+      let etiquetaTextoLibre = null; // texto original del técnico cuando no hay keyword match
       const hayTextoEtiqueta = !soloNumero && !restoEsFechaOnly;
       if (hayTextoEtiqueta) {
         const kws = Object.keys(_BM_KEYWORDS).sort((a,b) => b.length - a.length);
@@ -4968,7 +5035,12 @@ const UI = (() => {
           if (restoLower.includes(kw)) { etiqueta = _BM_KEYWORDS[kw]; break; }
         }
         // "en línea" NO es etiqueta guardable → se trata como en_linea normal
-        if (enLinea) etiqueta = null;
+        if (enLinea) { etiqueta = null; }
+        // Si hay texto pero no coincide con ningún keyword → guardar texto libre como observación
+        else if (!etiqueta && resto) {
+          etiqueta = 'OTRO';
+          etiquetaTextoLibre = resto; // texto original del técnico
+        }
       }
 
       const sys = _fechaSistemaParaBarridoManual(num, plat);
@@ -4979,6 +5051,7 @@ const UI = (() => {
         fechaSistemaFuente: fecha ? '' : sys.fuente,
         enLinea,
         etiqueta,
+        etiquetaTextoLibre, // texto libre cuando etiqueta === 'OTRO'
         rawLine: line,
         _hasTextoEtiqueta: hayTextoEtiqueta
       });
@@ -5033,7 +5106,8 @@ const UI = (() => {
     const conEt = filas.filter(f => f.etiqueta);
     if (!conEt.length) return '';
     return conEt.map(f => {
-      const label = _BM_ETIQUETA_LABEL[f.etiqueta] || f.etiqueta.toLowerCase().replace(/_/g,' ');
+      // Para OTRO: usar texto libre del técnico. Para el resto: label del diccionario.
+      const label = f.etiqueta === 'OTRO' ? (f.etiquetaTextoLibre || f.etiqueta) : (_BM_ETIQUETA_LABEL[f.etiqueta] || f.etiqueta.toLowerCase().replace(/_/g,' '));
       return `${f.num} ${label}`;
     }).join('\n');
   }
@@ -5158,7 +5232,7 @@ const UI = (() => {
       obsList
         .sort((a,b) => Number(a.num) - Number(b.num))
         .forEach(f => {
-          const label = f.etiqueta ? (_BM_ETIQUETA_LABEL[f.etiqueta] || f.etiqueta.toLowerCase()) : '';
+          const label = f.etiqueta ? (f.etiqueta === 'OTRO' ? (f.etiquetaTextoLibre || f.etiqueta.toLowerCase()) : (_BM_ETIQUETA_LABEL[f.etiqueta] || f.etiqueta.toLowerCase())) : '';
 
           if (f._fechaObj) {
             const dias = f._dias;
