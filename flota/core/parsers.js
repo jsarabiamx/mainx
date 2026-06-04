@@ -130,7 +130,8 @@ const Parsers = (() => {
 
   function fmtDate(v) {
     if (!v) return '';
-    const d = v instanceof Date ? v : new Date(v);
+    // Normalizar espacio→T para parseo consistente en todos los browsers
+    const d = v instanceof Date ? v : new Date(String(v).replace(' ', 'T'));
     if (isNaN(d)) return String(v).substring(0,16);
     // "14/04/2026 08:15"
     return d.toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' +
@@ -139,26 +140,29 @@ const Parsers = (() => {
 
   function fmtDateShort(v) {
     if (!v) return '';
-    const d = new Date(v);
+    const d = new Date(String(v).replace(' ', 'T'));
     if (isNaN(d)) return '';
     return d.toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
   }
 
   function fmtTime(v) {
     if (!v) return '';
-    const d = new Date(v);
+    const d = new Date(String(v).replace(' ', 'T'));
     if (isNaN(d)) return '';
     return d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
   }
 
   function diasDesde(iso) {
     if (!iso) return null;
-    const d = new Date(iso);
+    // Normalizar: reemplazar espacio por T para que todos los browsers traten como hora local
+    const isoNorm = String(iso).replace(' ', 'T');
+    const d = new Date(isoNorm);
     if (isNaN(d)) return null;
     const hoy = new Date();
-    const hoyLocal = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-    const fechaLocal = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    return Math.round((hoyLocal.getTime() - fechaLocal.getTime()) / 86400000);
+    // Comparar solo la parte de fecha (sin hora) en zona local
+    const hoyMidnight = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    const fechaMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    return Math.round((hoyMidnight.getTime() - fechaMidnight.getTime()) / 86400000);
   }
 
   function statusClass(dias) {
