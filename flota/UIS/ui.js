@@ -2936,16 +2936,18 @@ const UI = (() => {
    * Se abre un prompt simple (sin re-renderizar toda la tabla mientras se escribe,
    * para no perder foco). Al guardar actualiza la unidad y refresca la tabla.
    */
-  function _editarObsRapido(num, emp, plat) {
+  async function _editarObsRapido(num, emp, plat) {
     const u = DB.getUnidad(num, emp);
     if (!u) { toast('Unidad no encontrada','error'); return; }
     const fallaActiva = (u.fallas||[]).find(f => !f.resuelta);
     const actual = u.observaciones || (fallaActiva ? fallaActiva.motivo : '') || '';
-    const nuevo = window.prompt(
-      `Observaciones para unidad ${num}:\n(Se sincroniza con el registro de fallas)\n\n(Deja vacío para borrar)`,
-      actual
-    );
-    if (nuevo === null) return; // canceló
+    const nuevo = await _uiPrompt({
+      title: `Observación — Unidad ${num}`,
+      message: 'Se sincroniza con el registro de fallas. Deja vacío para borrar.',
+      placeholder: 'Ej: AFR motor, SIM baja, GPS mal...',
+      defaultValue: actual, icon: '📋', okText: 'Guardar observación'
+    });
+    if (nuevo === null) return;
     const texto = nuevo.trim();
     DB.upsertUnidad(num, { observaciones: texto, observaciones_manual: texto, _fuente: 'edit_obs_inline' }, emp);
 
