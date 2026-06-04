@@ -5117,7 +5117,42 @@ const UI = (() => {
       });
     }
 
-    const obsList = enriched.filter(f => f.etiqueta || f._categoria === 'sin_fecha');
+    // ── Pre-clasificar para evitar duplicados ──────────────────────────────
+    // Determinar qué unidades van a cada sección ANTES de renderizar,
+    // para que una unidad NO aparezca en dos secciones a la vez.
+    const platActual = _barridoManualState.plataforma || 'CEIBA';
+    const emp = DB.getEmpresaActiva();
+    const kPlat = 'ultima_act_' + platActual.toLowerCase();
+
+    // Sets de números por categoría (mutuamente excluyentes)
+    const _numsSinAsig    = new Set(); // no existe en asignación
+    const _numsSinEquipo  = new Set(); // existe pero sin datos en esta plataforma Y sin etiqueta Y sin fecha técnico
+    // Los que tienen etiqueta O tienen fecha técnico → van a OBSERVACIONES (con o sin plataforma)
+
+    filas.forEach(f => {
+      const u = DB.getUnidad(f.num, emp);
+      if (!u) {
+        _numsSinAsig.add(f.num);
+      } else if (!u[kPlat] && !f.etiqueta && !f.fecha) {
+        // Sin datos en la plataforma, sin etiqueta, sin fecha del técnico
+        // → va solo a "Sin equipo PLATAFORMA", no a observaciones
+        _numsSinEquipo.add(f.num);
+      }
+      // Si tiene etiqueta o fecha técnico → va a OBSERVACIONES aunque no tenga plataforma
+    });
+
+    // ── OBSERVACIONES ────────────────────────────────────────────────────
+    // Solo entran: unidades con etiqueta OR con fecha pero días>0 OR con fecha y sin_fecha que tengan etiqueta
+    // NO entran: las del set _numsSinEquipo ni _numsSinAsig (a menos que tengan etiqueta)
+    const obsList = enriched.filter(f => {
+      // Si tiene etiqueta → siempre va a OBSERVACIONES (independiente de si tiene fecha o no)
+      if (f.etiqueta) return true;
+      // Sin etiqueta y sin fecha: solo si NO está en los sets de sin-equipo / sin-asig
+      if (f._categoria === 'sin_fecha') {
+        return !_numsSinEquipo.has(f.num) && !_numsSinAsig.has(f.num);
+      }
+      return false;
+    });
     if (obsList.length) {
       out += `\n⚠ OBSERVACIONES\n`;
       obsList
@@ -5137,45 +5172,30 @@ const UI = (() => {
             const diasTxt = dias > 0 ? ` (${dias} día${dias===1?'':'s'} sin transmitir)` : '';
             out += `${prefijoFecha}${_fmtBarridoManualFecha(f._fechaObj)}${diasTxt}\n`;
           } else {
-            if (label) out += `${f.num} — ${label}\n`;
-            else out += `${f.num}\n`;
-            out += `(No marca fecha)\n`;
+            // tiene etiqueta pero sin fecha (ni técnico ni sistema)
+            out += `${f.num} — ${label || 'sin datos'}\n`;
           }
         });
     }
 
-    // ── Sección: unidades sin equipo en la plataforma seleccionada ──
-    const platActual = _barridoManualState.plataforma || 'CEIBA';
-    const emp = DB.getEmpresaActiva();
-    const kPlat = 'ultima_act_' + platActual.toLowerCase();
-
-    // Grupo A: están en asignación pero NO tienen datos en esta plataforma
-    const sinEquipoPlat = filas.filter(f => {
-      const u = DB.getUnidad(f.num, emp);
-      // existe en asignación pero no tiene ultima_act para esta plataforma
-      return u && !u[kPlat];
-    });
-    if (sinEquipoPlat.length) {
+    // ── Sin equipo en la plataforma seleccionada ────────────────────────
+    // Unidades que existen en asignación pero no tienen datos en esta plataforma
+    // y tampoco tienen etiqueta ni fecha técnico (no duplicar con OBSERVACIONES)
+    if (_numsSinEquipo.size) {
+      const sinEquipoList = [..._numsSinEquipo].sort((a,b) => Number(a) - Number(b));
       out += `\n🚫 Sin equipo ${platActual}:\n`;
-      sinEquipoPlat
-        .sort((a,b) => Number(a.num) - Number(b.num))
-        .forEach(f => {
-          out += `${f.num} sin ${platActual.toLowerCase()}\n`;
-        });
+      sinEquipoList.forEach(num => {
+        out += `${num} sin ${platActual.toLowerCase()}\n`;
+      });
     }
 
-    // Grupo B: no existen en la asignación activa
-    const noEnAsig = filas.filter(f => {
-      const u = DB.getUnidad(f.num, emp);
-      return !u;
-    });
-    if (noEnAsig.length) {
+    // ── Sin asignación activa ───────────────────────────────────────────
+    if (_numsSinAsig.size) {
+      const sinAsigList = [..._numsSinAsig].sort((a,b) => Number(a) - Number(b));
       out += `\n⚠ Sin asignación activa (verificar en sistema):\n`;
-      noEnAsig
-        .sort((a,b) => Number(a.num) - Number(b.num))
-        .forEach(f => {
-          out += `${f.num} — no encontrada en asignación\n`;
-        });
+      sinAsigList.forEach(num => {
+        out += `${num} — no encontrada en asignación\n`;
+      });
     }
 
     return out.trim();
