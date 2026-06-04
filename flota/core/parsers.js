@@ -50,27 +50,33 @@ const Parsers = (() => {
    */
   function parseDate(val) {
     if (!val && val !== 0) return null;
-    if (val instanceof Date && !isNaN(val)) return val;
+    if (val instanceof Date && !isNaN(val)) {
+      // Normalizar: usar componentes UTC como hora local para consistencia
+      const y = val.getUTCFullYear();
+      const mo = String(val.getUTCMonth()+1).padStart(2,'0');
+      const d2 = String(val.getUTCDate()).padStart(2,'0');
+      const h = String(val.getUTCHours()).padStart(2,'0');
+      const mi = String(val.getUTCMinutes()).padStart(2,'0');
+      const s2 = String(val.getUTCSeconds()).padStart(2,'0');
+      return new Date(`${y}-${mo}-${d2}T${h}:${mi}:${s2}`);
+    }
 
-    // Excel serial number → convertir a hora LOCAL del archivo (no UTC)
-    // Excel almacena fechas como días desde 1899-12-30 en hora local
+    // Excel serial number → extraer componentes de hora tal como están en el archivo
+    // Independiente del timezone del browser
     if (typeof val === 'number' && val > 25000 && val < 60000) {
-      // Calcular año/mes/día/hora del serial directamente sin conversión UTC
-      const totalDays = val - 25569; // días desde epoch Unix (1970-01-01)
+      const totalDays = val - 25569;
       const totalMs = Math.round(totalDays * 86400 * 1000);
-      // Crear fecha UTC con ese valor, luego ajustar al timezone del browser
-      // para que la hora se interprete como LOCAL (igual a lo que muestra el Excel)
       const tmpDate = new Date(totalMs);
-      // Obtener componentes UTC del timestamp (que corresponden a la hora local del archivo)
+      // Usar componentes UTC que corresponden EXACTAMENTE a la hora del archivo Excel
       const y = tmpDate.getUTCFullYear();
-      const mo = tmpDate.getUTCMonth();
-      const d2 = tmpDate.getUTCDate();
-      const h = tmpDate.getUTCHours();
-      const mi = tmpDate.getUTCMinutes();
-      const s2 = tmpDate.getUTCSeconds();
-      // Crear Date como hora local (constructor local, no UTC)
-      const d = new Date(y, mo, d2, h, mi, s2);
-      return isNaN(d) ? null : d;
+      const mo = String(tmpDate.getUTCMonth() + 1).padStart(2, '0');
+      const d2 = String(tmpDate.getUTCDate()).padStart(2, '0');
+      const h = String(tmpDate.getUTCHours()).padStart(2, '0');
+      const mi = String(tmpDate.getUTCMinutes()).padStart(2, '0');
+      const s2 = String(tmpDate.getUTCSeconds()).padStart(2, '0');
+      // Retornar como ISO string SIN sufijo Z ni offset — todos los browsers lo interpretan igual
+      const isoLocal = `${y}-${mo}-${d2}T${h}:${mi}:${s2}`;
+      return new Date(isoLocal); // sin Z = local time = se muestra igual en todos
     }
 
     let s = String(val).trim();
