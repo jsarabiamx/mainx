@@ -5241,12 +5241,20 @@ const UI = (() => {
     if (f.base) lista = lista.filter(u => u.base === f.base);
     if (f.crom) lista = lista.filter(u => u.cromatica === f.crom);
     if (f.est)  lista = lista.filter(u => Parsers.categorizarEstatus(u.estatus) === f.est);
+    // Filtros por plataforma: 'con' = tiene datos, 'sin' = no tiene
+    ALL_PLATS.forEach(p => {
+      const fp = f['plat_' + p];
+      if (!fp) return;
+      const k = 'ultima_act_' + p.toLowerCase();
+      if (fp === 'con') lista = lista.filter(u => !!u[k]);
+      if (fp === 'sin') lista = lista.filter(u => !u[k]);
+    });
 
-    // Conteo por plataforma (SI / NO tienen datos)
+    // Conteo por plataforma
     const conteos = {};
     ALL_PLATS.forEach(p => {
       const k = 'ultima_act_' + p.toLowerCase();
-      conteos[p] = { con: lista.filter(u => u[k]).length, sin: lista.filter(u => !u[k]).length };
+      conteos[p] = { con: uns.filter(u => u[k]).length, sin: uns.filter(u => !u[k]).length };
     });
 
     lista.sort((a,b) => parseInt(a.num||0) - parseInt(b.num||0));
@@ -5255,24 +5263,25 @@ const UI = (() => {
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
         <div>
           <h2 style="font-size:14px;font-weight:700">TABLA MAESTRA</h2>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">Unidades con matriz de plataformas (SÍ/NO) · Filtra y exporta en CSV</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Unidades con matriz de plataformas · Filtra por plataforma y exporta en CSV</div>
         </div>
         <button class="export-btn" onclick="UI._exportarMaestra()">↓ Exportar CSV</button>
       </div>
 
-      <!-- Conteos por plataforma -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px">
-        ${ALL_PLATS.map(p => `
-          <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">${platIcon(p,18)}<div style="font-size:12px;font-weight:700">${p}</div></div>
-            <div style="display:flex;gap:8px;font-size:11px">
-              <div><span style="color:var(--green);font-weight:700">${conteos[p].con}</span> <span style="color:var(--text3)">sí</span></div>
-              <div><span style="color:var(--red);font-weight:700">${conteos[p].sin}</span> <span style="color:var(--text3)">no</span></div>
-            </div>
-          </div>`).join('')}
+      <!-- Chips de filtro por plataforma -->
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;align-items:center">
+        <span style="font-size:11px;color:var(--text3);margin-right:4px">PLATAFORMA</span>
+        ${ALL_PLATS.map(p => {
+          const fp = f['plat_' + p] || '';
+          const con = conteos[p].con;
+          const sin = conteos[p].sin;
+          const btnCon = `<button onclick="UI._setMaestraPlatFilter('${p}','con')" style="padding:3px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;border:1px solid ${fp==='con'?'var(--green)':'var(--border)'};background:${fp==='con'?'rgba(34,197,94,.15)':'var(--bg-card)'};color:${fp==='con'?'var(--green)':'var(--text2)'}">✓ Con ${p} <span style="color:var(--text3)">${con}</span></button>`;
+          const btnSin = `<button onclick="UI._setMaestraPlatFilter('${p}','sin')" style="padding:3px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;border:1px solid ${fp==='sin'?'var(--red)':'var(--border)'};background:${fp==='sin'?'rgba(239,68,68,.12)':'var(--bg-card)'};color:${fp==='sin'?'var(--red)':'var(--text2)'}">Sin ${p} <span style="color:var(--text3)">${sin}</span></button>`;
+          return btnCon + btnSin;
+        }).join('')}
       </div>
 
-      <!-- Filtros -->
+      <!-- Filtros base/crom/estatus -->
       <div class="plat-filter-bar" style="margin-bottom:12px;border-radius:10px;border:1px solid var(--border)">
         <div class="plat-filter-group">
           <span class="plat-filter-lbl">BASE</span>
@@ -5309,7 +5318,7 @@ const UI = (() => {
               <tr>
                 <th style="position:sticky;left:0;background:var(--bg-panel);z-index:2">UNIDAD</th>
                 <th>EMPRESA</th><th>BASE</th><th>CROMÁTICA</th><th>ESTATUS</th>
-                ${ALL_PLATS.map(p => `<th style="text-align:center">${p}</th>`).join('')}
+                ${ALL_PLATS.map(p => `<th style="text-align:center;font-size:11px">${p}</th>`).join('')}
               </tr>
             </thead>
             <tbody>
@@ -5322,7 +5331,9 @@ const UI = (() => {
                 ${ALL_PLATS.map(p => {
                   const k = 'ultima_act_' + p.toLowerCase();
                   const tiene = !!u[k];
-                  return `<td style="text-align:center;color:${tiene?'var(--green)':'var(--red)'};font-weight:700">${tiene?'SÍ':'NO'}</td>`;
+                  return `<td style="text-align:center">
+                    <span style="font-size:10px;font-weight:700;color:${tiene?'var(--green)':'var(--red)'}">${tiene?'✓ Con '+p:'Sin '+p}</span>
+                  </td>`;
                 }).join('')}
               </tr>`).join('')}
             </tbody>
@@ -5332,12 +5343,24 @@ const UI = (() => {
     `;
   }
 
+  function _setMaestraPlatFilter(plat, val) {
+    // Toggle: si ya está activo ese valor, desactivar
+    const current = _maestraFilter['plat_' + plat] || '';
+    _maestraFilter['plat_' + plat] = current === val ? '' : val;
+    renderMaestra();
+  }
+
   function _onMaestraFilterChange() {
+    const prev = _maestraFilter;
     _maestraFilter = {
       base: $('ma-f-base')?.value || '',
       crom: $('ma-f-crom')?.value || '',
       est:  $('ma-f-est')?.value || ''
     };
+    // Preservar filtros de plataforma
+    ALL_PLATS.forEach(p => {
+      _maestraFilter['plat_' + p] = prev['plat_' + p] || '';
+    });
     renderMaestra();
   }
   function _resetMaestraFilters() {
@@ -5478,7 +5501,7 @@ const UI = (() => {
     get _barridoManualState(){return _barridoManualState;},
     set _barridoManualState(v){Object.assign(_barridoManualState,v);},
     // maestra
-    _onMaestraFilterChange, _resetMaestraFilters, _exportarMaestra,
+    _onMaestraFilterChange, _setMaestraPlatFilter, _resetMaestraFilters, _exportarMaestra,
     // date picker
     openDatePicker, _confirmDatePicker,
     // carga
