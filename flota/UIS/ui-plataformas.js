@@ -130,7 +130,16 @@
       const conFecha=operativas.filter(u=>u[k]);
       // Excluir siniestros de conteos GPS en tarjetas de plataforma
       const conFechaGPS=conFecha.filter(u=>!_tieneSiniestroActivo(u));
-      const enLinea=conFechaGPS.filter(u=>Math.floor((hoy-new Date(u[k]))/86400000)<=cfg.diasLinea).length;
+      const _dLocalCard=(f)=>{
+        if(!f) return null;
+        const fd=new Date(String(f).replace(' ','T'));
+        if(isNaN(fd)) return null;
+        const hD=new Date(hoy);
+        const hM=new Date(hD.getFullYear(),hD.getMonth(),hD.getDate());
+        const fM=new Date(fd.getFullYear(),fd.getMonth(),fd.getDate());
+        return Math.floor((hM-fM)/86400000);
+      };
+      const enLinea=conFechaGPS.filter(u=>{ const _d=_dLocalCard(u[k]); return _d!==null && _d<=cfg.diasLinea; }).length;
       const fuera=conFechaGPS.length-enLinea;
       const esManual=true;
       const COLS_MAP={
@@ -447,7 +456,7 @@
     if (f.dias && f.dias.length) {
       uns = uns.filter(u => {
         if (!u[k]) return false;
-        const fd = new Date(u[k]);
+        const fd = new Date(String(u[k]).replace(' ','T'));
         if (isNaN(fd)) return false;
         const _hD2 = new Date(hoy); // hoy es Date.now() (número)
         const hoyL  = new Date(_hD2.getFullYear(), _hD2.getMonth(), _hD2.getDate());
@@ -492,7 +501,7 @@
     if (sum) {
       const _dLocal = (fecha) => {
         if (!fecha) return null;
-        const fd = new Date(fecha);
+        const fd = new Date(String(fecha).replace(' ','T'));
         if (isNaN(fd)) return null;
         const _hD  = new Date(hoy); // hoy es Date.now() (número)
         const hoyL  = new Date(_hD.getFullYear(), _hD.getMonth(), _hD.getDate());
@@ -587,7 +596,7 @@
         // interpreta el string como UTC y la hora local resulta en el día siguiente.
         const d = (() => {
           if (!fecha) return null;
-          const fd = new Date(fecha);
+          const fd = new Date(String(fecha).replace(' ','T'));
           if (isNaN(fd)) return null;
           const _hoyD = new Date(hoy); // hoy es Date.now() (número) — convertir a Date
           const hoyLocal   = new Date(_hoyD.getFullYear(), _hoyD.getMonth(), _hoyD.getDate());
@@ -736,7 +745,14 @@
     const hoy = Date.now();
     const k = 'ultima_act_' + plat.toLowerCase();
     const fecha = u[k];
-    const d = fecha ? Math.floor((hoy - new Date(fecha))/86400000) : null;
+    const d = fecha ? (() => {
+      const fd = new Date(String(fecha).replace(' ','T'));
+      if (isNaN(fd)) return null;
+      const hD = new Date(hoy);
+      const hM = new Date(hD.getFullYear(), hD.getMonth(), hD.getDate());
+      const fM = new Date(fd.getFullYear(), fd.getMonth(), fd.getDate());
+      return Math.floor((hM - fM) / 86400000);
+    })() : null;
     const cls = Parsers.statusClass(d);
     const clsColor = cls==='critico'?'var(--red)':cls==='atencion'?'var(--yellow)':cls==='sin'?'var(--text3)':'var(--green)';
     const clsLabel = cls==='critico'?'FUERA DE LÍNEA':cls==='atencion'?'ATENCIÓN':cls==='sin'?'SIN DATOS':'EN LÍNEA';
@@ -1453,11 +1469,16 @@
     const uns=DB.getUnidadesList(emp).filter(u=>{
       if(!u.activa) return false;
       if(!u[k]) return false;
-      const d=Math.floor((hoy-new Date(u[k]))/86400000);
+      const _fdE=new Date(String(u[k]).replace(' ','T'));
+      if(isNaN(_fdE)) return false;
+      const _hDE=new Date(hoy);
+      const _hME=new Date(_hDE.getFullYear(),_hDE.getMonth(),_hDE.getDate());
+      const _fME=new Date(_fdE.getFullYear(),_fdE.getMonth(),_fdE.getDate());
+      const d=Math.floor((_hME-_fME)/86400000);
       return d > cfg.diasAtencion;
     }).map(u=>({
       ...u,
-      _dias: Math.floor((hoy-new Date(u[k]))/86400000)
+      _dias: (()=>{ const _fdM=new Date(String(u[k]).replace(' ','T')); if(isNaN(_fdM)) return 0; const _hDM=new Date(hoy); const _hMM=new Date(_hDM.getFullYear(),_hDM.getMonth(),_hDM.getDate()); const _fMM=new Date(_fdM.getFullYear(),_fdM.getMonth(),_fdM.getDate()); return Math.floor((_hMM-_fMM)/86400000); })()
     })).sort((a,b)=>b._dias-a._dias);
 
     if (!uns.length) { toast(`No hay unidades fuera de línea en ${plat}`,'info'); return; }
