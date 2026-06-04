@@ -769,20 +769,40 @@ const UI = (() => {
         <div class="plat-grid">
           ${ALL_PLATS.map(p=>{
             const k='ultima_act_'+p.toLowerCase();
-            const f=u[k];
-            const pd=Parsers.diasDesde(f);
-            const pc=!f?'var(--border)':pd<=DB.getConfig().diasLinea?'var(--green)':pd<=DB.getConfig().diasAtencion?'var(--yellow)':'var(--red)';
-            const label=!f?'SIN DATOS':pd<=DB.getConfig().diasLinea?'EN LÍNEA':'FUERA DE LÍNEA';
-            return`<div style="background:var(--bg-panel);border:1px solid var(--border);border-top:2px solid ${pc};border-radius:10px;padding:12px">
-              <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">${platIcon(p,22)}<span style="font-size:12px;font-weight:700">${p}</span></div>
-              ${f?`<div style="font-size:15px;font-weight:700">${Parsers.fmtDateShort(f)}</div>
-                <div style="font-size:11px;color:var(--text2)">${Parsers.fmtTime(f)}</div>
-                <div style="font-size:10px;font-weight:700;text-transform:uppercase;margin:5px 0 2px;color:${pc}">${label}</div>
-                <div style="font-size:20px;font-weight:700;color:${pc}">${pd} días</div>`
-              :`<div style="color:var(--text3);font-size:12px;margin:8px 0">Sin datos registrados</div>`}
-              <button class="act-btn-sm" style="margin-top:6px;width:100%" onclick="UI.openDatePicker('${f||''}',iso=>{UI._updatePlatFechaConISO('${esc(num)}','${p}','${esc(emp)}',iso)},'${p} — Actualizar conexión')">
-                ${f?'↻ Actualizar':'+ Ingresar fecha'}
-              </button>
+            const desKey='desinstalacion_'+p.toLowerCase();
+            const desObj=u[desKey]||null;
+            const desInstalado=!!desObj;
+            const f=desInstalado?null:u[k];
+            const pd=desInstalado?null:Parsers.diasDesde(f);
+            const pc=desInstalado?'var(--border2)':!f?'var(--border)':pd<=DB.getConfig().diasLinea?'var(--green)':pd<=DB.getConfig().diasAtencion?'var(--yellow)':'var(--red)';
+            const label=desInstalado?'DESINSTALADO':!f?'SIN DATOS':pd<=DB.getConfig().diasLinea?'EN LÍNEA':'FUERA DE LÍNEA';
+            const cardBg=desInstalado?'var(--bg-card)':'var(--bg-panel)';
+            const cardOpacity=desInstalado?'0.5':'1';
+            return`<div style="background:${cardBg};border:1px solid var(--border);border-top:3px solid ${pc};border-radius:10px;padding:12px;opacity:${cardOpacity}">
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+                ${platIcon(p,22)}
+                <span style="font-size:12px;font-weight:700">${p}</span>
+                <button title="${desInstalado?'Reinstalar equipo '+p:'Desinstalar equipo '+p}" onclick="event.stopPropagation();UI._toggleDesinstalacion('${esc(num)}','${p}','${esc(emp)}')"
+                  style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:13px;color:${desInstalado?'var(--green)':'var(--text3)'}">
+                  ${desInstalado?'🔧↩':'🔧'}
+                </button>
+              </div>
+              ${desInstalado
+                ?`<div style="color:var(--text3);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:8px 0">Equipo desinstalado</div>
+                  ${desObj.comentario?`<div style="font-size:10px;color:var(--text3);font-style:italic;margin-bottom:6px">${esc(desObj.comentario)}</div>`:''}
+                  ${desObj.fecha?`<div style="font-size:10px;color:var(--text3)">${Parsers.fmtDateShort(desObj.fecha)}</div>`:''}
+                  <button class="act-btn-sm" style="margin-top:6px;width:100%;opacity:0.6" onclick="event.stopPropagation();UI._toggleDesinstalacion('${esc(num)}','${p}','${esc(emp)}')">
+                    🔧 Reinstalar equipo
+                  </button>`
+                :`${f?`<div style="font-size:15px;font-weight:700">${Parsers.fmtDateShort(f)}</div>
+                  <div style="font-size:11px;color:var(--text2)">${Parsers.fmtTime(f)}</div>
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;margin:5px 0 2px;color:${pc}">${label}</div>
+                  <div style="font-size:20px;font-weight:700;color:${pc}">${pd} días</div>`
+                :`<div style="color:var(--text3);font-size:12px;margin:8px 0">Sin datos registrados</div>`}
+                <button class="act-btn-sm" style="margin-top:6px;width:100%" onclick="UI.openDatePicker('${f||''}',iso=>{UI._updatePlatFechaConISO('${esc(num)}','${p}','${esc(emp)}',iso)},'${p} — Actualizar conexión')">
+                  ${f?'↻ Actualizar':'+ Ingresar fecha'}
+                </button>`
+              }
             </div>`;
           }).join('')}
         </div>
@@ -1189,6 +1209,98 @@ const UI = (() => {
       ? (erroresSB === 0 ? ` · ☁ ${borradasSB} en Supabase` : ` · ⚠ ${erroresSB} sin borrar en Supabase`)
       : '';
     toast(`✅ ${borradasLocal} unidades eliminadas de ${plat}${sbMsg}`, 'success', 5000);
+  }
+
+
+  // ══════════════════════════════════════════════════════════════════
+  // DESINSTALACIÓN DE EQUIPOS GPS POR PLATAFORMA
+  // ══════════════════════════════════════════════════════════════════
+
+  function _toggleDesinstalacion(num, plat, emp) {
+    const u = DB.getUnidad(num, emp) || {};
+    const desKey = 'desinstalacion_' + plat.toLowerCase();
+    const yaDesinstalado = !!u[desKey];
+
+    if (yaDesinstalado) {
+      // Reinstalar — quitar desinstalación
+      if (!confirm(`¿Confirmar reinstalación del equipo ${plat} en unidad ${num}?`)) return;
+      const upd = { [desKey]: null };
+      DB.upsertUnidad(num, upd, emp);
+      // Supabase: limpiar campo en gps_barridos
+      if (window.GPS_SB) {
+        GPS_SB._patch('gps_barridos',
+          `empresa_id=eq.${emp}&plataforma=eq.${plat}&num_economico=eq.${num}`,
+          { desinstalado: false, desinstalacion_fecha: null, desinstalacion_comentario: null, desinstalacion_ts: null }
+        ).catch(e => console.warn('[_toggleDesinstalacion] reinstalar:', e.message));
+      }
+      toast(`✅ Equipo ${plat} reinstalado en unidad ${num}`, 'success', 3000);
+    } else {
+      // Desinstalar — pedir comentario
+      const comentario = prompt(`Desinstalar equipo ${plat} — Unidad ${num}\n\nComentario (opcional):`, '');
+      if (comentario === null) return; // Canceló
+      const ahora = new Date().toISOString();
+      const desObj = { fecha: ahora, comentario: comentario.trim(), ts: Date.now() };
+      const upd = { [desKey]: desObj };
+      DB.upsertUnidad(num, upd, emp);
+      // Supabase: marcar como desinstalado en gps_barridos
+      if (window.GPS_SB) {
+        GPS_SB._patch('gps_barridos',
+          `empresa_id=eq.${emp}&plataforma=eq.${plat}&num_economico=eq.${num}`,
+          { desinstalado: true, desinstalacion_fecha: ahora,
+            desinstalacion_comentario: comentario.trim(), desinstalacion_ts: ahora }
+        ).catch(e => console.warn('[_toggleDesinstalacion] desinstalar:', e.message));
+      }
+      // Guardar en nota de la unidad si hay comentario
+      if (comentario.trim()) {
+        const notaActual = (DB.getUnidad(num, emp) || {}).notas || '';
+        const nuevaNota = notaActual
+          ? `${notaActual} | ${plat} desinstalado: ${comentario.trim()}`
+          : `${plat} desinstalado: ${comentario.trim()}`;
+        DB.upsertUnidad(num, { notas: nuevaNota }, emp);
+        if (window.GPS_SB && GPS_SB.saveNota) {
+          GPS_SB.saveNota(num, emp, nuevaNota).catch(e => console.warn('[_toggleDesinstalacion] nota:', e.message));
+        }
+      }
+      toast(`🔧 Equipo ${plat} desinstalado en unidad ${num}`, 'success', 3000);
+    }
+    renderDetalle(num, emp);
+    if (_platExpandida === plat) _refreshPlatTable(plat);
+  }
+
+  async function _desinstalarSeleccionadasPlat(plat, emp) {
+    const nums = [..._platSeleccionadas];
+    if (!nums.length) return;
+    const comentario = prompt(
+      `Desinstalar equipo ${plat} en ${nums.length} unidad${nums.length>1?'es':''}:\n${nums.slice(0,5).join(', ')}${nums.length>5?'...':''}\n\nComentario (opcional):`, ''
+    );
+    if (comentario === null) return;
+    const ahora = new Date().toISOString();
+    const desObj = { fecha: ahora, comentario: comentario.trim(), ts: Date.now() };
+    const desKey = 'desinstalacion_' + plat.toLowerCase();
+
+    let ok = 0;
+    for (const num of nums) {
+      DB.upsertUnidad(num, { [desKey]: desObj }, emp);
+      ok++;
+    }
+
+    // Supabase en background
+    if (window.GPS_SB) {
+      const BATCH = 50;
+      for (let i = 0; i < nums.length; i += BATCH) {
+        const batch = nums.slice(i, i + BATCH);
+        const inList = batch.join(',');
+        GPS_SB._patch('gps_barridos',
+          `empresa_id=eq.${emp}&plataforma=eq.${plat}&num_economico=in.(${inList})`,
+          { desinstalado: true, desinstalacion_fecha: ahora,
+            desinstalacion_comentario: comentario.trim(), desinstalacion_ts: ahora }
+        ).catch(e => console.warn('[_desinstalarSeleccionadasPlat]', e.message));
+      }
+    }
+
+    _platSeleccionadas.clear();
+    toast(`🔧 ${ok} unidades marcadas como desinstaladas en ${plat}`, 'success', 4000);
+    _refreshPlatTable(plat);
   }
 
   function _eliminarUnidadDePlat(num, plat, emp) {
@@ -2082,6 +2194,8 @@ const UI = (() => {
           </div>
           <div id="plat-bulk-bar" style="display:none;align-items:center;gap:8px">
             <span id="plat-bulk-count" style="font-size:12px;color:var(--text2)"></span>
+            <button style="background:#78350f22;border:1px solid #f59e0b;color:#fbbf24;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px"
+              onclick="UI._desinstalarSeleccionadasPlat('${plat}','${esc(emp)}')">🔧 Desinstalar equipo</button>
             <button style="background:#ef444422;border:1px solid #ef4444;color:#f87171;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px"
               onclick="UI._eliminarSeleccionadasPlat('${plat}')">🗑 Eliminar seleccionadas</button>
             <button class="act-btn" onclick="UI._limpiarSeleccionPlat()">✕ Deseleccionar</button>
@@ -2427,7 +2541,9 @@ const UI = (() => {
       })() : '';
 
       const isChecked = _platSeleccionadas.has(u.num);
-      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''} ${isChecked?'plat-row-checked':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" ondblclick="event.preventDefault();UI._editarCapturaManuaRow('${esc(u.num)}','${plat}')" style="cursor:pointer;user-select:none;-webkit-user-select:none;-moz-user-select:none" title="${esManual?'Doble clic para editar fecha':''}">
+      const desKey2 = 'desinstalacion_' + plat.toLowerCase();
+      const isDesinstalado = !!(DB.getUnidad(u.num, emp)||u)[desKey2];
+      return `<tr data-num="${esc(u.num)}" class="plat-row-clickable ${isSelected?'plat-row-selected':''} ${isChecked?'plat-row-checked':''} ${isDesinstalado?'plat-row-desinstalado':''}" style="${isDesinstalado?'opacity:0.45;':''}" onclick="UI._onPlatRowClick('${esc(u.num)}','${plat}')" ondblclick="event.preventDefault();UI._editarCapturaManuaRow('${esc(u.num)}','${plat}')" style="cursor:pointer;user-select:none;-webkit-user-select:none;-moz-user-select:none" title="${esManual?'Doble clic para editar fecha':''}">
         <td style="width:28px;text-align:center" onclick="event.stopPropagation()">
           <input type="checkbox" class="plat-row-chk" data-num="${esc(u.num)}" ${isChecked?'checked':''} style="cursor:pointer;width:14px;height:14px" onchange="UI._onPlatCheckRow('${esc(u.num)}','${plat}',this.checked)">
         </td>
@@ -2439,7 +2555,7 @@ const UI = (() => {
         ${incluyeEstadoCol ? `<td>${estadoSamsaraCell}</td>` : ''}
         ${esMotive ? `<td>${motiveEstadoCell}</td><td style="font-size:11px">${esc(motiveEmpresa||'—')}</td>` : ''}
         <td style="font-size:11px">${fecha?Parsers.fmtDate(fecha):'<span style="color:var(--text3)">Sin datos</span>'}</td>
-        <td>${diasBadge(d)}</td>
+        <td>${isDesinstalado ? '<span style="background:var(--border2);color:var(--text3);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:700">DESINS.</span>' : diasBadge(d)}</td>
         ${esMotive
           ? `<td style="font-family:monospace;font-size:10px">${esc(motiveSerieVG||'—')}</td><td style="font-family:monospace;font-size:10px">${esc(motiveSerieCam||'—')}</td>`
           : `<td style="font-family:monospace;font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(idValue)}</td>`
@@ -5238,6 +5354,7 @@ const UI = (() => {
     // plataformas v7: detalle inline, búsqueda multi-token, captura manual
     _onPlatRowClick, _cerrarPlatDetailInline,
     _guardarNota, _editarNotaRapido,
+    _toggleDesinstalacion, _desinstalarSeleccionadasPlat,
     _onPlatCheckRow, _toggleSelectAllPlat, _limpiarSeleccionPlat,
     _updateBulkBar, _eliminarSeleccionadasPlat,
     _abrirCapturaManualPlat, _autocompletarCapturaManual,
