@@ -5140,6 +5140,24 @@ const UI = (() => {
         });
     }
 
+    // ── Sección: unidades del reporte que NO tienen datos en la plataforma seleccionada ──
+    const platActual = _barridoManualState.plataforma || 'CEIBA';
+    const emp = DB.getEmpresaActiva();
+    const k = 'ultima_act_' + platActual.toLowerCase();
+    const sinPlat = filas.filter(f => {
+      const u = DB.getUnidad(f.num, emp);
+      // No tiene datos en esta plataforma O no existe en la asignación
+      return !u || !u[k];
+    });
+    if (sinPlat.length) {
+      out += `\n🚫 Unidades sin plataforma ${platActual}:\n`;
+      sinPlat
+        .sort((a,b) => Number(a.num) - Number(b.num))
+        .forEach(f => {
+          out += `${f.num} sin ${platActual.toLowerCase()}\n`;
+        });
+    }
+
     return out.trim();
   }
 
