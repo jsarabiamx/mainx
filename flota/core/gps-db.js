@@ -152,7 +152,18 @@ const GPS_SB = (() => {
       if (!fecha) return null;
       try {
         const d = fecha instanceof Date ? fecha : new Date(fecha);
-        return isNaN(d) ? null : d.toISOString();
+        if (isNaN(d)) return null;
+        // Usar componentes LOCALES del Date para emitir el ISO
+        // Así la hora que ve el usuario (local) es exactamente la del archivo Excel
+        // independientemente del timezone del browser donde se subió
+        const y  = d.getFullYear();
+        const mo = String(d.getMonth()+1).padStart(2,'0');
+        const dd = String(d.getDate()).padStart(2,'0');
+        const h  = String(d.getHours()).padStart(2,'0');
+        const mi = String(d.getMinutes()).padStart(2,'0');
+        const s  = String(d.getSeconds()).padStart(2,'0');
+        // Guardar como ISO sin offset (naive UTC) — mismo valor en todos los navegadores
+        return `${y}-${mo}-${dd}T${h}:${mi}:${s}`;
       } catch { return null; }
     };
 
