@@ -4678,9 +4678,10 @@ const UI = (() => {
     if (!u) return { fecha: null, fuente: '', unidad: null };
     const plat = String(plataforma || '').toLowerCase();
     const platKey = plat ? 'ultima_act_' + plat : '';
-    const fechaPlat = platKey ? u[platKey] : null;
+    // FIX: usar SOLO la fecha de la plataforma seleccionada.
+    // NO caer al fallback u.ultima_act (podría ser de otra plataforma).
+    const fechaPlat = platKey ? (u[platKey] || null) : null;
     if (fechaPlat) return { fecha: fechaPlat, fuente: String(plataforma || '').toUpperCase(), unidad: u };
-    if (u.ultima_act) return { fecha: u.ultima_act, fuente: 'SISTEMA', unidad: u };
     return { fecha: null, fuente: '', unidad: u };
   }
 
@@ -4690,7 +4691,8 @@ const UI = (() => {
 
   function _diasFechaBarridoManual(fecha) {
     if (!fecha) return null;
-    const d = new Date(fecha);
+    // FIX: normalizar espacio→T para que todos los browsers traten como hora local
+    const d = new Date(String(fecha).replace(' ', 'T'));
     if (isNaN(d)) return null;
     const hoy = new Date();
     const hoyLocal = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
@@ -4700,7 +4702,8 @@ const UI = (() => {
 
   function _fmtBarridoManualFecha(fecha) {
     if (!fecha) return '';
-    const fe = new Date(fecha);
+    // FIX: normalizar espacio→T para hora local consistente
+    const fe = new Date(String(fecha).replace(' ', 'T'));
     if (isNaN(fe)) return '';
     const dd = String(fe.getDate()).padStart(2,'0');
     const mm = String(fe.getMonth()+1).padStart(2,'0');
@@ -4712,7 +4715,8 @@ const UI = (() => {
 
   function _fmtFechaSoloDia(fecha) {
     if (!fecha) return '';
-    const fe = new Date(fecha);
+    // FIX: normalizar espacio→T para hora local consistente
+    const fe = fecha instanceof Date ? fecha : new Date(String(fecha).replace(' ', 'T'));
     if (isNaN(fe)) return '';
     const dd = String(fe.getDate()).padStart(2,'0');
     const mm = String(fe.getMonth()+1).padStart(2,'0');
@@ -5140,21 +5144,22 @@ const UI = (() => {
         });
     }
 
-    // ── Sección: unidades del reporte que NO tienen datos en la plataforma seleccionada ──
+    // ── Sección: unidades del reporte que NO están en la asignación activa ──
+    // FIX: solo reportar unidades que NO existen en la asignación (no en sistema).
+    // Las que sí existen pero no tienen barrido de esta plataforma YA se muestran
+    // en la sección de observaciones con "(No marca fecha)".
     const platActual = _barridoManualState.plataforma || 'CEIBA';
     const emp = DB.getEmpresaActiva();
-    const k = 'ultima_act_' + platActual.toLowerCase();
-    const sinPlat = filas.filter(f => {
+    const noEnAsig = filas.filter(f => {
       const u = DB.getUnidad(f.num, emp);
-      // No tiene datos en esta plataforma O no existe en la asignación
-      return !u || !u[k];
+      return !u; // solo las que definitivamente no están en asignación
     });
-    if (sinPlat.length) {
-      out += `\n🚫 Unidades sin plataforma ${platActual}:\n`;
-      sinPlat
+    if (noEnAsig.length) {
+      out += `\n⚠ Sin asignación activa (verificar en sistema):\n`;
+      noEnAsig
         .sort((a,b) => Number(a.num) - Number(b.num))
         .forEach(f => {
-          out += `${f.num} sin ${platActual.toLowerCase()}\n`;
+          out += `${f.num} — no encontrada en asignación\n`;
         });
     }
 
