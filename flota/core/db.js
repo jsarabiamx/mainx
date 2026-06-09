@@ -267,6 +267,63 @@ const DB = (() => {
         } catch(en) { console.warn('[DB] initFromSupabase notas:', en); }
       }
 
+      // ── PASO 1b: Merge gps_unidades — ediciones manuales / captura individual ──
+      // gps_unidades almacena unidades creadas/editadas manualmente (una por una).
+      // Sus campos sobrescriben lo que vino de gps_asignaciones si son más recientes.
+      try {
+        for (const emp of empresas) {
+          const uRows = await GPS_SB._getRaw('gps_unidades',
+            `empresa_id=eq.${encodeURIComponent(emp)}&order=num_economico`
+          );
+          if (!uRows || !uRows.length) continue;
+          if (!_s.unidades[emp]) _s.unidades[emp] = {};
+          uRows.forEach(r => {
+            const num = String(r.num_economico);
+            const existing = _s.unidades[emp][num];
+            if (existing) {
+              // Unidad ya existe (viene de asignación masiva) — aplicar solo los campos
+              // que tienen valor en gps_unidades (edición manual tiene prioridad)
+              if (r.base)          existing.base          = r.base;
+              if (r.cromatica)     existing.cromatica     = r.cromatica;
+              if (r.modelo)        existing.modelo        = r.modelo;
+              if (r.estatus)       existing.estatus       = r.estatus;
+              if (r.rol)           existing.rol           = r.rol;
+              if (r.placa)         existing.placa         = r.placa;
+              if (r.serie_vin)     existing.serie         = r.serie_vin;
+              if (r.motor)         existing.motor         = r.motor;
+              if (r.asientos)      existing.asientos      = r.asientos;
+              if (r.mes_asig)      existing.mes           = r.mes_asig;
+              if (r.observaciones) existing.observaciones = r.observaciones;
+              if (r.notas)         existing.notas         = r.notas;
+              existing._fuente = 'supabase_merged';
+            } else {
+              // Unidad nueva — no viene de asignación masiva, fue creada manualmente
+              _s.unidades[emp][num] = {
+                num,
+                economico:     num,
+                base:          r.base          || '',
+                cromatica:     r.cromatica     || '',
+                modelo:        r.modelo        || '',
+                estatus:       r.estatus       || '',
+                rol:           r.rol           || '',
+                placa:         r.placa         || '',
+                serie:         r.serie_vin     || '',
+                motor:         r.motor         || '',
+                asientos:      r.asientos      || '',
+                mes:           r.mes_asig      || '',
+                observaciones: r.observaciones || '',
+                notas:         r.notas         || '',
+                empresa_asig:  emp,
+                activa:        r.activa !== false,
+                fallas: [], historialFallas: [], historial: [],
+                siniestro: false, siniestroDesc: '', fallaCount: 0,
+                _fuente: 'supabase_unidades'
+              };
+            }
+          });
+        }
+      } catch(eu) { console.warn('[DB] initFromSupabase gps_unidades merge:', eu); }
+
       // ── PASO 2: Barridos GPS — Supabase es fuente de verdad ──────────────
       // Carga Supabase primero, luego limpia solo las plataformas que vienen de Supabase.
       // El usuario ve datos del localStorage durante la carga, no 0.
