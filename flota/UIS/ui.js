@@ -3085,7 +3085,9 @@ const UI = (() => {
     const u = DB.getUnidad(num, emp);
     if (!u) { toast('Unidad no encontrada','error'); return; }
     const fallaActiva = (u.fallas||[]).find(f => !f.resuelta);
-    const actual = u.observaciones || (fallaActiva ? fallaActiva.motivo : '') || '';
+    // Orden de prioridad: notas (Supabase gps_notas) > observaciones > etiqueta de falla activa
+    // NO usar fallaActiva.motivo porque puede ser un ID numérico (timestamp)
+    const actual = u.notas || u.observaciones || (fallaActiva ? (fallaActiva.etiqueta || '') : '') || '';
     const nuevo = await _uiPrompt({
       title: `Observación — Unidad ${num}`,
       message: 'Se sincroniza con el registro de fallas. Deja vacío para borrar.',
@@ -3094,22 +3096,17 @@ const UI = (() => {
     });
     if (nuevo === null) return;
     const texto = nuevo.trim();
-    DB.upsertUnidad(num, { observaciones: texto, observaciones_manual: texto, _fuente: 'edit_obs_inline' }, emp);
+    // Guardar en localStorage: tanto observaciones como notas (consistencia)
+    DB.upsertUnidad(num, { observaciones: texto, notas: texto, observaciones_manual: texto, _fuente: 'edit_obs_inline' }, emp);
 
-    // Sincronizar con fallas:
-    if (texto) {
-      if (fallaActiva) {
-        // Actualizar motivo de falla activa existente
-        fallaActiva.motivo = texto;
-        fallaActiva.etiqueta = texto;
-        DB.upsertUnidad(num, { fallas: u.fallas }, emp);
-      } else if (!u.siniestro) {
-        // Crear falla AFR con este texto si no hay ninguna activa
-        DB.registrarFalla(num, emp, { motivo: texto, tipo: 'AFR', esSiniestro: false });
-      }
+    // Sincronizar etiqueta en falla activa si existe
+    if (texto && fallaActiva) {
+      fallaActiva.etiqueta = texto;
+      // NO tocar fallaActiva.motivo para no corromper el texto con IDs
+      DB.upsertUnidad(num, { fallas: u.fallas }, emp);
     }
 
-    // Sincronizar observación a Supabase en background
+    // Sincronizar a Supabase gps_notas (fuente de verdad)
     if (window.GPS_SB && GPS_SB.saveNota) {
       GPS_SB.saveNota(num, emp, texto)
         .catch(e => console.warn('[editarObsRapido] Supabase sync:', e.message));
