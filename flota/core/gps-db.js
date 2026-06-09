@@ -315,11 +315,24 @@ const GPS_SB = (() => {
     });
   }
 
-  async function upsertUnidad(num, emp, datos) {
+  async function upsertUnidad(numOrDatos, emp, datos) {
+    // Acepta dos firmas:
+    //   1. upsertUnidad(num, emp, datos)  — separado
+    //   2. upsertUnidad({num, ...campos}, emp)  — num dentro del objeto
+    let num, campos;
+    if (typeof numOrDatos === 'object' && numOrDatos !== null) {
+      const { num: n, ...rest } = numOrDatos;
+      num    = n;
+      campos = rest;
+    } else {
+      num    = numOrDatos;
+      campos = datos || {};
+    }
+    if (!num) { console.warn('[GPS_SB.upsertUnidad] num requerido'); return; }
     return _upsert('gps_unidades', [{
       num_economico: String(num),
       empresa_id:    emp,
-      ...datos,
+      ...campos,
       updated_at:    new Date().toISOString()
     }], 'empresa_id,num_economico');
   }
