@@ -346,9 +346,45 @@ const Parsers = (() => {
       if (busIdx !== -1) colIdx.economico = busIdx;
     }
 
+    // ── Detectar formato AERS (Parque Vehicular) ────────────────────────────
+    // A=NO. B=AUTOBUS C=ROL(clave) D=SERVICIO E=MARCA COMERCIAL F=TECNOLOGIA
+    // G=EMPRESA H=BASE I=AÑO J=PLACAS K=TARJETA L=SERIE MOTOR M=SERIE NIV
+    // N=ASIENTOS O=OBSERVACIONES OPERATIVAS P=OBSERVACIONES 2
+    const headerNorm = headerRow.map(h => String(h||'').toUpperCase()
+      .replace(/[ÁÉÍÓÚÜ]/g, m=>({Á:'A',É:'E',Í:'I',Ó:'O',Ú:'U',Ü:'U'}[m]||m))
+      .replace(/\s+/g,'').trim());
+    const _hasAutobus = headerNorm.some(h => h === 'AUTOBUS' || h === 'AUTOBUSES');
+    const _hasTecnol  = headerNorm.some(h => h.includes('TECNOLOG'));
+    const _hasMarcaCom= headerNorm.some(h => h.includes('MARCACOMERCIAL') || h.includes('MARCACOM'));
+    const _hasObsOp   = headerNorm.some(h => h.includes('OBSOPERATIV') || (h.includes('OBSERV') && h.includes('OPERATIV')));
+    const isAERS = _hasAutobus && (_hasTecnol || _hasMarcaCom || _hasObsOp);
+
+    if (isAERS) {
+      // AERS: sobreescribir colIdx con mapeo correcto por nombre de columna
+      headerNorm.forEach((h, i) => {
+        if (h === 'AUTOBUS' || h === 'AUTOBUSES')                                           colIdx.economico = i; // B
+        if (h === 'SERVICIO' || h === 'SERVICIOS')                                          colIdx.rol       = i; // D (rol real: ECONOMICO/PLUS/COSTA LINE)
+        if (h.includes('MARCACOMERCIAL') || h === 'MARCACOM')                               colIdx.cromatica = i; // E (AMS/FUTURA)
+        if (h.includes('TECNOLOG'))                                                          colIdx.modelo    = i; // F (VOLVO-i5 / MARCO POLO...)
+        if (h === 'EMPRESA')                                                                 colIdx.empresa   = i; // G
+        if (h === 'BASE')                                                                    colIdx.base      = i; // H
+        if (h === 'PLACAS')                                                                  colIdx.placa     = i; // J
+        if (h === 'ASIENTOS')                                                                colIdx.asientos  = i; // N
+        if (h.includes('SERIEMOTOR') || h.includes('NOSERIEMOTOR') || h.includes('NOMOTOR'))colIdx.motor     = i; // L
+        if ((h.includes('SERIE') && h.includes('NIV')) || h.includes('NOSERIENV'))          colIdx.serie     = i; // M
+        if (h.includes('OBSOPERATIV') || (h.includes('OBSERV') && h.includes('OPERATIV')))  colIdx.estatus   = i; // O ← estatus real
+      });
+      // Doble garantía: forzar col O como estatus y col D como rol
+      const _obsOpIdx    = headerNorm.findIndex(h => h.includes('OBSOPERATIV') || (h.includes('OBSERV') && h.includes('OPERATIV')));
+      const _servicioIdx = headerNorm.findIndex(h => h === 'SERVICIO' || h === 'SERVICIOS');
+      if (_obsOpIdx    !== -1) colIdx.estatus = _obsOpIdx;
+      if (_servicioIdx !== -1) colIdx.rol     = _servicioIdx;
+      console.log('[Asignacion] AERS detectado — colIdx:', JSON.stringify(colIdx));
+    }
+
     // Fallbacks por posición (formato ETN estándar):
     // A=ECONÓMICO(0), B=CROMÁTICA(1), C=ESTATUS(2), D=MODELO(3), E=ROL(4), F=BASE(5), G=EMPRESA(6)
-    // Solo aplicar si NO se detectó por nombre (evita sobreescribir detección GHO)
+    // Solo aplicar si NO se detectó por nombre
     if (colIdx.economico === undefined) colIdx.economico = 0;
     if (colIdx.cromatica === undefined) colIdx.cromatica = 1;
     if (colIdx.estatus   === undefined) colIdx.estatus   = 2;
@@ -362,9 +398,9 @@ const Parsers = (() => {
     if (colIdx.asientos  === undefined) colIdx.asientos  = 10;
     if (colIdx.observaciones === undefined) colIdx.observaciones = 11;
 
-    // GHO detectado: número de unidad está en AUTOBUS, el resultado num debe ser ese valor
-    const isGHO = colIdx.economico > 0; // Si economico no es col A, es formato GHO u otro
-    console.log('[Asignacion] colIdx:', JSON.stringify(colIdx), 'isGHO:', isGHO);
+    // GHO: AUTOBUS es num pero sin TECNOLOGIA/MARCACOMERCIAL/OBSOPERATIVAS
+    const isGHO = !isAERS && colIdx.economico > 0;
+    console.log('[Asignacion] colIdx:', JSON.stringify(colIdx), 'isGHO:', isGHO, 'isAERS:', isAERS);
 
     const result = [];
     const seen = new Set();
@@ -391,6 +427,13 @@ const Parsers = (() => {
       // Advertir duplicado
       const isDuplicate = seen.has(num);
       seen.add(num);
+
+      // Nomenclatura AERS: sufijo -A en unidades propias para evitar colisión con ETN
+      // Unidades ETN prestadas (5 dígitos, empieza con 1) se guardan tal cual (ej: 18213)
+      if (isAERS && !/-A$/.test(num)) {
+        const _esPrestadaETN = num.length === 5 && num.startsWith('1');
+        if (!_esPrestadaETN) num = num + '-A';
+      }
 
       result.push({
         num,
@@ -987,9 +1030,18 @@ const Parsers = (() => {
     const normalize = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
 
     if (plat === 'ASIGNACION') {
-      // Buscar "Detalle1" o "detalle1" o la primera hoja con datos
       const det = sheetNames.find(n => normalize(n) === 'detalle1' || normalize(n).includes('detalle'));
-      return det || sheetNames[0];
+      if (det) return det;
+      // AERS: hoja "PV MAYO", "PV ABRIL", o nombre que contenga el mes
+      const MESES_PV = ['enero','febrero','marzo','abril','mayo','junio',
+                        'julio','agosto','septiembre','octubre','noviembre','diciembre'];
+      const pvSheet = sheetNames.find(n => {
+        const nn = normalize(n);
+        if (nn.startsWith('pv')) return true;
+        return MESES_PV.some(m => nn.includes(m));
+      });
+      if (pvSheet) return pvSheet;
+      return sheetNames[0];
     }
     if (plat === 'CEIBA') {
       const sh = sheetNames.find(n => normalize(n).includes('sheet') || normalize(n) === 'sheet1');
