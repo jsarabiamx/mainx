@@ -509,10 +509,10 @@ const UI = (() => {
       onChange: 'UI._rf={...UI._rf,crom:UI._msGetSelected("ms-rf-crom"),page:1};UI.renderUnitList()'
     });
 
-    // ESTADO — valores reales de estatus de asignación (En operación, Para venta, etc.)
+    // ESTADO — usar estatus normalizado directo (no la categoría genérica)
+    // Así aparecen: Enrolado, Desenrolado, Revisar, En operación, Para venta, etc.
     const estOpciones = [...new Set(uns.map(u => {
-      const cat = Parsers.categorizarEstatus(u.estatus);
-      return cat || u.estatus || '';
+      return Parsers.normalizarEstatus(u.estatus) || u.estatus || '';
     }).filter(Boolean))].sort();
     _renderMs('ms-rf-est', 'ms-rf-est', {
       id: 'ms-rf-est', label: 'Estado', allLabel: 'Todos',
@@ -546,9 +546,16 @@ const UI = (() => {
     uns=uns.map(u=>({...u,dias:Parsers.diasDesde(u.ultima_act)}));
 
     // Excluir "Para venta" por defecto. Si el usuario filtra explícitamente por "Para venta", sí las muestra.
-    const _filtrandoVenta = Array.isArray(_rf.est) ? _rf.est.includes('Para venta') : _rf.est === 'venta';
+    // Excluir Para venta/Vendido salvo que el usuario los seleccione explícitamente
+    const _ventaValues = ['Para venta','Vendido'];
+    const _filtrandoVenta = Array.isArray(_rf.est)
+      ? _rf.est.some(e => _ventaValues.includes(e))
+      : _rf.est === 'venta';
     if (!_filtrandoVenta) {
-      uns = uns.filter(u => Parsers.categorizarEstatus(u.estatus) !== 'Para venta');
+      uns = uns.filter(u => {
+        const norm = Parsers.normalizarEstatus(u.estatus);
+        return !_ventaValues.includes(norm);
+      });
     }
 
     if(_rf.plat)   uns=uns.filter(u=>u.plataforma===_rf.plat||u['ultima_act_'+_rf.plat.toLowerCase()]);
@@ -556,11 +563,11 @@ const UI = (() => {
     if(_rf.base && _rf.base.length) uns=uns.filter(u=>_rf.base.includes(u.base));
     // CROMÁTICA — multi-select (array)
     if(_rf.crom && _rf.crom.length) uns=uns.filter(u=>_rf.crom.includes(u.cromatica));
-    // ESTADO — multi-select con valores de categoría real
+    // ESTADO — multi-select: comparar contra estatus normalizado
     if(_rf.est && _rf.est.length){
       uns=uns.filter(u=>{
-        const cat = Parsers.categorizarEstatus(u.estatus) || u.estatus || '';
-        return _rf.est.includes(cat);
+        const norm = Parsers.normalizarEstatus(u.estatus) || u.estatus || '';
+        return _rf.est.includes(norm);
       });
     }
     // DÍAS GPS — multi-select con labels legibles
