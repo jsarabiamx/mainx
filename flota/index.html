@@ -162,31 +162,19 @@
       <select class="filter-select" id="filter-emp" onchange="UI.cambiarEmpresa(this.value)"></select>
     </div>
     <div class="filter-group"><span class="filter-label">Base</span>
-      <select class="filter-select" id="filter-base" onchange="UI._rf={...UI._rf,base:this.value,page:1};UI.renderUnitList()"></select>
+      <div id="ms-rf-base"></div>
     </div>
     <div class="filter-group"><span class="filter-label">Cromática</span>
-      <select class="filter-select" id="filter-crom" onchange="UI._rf={...UI._rf,crom:this.value,page:1};UI.renderUnitList()"></select>
+      <div id="ms-rf-crom"></div>
     </div>
     <div class="filter-group"><span class="filter-label">Estado</span>
-      <select class="filter-select" id="filter-est" onchange="UI._rf={...UI._rf,est:this.value,page:1};UI.renderUnitList()">
-        <option value="">Todos</option>
-      </select>
+      <div id="ms-rf-est"></div>
     </div>
     <div class="filter-group"><span class="filter-label">Días GPS</span>
-      <select class="filter-select" onchange="UI._rf={...UI._rf,dias:this.value,page:1};UI.renderUnitList()">
-        <option value="">Todos</option><option value="enlinea">En línea (&lt;2d)</option><option value="atencion">Atención (2-4d)</option><option value="fuera">Fuera de línea</option>
-      </select>
+      <div id="ms-rf-dias"></div>
     </div>
     <div class="filter-group"><span class="filter-label">Etiqueta</span>
-      <select class="filter-select" id="filter-etiqueta" onchange="UI._rf={...UI._rf,etiqueta:this.value,page:1};UI.renderUnitList()">
-        <option value="">Todas</option>
-        <option value="siniestro">🚨 Siniestro</option>
-        <option value="afr">⚠ AFR/Falla</option>
-        <option value="sim baja">📵 SIM Baja</option>
-        <option value="dvr">⚠ DVR</option>
-        <option value="gps mal">⚠ GPS Mal</option>
-        <option value="sin conexion">📡 Sin conexión</option>
-      </select>
+      <div id="ms-rf-etq"></div>
     </div>
     <input class="filter-select" style="min-width:170px;padding:5px 8px" placeholder="🔍 Buscar (separa espacios: 2280 AFR SIM)..." oninput="UI._debounceResumenSearch(this.value)" id="res-search-input">
     <button class="btn-cancel" style="font-size:11px" onclick="_resetFiltros()">↺ Reset</button>
