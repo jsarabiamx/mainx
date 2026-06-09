@@ -412,7 +412,7 @@ const Parsers = (() => {
       const rawNum = row[colIdx.economico];
       if (!rawNum && rawNum !== 0) continue;
 
-      const num = cleanNum(String(rawNum));
+      let num = cleanNum(String(rawNum));
       if (!num || num.length < 2) continue;
       // Permitir sufijo -A (AERS); para el resto validar que sea numérico
       const _isAERS_num = /-A$/.test(num);
