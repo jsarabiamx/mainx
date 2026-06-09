@@ -1782,16 +1782,52 @@ const UI = (() => {
       if(plat) datos['ultima_act_'+plat.toLowerCase()]=ultActISO;
     }
 
-    DB.upsertUnidad(numVal,datos,emp);
+    // Normalizar claves para que coincidan con DB local Y Supabase (gps_unidades)
+    const datosDB = {
+      ...datos,
+      num:      numVal,
+      serie:    datos.serie,
+      mes:      datos.mes,
+      // aliases para Supabase (columnas reales)
+      serie_vin: datos.serie,
+      mes_asig:  datos.mes,
+    };
+    DB.upsertUnidad(numVal, datosDB, emp);
     DB.addLog('manual',`Unidad ${numVal} guardada manualmente (${tipo})`,emp);
+
+    // ── Persistir en Supabase ──────────────────────────────────────────
+    if (window.GPS_SB) {
+      // Payload mapeado a columnas reales de gps_unidades
+      const sbPayload = {
+        base:          datos.base         || null,
+        cromatica:     datos.cromatica    || null,
+        modelo:        datos.modelo       || null,
+        estatus:       datos.estatus      || null,
+        rol:           datos.rol          || null,
+        placa:         datos.placa        || null,
+        serie_vin:     datos.serie        || null,
+        motor:         datos.motor        || null,
+        asientos:      datos.asientos     ? String(datos.asientos) : null,
+        mes_asig:      datos.mes          || null,
+        observaciones: datos.observaciones|| null,
+        activa:        true,
+      };
+      GPS_SB.upsertUnidad({ num: numVal, ...sbPayload }, emp)
+        .then(() => {
+          // Si tiene plataforma GPS, también guardar el barrido
+          if (datos.plataforma && datos.ultima_act) {
+            const raw = { num: numVal, fecha: datos.ultima_act, fechaStr: datos.ultima_act, plataforma: datos.plataforma };
+            return GPS_SB.saveBarrido(datos.plataforma, [raw], emp);
+          }
+        })
+        .catch(e => console.warn('[_guardarUnidad Supabase]', e));
+    }
 
     if (continuar) {
       toast(`✓ Unidad ${numVal} guardada — Agrega la siguiente`,'success',2500);
-      // Reabrir el modal limpio manteniendo el tipo de registro
       closeModal();
       setTimeout(()=>{
         openEditarUnidad(null, emp);
-        // Mantener el tipo de captura seleccionado
         setTimeout(()=>{
           const radio = document.querySelector(`input[name="tipo-reg"][value="${tipo}"]`);
           if (radio) { radio.checked = true; _switchTipoReg(tipo); }
