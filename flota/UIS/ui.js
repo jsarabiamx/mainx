@@ -5094,6 +5094,8 @@ const UI = (() => {
     });
 
     // Llenar SOLO Cuadro 2 (etiquetas + reporte). Cuadro 3 queda en blanco.
+    // Aprender keywords nuevos (OTRO) en segundo plano
+    _aprenderKeywordsNuevos(filas, DB.getEmpresaActiva()).catch(()=>{});
     _barridoManualState.filas = filas;
     _barridoManualState.reporteTexto = _formatearReporteBarrido(filas);
     _barridoManualState.etiquetasTexto = _formatearEtiquetasBarrido(filas);
@@ -5383,6 +5385,25 @@ const UI = (() => {
    * Guarda SOLO las etiquetas del snapshot del Cuadro 3 (st.finalEtiquetas).
    * No reprocesa nada — usa lo que ya quedó bloqueado al pulsar "Reprocesar".
    */
+  async function _aprenderKeywordsNuevos(filas, emp) {
+    // Guardar en Supabase textos libres (OTRO) para que el sistema los aprenda
+    if (!window.GPS_SB || !GPS_SB._upsert) return;
+    const nuevos = filas.filter(f => f.etiqueta === 'OTRO' && f.etiquetaTextoLibre);
+    if (!nuevos.length) return;
+    const rows = nuevos.map(f => ({
+      keyword:    f.etiquetaTextoLibre.toLowerCase().trim(),
+      etiqueta:   'OTRO',
+      label:      f.etiquetaTextoLibre.trim(),
+      empresa_id: emp || null,
+      usos:       1,
+      updated_at: new Date().toISOString()
+    }));
+    try {
+      await GPS_SB._upsert('gps_barrido_keywords', rows, 'keyword,empresa_id');
+      console.log(`[BarridoManual] ${rows.length} keywords nuevos guardados`);
+    } catch(e) { console.warn('[BarridoManual] keywords save:', e.message); }
+  }
+
   function _procesarFinalBarridoManual() {
     const st = _barridoManualState;
     if (st.step < 2) { toast('Pulsa primero "Reprocesar / Enviar a final" en el cuadro 2', 'warn'); return; }
