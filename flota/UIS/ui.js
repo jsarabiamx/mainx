@@ -3085,9 +3085,34 @@ const UI = (() => {
     const u = DB.getUnidad(num, emp);
     if (!u) { toast('Unidad no encontrada','error'); return; }
     const fallaActiva = (u.fallas||[]).find(f => !f.resuelta);
-    // Orden de prioridad: notas (Supabase gps_notas) > observaciones > etiqueta de falla activa
-    // NO usar fallaActiva.motivo porque puede ser un ID numérico (timestamp)
-    const actual = u.notas || u.observaciones || (fallaActiva ? (fallaActiva.etiqueta || '') : '') || '';
+
+    // Helper: detectar si un valor es un ID numérico (timestamp o bigint) — NO es texto de observación
+    const _esIdNumerico = v => v && /^\d{5,}$/.test(String(v).trim());
+
+    // Intentar cargar la nota real desde Supabase antes de mostrar el modal
+    let notaSupabase = '';
+    if (window.GPS_SB && GPS_SB._getRaw) {
+      try {
+        const rows = await GPS_SB._getRaw('gps_notas',
+          `empresa_id=eq.${encodeURIComponent(emp)}&num_economico=eq.${encodeURIComponent(num)}`
+        );
+        if (rows && rows.length > 0 && rows[0].nota) {
+          notaSupabase = rows[0].nota;
+          // Actualizar localStorage con el valor correcto
+          DB.upsertUnidad(num, { notas: notaSupabase, observaciones: notaSupabase }, emp);
+        }
+      } catch(e) { /* silencioso — usamos localStorage */ }
+    }
+
+    // Prioridad: Supabase live > u.notas (si no es ID) > u.observaciones (si no es ID) > etiqueta falla
+    const _rawNotas = u.notas || '';
+    const _rawObs   = u.observaciones || '';
+    const actual =
+      notaSupabase ||
+      (_esIdNumerico(_rawNotas) ? '' : _rawNotas) ||
+      (_esIdNumerico(_rawObs)   ? '' : _rawObs)   ||
+      (fallaActiva ? (fallaActiva.etiqueta || '') : '') || '';
+
     const nuevo = await _uiPrompt({
       title: `Observación — Unidad ${num}`,
       message: 'Se sincroniza con el registro de fallas. Deja vacío para borrar.',
