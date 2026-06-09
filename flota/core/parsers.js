@@ -1219,16 +1219,30 @@ const Parsers = (() => {
     if (v.includes('RENTADO A SAME') || v.includes('RENT')) return 'Rentado a SAME';
     if (v.includes('BAJA')) return 'Baja';
     if (v.includes('SINIESTRO')) return 'Siniestro';
+    // GHO
+    if (v === 'ENROLADO' || v.includes('ENROLAD')) return 'Enrolado';
+    if (v === 'DESENROLADO' || v.includes('DESENROLAD')) return 'Desenrolado';
+    if (v === 'REVISAR' || v.includes('REVISAR')) return 'Revisar';
+    if (v.includes('VENDIDO') || v.includes('VENDIDA')) return 'Vendido';
+    if (v.includes('ACCIDENTE')) return 'Accidente';
+    if (v.includes('DESACTIVAD')) return 'Desactivado';
+    if (v.includes('REPARACI')) return 'En reparación';
     return val.trim();
   }
 
   function categorizarEstatus(est) {
     const e = normalizarEstatus(est);
     if (e === 'En operación' || e === 'Arrendamiento') return 'En operación';
-    if (e === 'Para venta') return 'Para venta';
-    if (e === 'Fuera de operación' || e === 'Rentado a SAME') return 'Fuera de operación';
-    if (e === 'Siniestro') return 'Siniestro';
+    if (e === 'Para venta' || e === 'Vendido') return 'Para venta';
+    if (e === 'Fuera de operación' || e === 'Rentado a SAME' || e === 'Desactivado') return 'Fuera de operación';
+    if (e === 'Siniestro' || e === 'Accidente') return 'Siniestro';
     if (e === 'Baja') return 'Baja';
+    // GHO — mantener como categoría propia para que aparezca en el filtro
+    if (e === 'Enrolado') return 'Enrolado';
+    if (e === 'Desenrolado') return 'Desenrolado';
+    if (e === 'Revisar') return 'Revisar';
+    if (e === 'En reparación') return 'En reparación';
+    if (e) return e; // cualquier otro valor normalizado — mostrarlo tal cual
     return 'Otro';
   }
 
