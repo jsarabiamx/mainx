@@ -36,6 +36,8 @@ const Parsers = (() => {
   function cleanNum(val) {
     if (val === null || val === undefined) return '';
     const s = String(val).trim();
+    // Preservar sufijo -A (unidades AERS propias ya procesadas con nomenclatura)
+    if (/-A$/.test(s)) return s;
     // Buscar primer número de 2-5 dígitos (números de unidad típicos: 600-8999)
     const m = s.match(/\b(\d{3,5})\b/);
     if (m) return m[1];
@@ -375,11 +377,16 @@ const Parsers = (() => {
       if (!rawNum && rawNum !== 0) continue;
 
       const num = cleanNum(String(rawNum));
-      if (!num || num.length < 2 || isNaN(Number(num))) continue;
+      if (!num || num.length < 2) continue;
+      // Permitir sufijo -A (AERS); para el resto validar que sea numérico
+      const _isAERS_num = /-A$/.test(num);
+      if (!_isAERS_num && isNaN(Number(num))) continue;
 
-      // Validación: número de unidad típicamente 3-5 dígitos
-      const n = Number(num);
-      if (n < 100 || n > 99999) continue;
+      // Validación de rango: solo para números puros
+      if (!_isAERS_num) {
+        const n = Number(num);
+        if (n < 100 || n > 99999) continue;
+      }
 
       // Advertir duplicado
       const isDuplicate = seen.has(num);
