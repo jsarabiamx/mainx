@@ -454,7 +454,7 @@ const UI = (() => {
   /* ══════════════════════════════════════════════════════
      PANEL: RESUMEN
   ══════════════════════════════════════════════════════ */
-  let _rf={plat:'',base:'',crom:'',est:'',dias:'',search:'',sort:'dias',page:1};
+  let _rf={plat:'',base:[],crom:[],est:[],dias:[],etiqueta:'',search:'',sort:'dias',page:1};
 
   function renderResumen() {
     const emp=DB.getEmpresaActiva();
@@ -480,13 +480,61 @@ const UI = (() => {
   }
 
   function _fillFilters(emp) {
-    const uns=DB.getUnidadesList(emp).filter(u=>u.activa);
-    const selB=$('filter-base');
-    if(selB){const c=selB.value,bases=[...new Set(uns.map(u=>u.base).filter(Boolean))].sort();selB.innerHTML=`<option value="">Todas</option>`+bases.map(b=>`<option>${esc(b)}</option>`).join('');if(c)selB.value=c;}
-    const selC=$('filter-crom');
-    if(selC){const c=selC.value,croms=[...new Set(uns.map(u=>u.cromatica).filter(Boolean))].sort();selC.innerHTML=`<option value="">Todos</option>`+croms.map(b=>`<option>${esc(b)}</option>`).join('');if(c)selC.value=c;}
-    const selE=$('filter-emp');
-    if(selE){selE.innerHTML=DB.getEmpresasList().map(e=>`<option value="${e}" ${e===DB.getEmpresaActiva()?'selected':''}>${e}</option>`).join('');}
+    const uns = DB.getUnidadesList(emp).filter(u => u.activa);
+    // Empresa (select simple — no multi)
+    const selE = $('filter-emp');
+    if (selE) selE.innerHTML = DB.getEmpresasList().map(e =>
+      `<option value="${e}" ${e===emp?'selected':''}>${e}</option>`).join('');
+
+    // Helper: renderizar un _multiSelectChipsDropdown en un contenedor div
+    const _renderMs = (containerId, msId, opts) => {
+      const el = $(containerId);
+      if (!el) return;
+      el.innerHTML = _multiSelectChipsDropdown(opts);
+    };
+
+    // BASE — valores dinámicos de asignación
+    const bases = [...new Set(uns.map(u => u.base).filter(Boolean))].sort();
+    _renderMs('ms-rf-base', 'ms-rf-base', {
+      id: 'ms-rf-base', label: 'Base', allLabel: 'Todas',
+      options: bases, selected: _rf.base || [],
+      onChange: 'UI._rf={...UI._rf,base:UI._msGetSelected("ms-rf-base"),page:1};UI.renderUnitList()'
+    });
+
+    // CROMÁTICA — valores dinámicos de asignación
+    const croms = [...new Set(uns.map(u => u.cromatica).filter(Boolean))].sort();
+    _renderMs('ms-rf-crom', 'ms-rf-crom', {
+      id: 'ms-rf-crom', label: 'Cromática', allLabel: 'Todos',
+      options: croms, selected: _rf.crom || [],
+      onChange: 'UI._rf={...UI._rf,crom:UI._msGetSelected("ms-rf-crom"),page:1};UI.renderUnitList()'
+    });
+
+    // ESTADO — valores reales de estatus de asignación (En operación, Para venta, etc.)
+    const estOpciones = [...new Set(uns.map(u => {
+      const cat = Parsers.categorizarEstatus(u.estatus);
+      return cat || u.estatus || '';
+    }).filter(Boolean))].sort();
+    _renderMs('ms-rf-est', 'ms-rf-est', {
+      id: 'ms-rf-est', label: 'Estado', allLabel: 'Todos',
+      options: estOpciones, selected: _rf.est || [],
+      onChange: 'UI._rf={...UI._rf,est:UI._msGetSelected("ms-rf-est"),page:1};UI.renderUnitList()'
+    });
+
+    // DÍAS GPS — opciones fijas
+    const diasOpts = ['En línea (<2d)', 'Atención (2-4d)', 'Fuera de línea'];
+    _renderMs('ms-rf-dias', 'ms-rf-dias', {
+      id: 'ms-rf-dias', label: 'Días GPS', allLabel: 'Todos',
+      options: diasOpts, selected: _rf.dias || [],
+      onChange: 'UI._rf={...UI._rf,dias:UI._msGetSelected("ms-rf-dias"),page:1};UI.renderUnitList()'
+    });
+
+    // ETIQUETA — opciones comunes + "Otro"
+    const etqOpts = ['Siniestro','AFR / Falla','Sin SIM','En taller','En alineación','En carrocería','En pintura','Mecánica','Candado','Sin energía','Para venta','Desinstalado','Otro'];
+    _renderMs('ms-rf-etq', 'ms-rf-etq', {
+      id: 'ms-rf-etq', label: 'Etiqueta', allLabel: 'Todas',
+      options: etqOpts, selected: _rf.etiqueta ? [_rf.etiqueta] : [],
+      onChange: 'UI._rf={...UI._rf,etiqueta:UI._msGetSelected("ms-rf-etq"),page:1};UI.renderUnitList()'
+    });
   }
 
   /* ── UNIT LIST ─────────────────────────────────────── */
@@ -498,33 +546,35 @@ const UI = (() => {
     uns=uns.map(u=>({...u,dias:Parsers.diasDesde(u.ultima_act)}));
 
     // Excluir "Para venta" por defecto. Si el usuario filtra explícitamente por "Para venta", sí las muestra.
-    if (_rf.est !== 'venta') {
+    const _filtrandoVenta = Array.isArray(_rf.est) ? _rf.est.includes('Para venta') : _rf.est === 'venta';
+    if (!_filtrandoVenta) {
       uns = uns.filter(u => Parsers.categorizarEstatus(u.estatus) !== 'Para venta');
     }
 
     if(_rf.plat)   uns=uns.filter(u=>u.plataforma===_rf.plat||u['ultima_act_'+_rf.plat.toLowerCase()]);
-    if(_rf.base)   uns=uns.filter(u=>u.base===_rf.base);
-    if(_rf.crom)   uns=uns.filter(u=>u.cromatica===_rf.crom);
-    if(_rf.est){
+    // BASE — multi-select (array)
+    if(_rf.base && _rf.base.length) uns=uns.filter(u=>_rf.base.includes(u.base));
+    // CROMÁTICA — multi-select (array)
+    if(_rf.crom && _rf.crom.length) uns=uns.filter(u=>_rf.crom.includes(u.cromatica));
+    // ESTADO — multi-select con valores de categoría real
+    if(_rf.est && _rf.est.length){
       uns=uns.filter(u=>{
-        const cat=Parsers.categorizarEstatus(u.estatus);
-        if(_rf.est==='op')    return cat==='En operación';
-        if(_rf.est==='fuera') return cat==='Fuera de operación';
-        if(_rf.est==='venta') return cat==='Para venta';
-        return true;
+        const cat = Parsers.categorizarEstatus(u.estatus) || u.estatus || '';
+        return _rf.est.includes(cat);
       });
     }
-    if(_rf.dias){
+    // DÍAS GPS — multi-select con labels legibles
+    if(_rf.dias && _rf.dias.length){
       uns=uns.filter(u=>{
         const d=u.dias;
-        if(_rf.dias==='enlinea')  return d!==null&&d<=cfg.diasLinea;
-        if(_rf.dias==='atencion') return d!==null&&d>cfg.diasLinea&&d<=cfg.diasAtencion;
-        if(_rf.dias==='fuera')    return d===null||d>cfg.diasAtencion;
-        return true;
+        const bucket = d===null||d>cfg.diasAtencion ? 'Fuera de línea'
+                     : d>cfg.diasLinea             ? 'Atención (2-4d)'
+                     :                               'En línea (<2d)';
+        return _rf.dias.includes(bucket);
       });
     }
-    if(_rf.etiqueta){
-      const _etq = _rf.etiqueta.toLowerCase();
+    if(_rf.etiqueta && (Array.isArray(_rf.etiqueta) ? _rf.etiqueta.length : _rf.etiqueta)){
+      const _etqArr = Array.isArray(_rf.etiqueta) ? _rf.etiqueta.map(e=>e.toLowerCase()) : [_rf.etiqueta.toLowerCase()];
       uns = uns.filter(u => {
         const _uFull = DB.getUnidad(u.num, emp) || u;
         const _fallaMotivos = (_uFull.fallas||[])
@@ -535,7 +585,7 @@ const UI = (() => {
         const _sinDesc = (_uFull.siniestroDesc || u.siniestroDesc || '').toLowerCase();
         const _obsManual = (_uFull.observaciones_manual || '').toLowerCase();
         const allText = [_fallaMotivos, _esSiniestro?'siniestro':'', _sinDesc, _obsManual].join(' ');
-        return allText.includes(_etq);
+        return _etqArr.some(eq => allText.includes(eq));
       });
     }
     if(_rf.search){
@@ -3595,13 +3645,10 @@ const UI = (() => {
       'cambios_recientes':{}
     };
     const f = map[tipo] || {};
-    _rf = { plat:'', base:'', crom:'', est:'', dias:'', etiqueta:'', search:'', sort:'dias', page:1, ...f };
+    _rf = { plat:'', base:[], crom:[], est:[], dias:[], etiqueta:'', search:'', sort:'dias', page:1, ...f };
     App.nav(null, 'panel-resumen');
     setTimeout(()=>{
-      // Sincronizar UI
       document.querySelectorAll('#chips-plat .chip').forEach(c => c.classList.toggle('active', c.textContent.trim() === (_rf.plat || 'Todas')));
-      const fb=$('filter-base'); if(fb) fb.value=_rf.base;
-      const fc=$('filter-crom'); if(fc) fc.value=_rf.crom;
       renderUnitList();
       toast('Filtros aplicados desde alerta','info',2000);
     }, 100);
