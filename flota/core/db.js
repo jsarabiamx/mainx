@@ -230,15 +230,17 @@ const DB = (() => {
               u.fallas.push(falla);
               if (esSiniestroRow) { u.siniestro = true; u.siniestroDesc = falla.motivo; }
               u.fallaCount = u.fallas.length;
-              if (!u.observaciones && falla.motivo) {
-                u.observaciones = esSiniestroRow ? ('🚨 ' + falla.motivo) : falla.motivo;
+              // Solo asignar observación desde falla si no es un ID numérico
+              const _motFalla = falla.motivo || '';
+              if (!u.observaciones && _motFalla && !/^\d{5,}$/.test(_motFalla.trim())) {
+                u.observaciones = esSiniestroRow ? ('🚨 ' + _motFalla) : _motFalla;
               }
             } else {
               if (!existe._sbId) existe._sbId = r.id;
               if (esSiniestroRow && !u.siniestro) { u.siniestro = true; u.siniestroDesc = existe.motivo || r.etiqueta || ''; }
-              if (!u.observaciones && (existe.motivo || r.etiqueta)) {
-                const mot = existe.motivo || r.etiqueta || '';
-                u.observaciones = esSiniestroRow ? ('🚨 ' + mot) : mot;
+              const _motExiste = existe.motivo || r.etiqueta || '';
+              if (!u.observaciones && _motExiste && !/^\d{5,}$/.test(_motExiste.trim())) {
+                u.observaciones = esSiniestroRow ? ('🚨 ' + _motExiste) : _motExiste;
               }
             }
           });
@@ -262,9 +264,12 @@ const DB = (() => {
                 };
               }
               _s.unidades[emp][num].notas = r.nota;
-              // La nota es la fuente de verdad para observaciones en la tabla de plataformas
-              // Sobreescribe lo que pudiera haber cargado de fallas (evita mostrar IDs numéricos)
+              // La nota es la fuente de verdad para observaciones — sobreescribe IDs numéricos
               _s.unidades[emp][num].observaciones = r.nota;
+              // Limpiar cualquier ID numérico que hubiera quedado en notas anteriores
+              if (_s.unidades[emp][num].notas && /^\d{5,}$/.test(String(_s.unidades[emp][num].notas).trim())) {
+                _s.unidades[emp][num].notas = r.nota;
+              }
             });
           }
         } catch(en) { console.warn('[DB] initFromSupabase notas:', en); }
