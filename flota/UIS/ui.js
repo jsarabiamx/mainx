@@ -2182,7 +2182,7 @@ const UI = (() => {
       const conFechaGPS=conFecha.filter(u=>!_tieneSiniestroActivo(u));
       const enLinea=conFechaGPS.filter(u=>Math.floor((hoy-new Date(u[k]))/86400000)<=cfg.diasLinea).length;
       const fuera=conFechaGPS.length-enLinea;
-      const esManual=p==='VOLVO';
+      const esManual=true; // captura manual en todas las plataformas
       const COLS_MAP={
         CEIBA:'Plate No. | GPS time | Serial No.',
         SAMSARA:'Nombre | Última hora de registro | N° serie',
@@ -2254,7 +2254,7 @@ const UI = (() => {
     const box = $('plat-detail-box');
     if (!box) return;
     const k = 'ultima_act_' + plat.toLowerCase();
-    const esManual = plat === 'VOLVO';
+    const esManual = true; // captura manual en todas las plataformas
 
     // BASE de unidades para este panel:
     // - Plataformas NO manuales (CEIBA, SAMSARA, AVL, SCANIA, MAN): SOLO unidades que aparecen
@@ -2559,7 +2559,7 @@ const UI = (() => {
       sum.innerHTML = `<strong>${uns.length}</strong> unidades en ${plat} · <span style="color:var(--green)">${enLinea} en línea</span> · <span style="color:var(--yellow)">${atencion} atención</span> · <span style="color:var(--red)">${fuera} fuera</span>${sinis?` · <span style="color:#ef4444">🚨 ${sinis} siniestro${sinis>1?'s':''}</span>`:''}`;
     }
 
-    const esManual = plat === 'VOLVO';
+    const esManual = true; // captura manual en todas las plataformas
 
     if (!uns.length) {
       const hayFiltros = (f.emp && f.emp.length) || (f.base && f.base.length) ||
