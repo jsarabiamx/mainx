@@ -215,7 +215,7 @@
     const box = $('plat-detail-box');
     if (!box) return;
     const k = 'ultima_act_' + plat.toLowerCase();
-    const esManual = plat === 'VOLVO';
+    const esManual = true; // captura manual disponible para todas las plataformas
 
     // BASE de unidades para este panel:
     // - Plataformas NO manuales (CEIBA, SAMSARA, AVL, SCANIA, MAN): SOLO unidades que aparecen
@@ -516,7 +516,7 @@
     }
 
     if (!uns.length) {
-      const esManual = plat === 'VOLVO';
+      const esManual = true; // captura manual disponible para todas las plataformas
       const hayFiltros = (f.emp && f.emp.length) || (f.base && f.base.length) ||
                          (f.crom && f.crom.length) || (f.est && f.est.length) ||
                          (f.dias && f.dias.length) || (f.estadoSam && f.estadoSam.length) ||
