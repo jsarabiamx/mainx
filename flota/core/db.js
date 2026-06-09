@@ -262,6 +262,9 @@ const DB = (() => {
                 };
               }
               _s.unidades[emp][num].notas = r.nota;
+              // La nota es la fuente de verdad para observaciones en la tabla de plataformas
+              // Sobreescribe lo que pudiera haber cargado de fallas (evita mostrar IDs numéricos)
+              _s.unidades[emp][num].observaciones = r.nota;
             });
           }
         } catch(en) { console.warn('[DB] initFromSupabase notas:', en); }
