@@ -5275,15 +5275,28 @@ const UI = (() => {
             const ayer = new Date(hoy.getTime() - 86400000);
             const esAyer = _fmtFechaSoloDia(f._fechaObj) === _fmtFechaSoloDia(ayer);
             const prefijoFecha = esAyer ? 'Ayer ' : '';
+            const fechaFmt = `${prefijoFecha}${_fmtBarridoManualFecha(f._fechaObj)}`;
 
-            if (label) out += `${f.num} — ${label}\n`;
-            else out += `${f.num}\n`;
-
-            const diasTxt = dias > 0 ? ` (${dias} día${dias===1?'':'s'} sin transmitir)` : '';
-            out += `${prefijoFecha}${_fmtBarridoManualFecha(f._fechaObj)}${diasTxt}\n`;
+            if (label) {
+              // Con etiqueta: "2434 — en carrocería"
+              //               "(9 días sin transmitir) — 31-05-26 / 01:25"
+              out += `${f.num} — ${label}\n`;
+              if (dias > 0) {
+                out += ` (${dias} día${dias===1?'':'s'} sin transmitir) — ${fechaFmt}\n`;
+              } else {
+                // En línea con etiqueta: mostrar fecha igualmente
+                out += ` ${fechaFmt}\n`;
+              }
+            } else {
+              // Sin etiqueta con fecha: va en sección Última transmisión, no aquí.
+              // Pero por si llega: mostrar num + fecha + días
+              const diasTxt = dias > 0 ? ` (${dias} día${dias===1?'':'s'} sin transmitir)` : '';
+              out += `${f.num}\n${fechaFmt}${diasTxt}\n`;
+            }
           } else {
-            // tiene etiqueta pero sin fecha (ni técnico ni sistema)
-            out += `${f.num} — ${label || 'sin datos'}\n`;
+            // Sin fecha: solo etiqueta
+            if (label) out += `${f.num} — ${label}\n`;
+            else out += `${f.num} — sin datos\n`;
           }
         });
     }
