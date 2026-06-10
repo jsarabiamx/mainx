@@ -4879,8 +4879,8 @@ const UI = (() => {
 
   function _fmtBarridoManualFecha(fecha) {
     if (!fecha) return '';
-    // FIX: normalizar espacio→T para hora local consistente
-    const fe = new Date(String(fecha).replace(' ', 'T'));
+    // Aceptar Date object directamente O string normalizado
+    const fe = fecha instanceof Date ? fecha : new Date(String(fecha).replace(' ', 'T'));
     if (isNaN(fe)) return '';
     const dd = String(fe.getDate()).padStart(2,'0');
     const mm = String(fe.getMonth()+1).padStart(2,'0');
