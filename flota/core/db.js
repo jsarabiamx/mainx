@@ -429,6 +429,8 @@ const DB = (() => {
 
       save();
       console.log('[DB] initFromSupabase: carga completa');
+      // Migración: limpiar nombres de personas de observaciones GHO
+      try { _limpiarNombrePersonas(); } catch(em) {}
       return true;
     } catch(e) {
       console.warn('[DB] initFromSupabase error:', e);
@@ -459,6 +461,46 @@ const DB = (() => {
     if (!(d instanceof Date) || isNaN(d)) return null;
     const p = n => String(n).padStart(2,'0');
     return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+
+  // ── Migración única: limpiar nombres de personas de observaciones GHO ──────
+  // Solo corre si no se ha ejecutado antes. Borra notas/obs que sean solo un nombre
+  // de persona (1 palabra, solo letras, no técnica). Preserva: GPS MAL, SIM BAJA, etc.
+  function _limpiarNombrePersonas() {
+    const _migKey = 'mainx_migr_obs_nombres_v1';
+    if (localStorage.getItem(_migKey)) return; // ya corrió
+    const TECNICOS = new Set([
+      'afr','gps','sim','dvr','baja','mal','revisar','siniestro','taller',
+      'remodelacion','energia','motor','carroceria','pintura','alineacion',
+      'candado','juridico','venta','fuera','inactivo','pendiente','corralon',
+      'datos','señal','antena','bateria','camara','equipo','wifi','conexion',
+      'retarder','daño','falla','problema','reporte','espera','salida','viajes',
+      'local','bloqueada','slot','dañado','quemado','imagen','transmision',
+      'accidente','colision','mecanica','electrica','fusible','corto'
+    ]);
+    const _esNombrePersona = (v) => {
+      if (!v) return false;
+      const s = String(v).trim();
+      // Solo una palabra de 3-12 letras, sin números ni caracteres especiales
+      if (!/^[A-ZÁÉÍÓÚÜÑ]{3,12}$/i.test(s)) return false;
+      // No es término técnico
+      return !TECNICOS.has(s.toLowerCase());
+    };
+    // Aplicar solo a GHO
+    if (_s.unidades && _s.unidades['GHO']) {
+      Object.values(_s.unidades['GHO']).forEach(u => {
+        if (u.observaciones && _esNombrePersona(u.observaciones)) {
+          console.log(`[Migración] Borrando nombre "${u.observaciones}" de obs unidad ${u.num}`);
+          u.observaciones = '';
+        }
+        if (u.notas && _esNombrePersona(u.notas)) {
+          console.log(`[Migración] Borrando nombre "${u.notas}" de notas unidad ${u.num}`);
+          u.notas = '';
+        }
+      });
+      save();
+    }
+    localStorage.setItem(_migKey, '1');
   }
 
   function getEmpresasList() { return Object.keys(_s.empresas); }
