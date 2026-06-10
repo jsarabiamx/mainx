@@ -5249,17 +5249,26 @@ const UI = (() => {
         const esHoy = _fmtFechaSoloDia(d) === hoyStr;
         if (esHoy) {
           const hora = d.getHours();
-          if (hora >= 1 && hora <= 6) categoria = 'madrugada';
-          else if (hora >= 7) categoria = 'en_linea';
-          else categoria = 'en_linea';
+          if (f.etiqueta) {
+            // Con etiqueta y fecha de hoy → OBSERVACIONES (no en_linea)
+            categoria = 'etiqueta_en_linea';
+          } else if (hora >= 1 && hora <= 6) {
+            categoria = 'madrugada';
+          } else {
+            categoria = 'en_linea';
+          }
         } else {
+          // Fecha de otro día: con o sin etiqueta → días o etiqueta_con_fecha
           categoria = f.etiqueta ? 'etiqueta_con_fecha' : 'dias';
         }
       } else {
         categoria = 'sin_fecha';
       }
 
-      if (f.enLinea && !d) categoria = 'en_linea';
+      if (f.enLinea && !d) {
+        // En línea sin fecha del sistema
+        categoria = f.etiqueta ? 'etiqueta_sin_fecha' : 'en_linea';
+      }
 
       return { ...f, _fechaSalida: fechaSalida, _fechaObj: d, _dias: dias, _categoria: categoria };
     });
@@ -5268,7 +5277,9 @@ const UI = (() => {
     out += `\n📡 ESTADO DE UNIDADES CCTV\n`;
     out += `✅ OPERATIVO — Cámaras / Antenas GPS-3G OK\n`;
 
-    const enLineaList = enriched.filter(f => f._categoria === 'en_linea' && !f.etiqueta);
+    const enLineaList = enriched.filter(f =>
+      (f._categoria === 'en_linea') && !f.etiqueta
+    );
     if (enLineaList.length) {
       out += `\nEn línea:\n`;
       enLineaList
@@ -5333,10 +5344,10 @@ const UI = (() => {
     // Solo entran: unidades con etiqueta OR con fecha pero días>0 OR con fecha y sin_fecha que tengan etiqueta
     // NO entran: las del set _numsSinEquipo ni _numsSinAsig (a menos que tengan etiqueta)
     const obsList = enriched.filter(f => {
-      // Si tiene etiqueta → siempre va a OBSERVACIONES (independiente de si tiene fecha o no)
+      // Si tiene etiqueta → siempre va a OBSERVACIONES (cualquier categoría, incluyendo en_linea hoy)
       if (f.etiqueta) return true;
       // Sin etiqueta y sin fecha: solo si NO está en los sets de sin-equipo / sin-asig
-      if (f._categoria === 'sin_fecha') {
+      if (f._categoria === 'sin_fecha' || f._categoria === 'etiqueta_sin_fecha') {
         return !_numsSinEquipo.has(f.num) && !_numsSinAsig.has(f.num);
       }
       return false;
