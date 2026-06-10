@@ -102,9 +102,11 @@
 
     // Excluir "Para venta" Y siniestros activos de los conteos operativos de plataformas
     // Solo la empresa activa — MOTIVE/VOLVO manejan multi-empresa dentro de su propia tabla
-    const operativas = DB.getUnidadesList(emp).filter(u =>
-      u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta' && !_tieneSiniestroActivo(u)
-    );
+    const operativas = DB.getUnidadesList(emp).filter(u => {
+      if (!u.activa || _tieneSiniestroActivo(u)) return false;
+      // SAMSARA: incluir todas; otras plataformas excluyen Para venta del conteo operativo
+      return true; // el filtro por plataforma lo hace conFechaGPS más abajo
+    });
 
     // Barra de acciones superior (export + cargar masivo)
     let topBar = `<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
@@ -223,9 +225,14 @@
     //   Esto evita que por ejemplo el filtro TAPA muestre unidades sin Samsara.
     // - Plataformas manuales (VOLVO, MOTIVE): solo las que tienen captura manual (ultima_act_<plat>).
     // Siempre filtrar por empresa activa — sin datos cruzados entre empresas
-    let scopeUns = DB.getUnidadesList(emp).filter(u =>
-      u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-    );
+    // SAMSARA: incluir todas las unidades con datos aunque sean Para venta o estatus especial.
+    // El resto de plataformas mantiene la exclusión de Para venta.
+    const _esPlataformaTodosEstatus = (plat === 'SAMSARA');
+    let scopeUns = DB.getUnidadesList(emp).filter(u => {
+      if (!u.activa || _tieneSiniestroActivo(u)) return false;
+      if (_esPlataformaTodosEstatus) return true; // SAMSARA: incluir todas
+      return Parsers.categorizarEstatus(u.estatus) !== 'Para venta';
+    });
     scopeUns = scopeUns.filter(u => !!u[k]);
 
     // Los selects se pueblan SOLO con valores presentes en el scope (unidades de esta plataforma).
@@ -432,9 +439,13 @@
     // TAPA aunque no estuvieran en el archivo de Samsara.
     // Unidades "Para venta" se excluyen de los conteos operativos.
     // VOLVO/MOTIVE son captura manual — pueden tener unidades de cualquier empresa
-    let uns = DB.getUnidadesList(emp).filter(u =>
-      u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-    );
+    // SAMSARA: incluir unidades de cualquier estatus (Para venta, etc.).
+    // El resto de plataformas excluye Para venta de la tabla operativa.
+    let uns = DB.getUnidadesList(emp).filter(u => {
+      if (!u.activa) return false;
+      if (plat === 'SAMSARA') return true; // SAMSARA: todos los estatus
+      return Parsers.categorizarEstatus(u.estatus) !== 'Para venta';
+    });
     uns = uns.filter(u => !!u[k]);
 
     // Siniestros activos NO aparecen en tabla de Plataformas GPS.
