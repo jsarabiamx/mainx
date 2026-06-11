@@ -4201,9 +4201,15 @@ const UI = (() => {
     // "Fuera de línea" en la dona = atención + fuera estricto (sin contar las que no tienen el dispositivo).
     // Las "sin datos" son las unidades de la empresa que NO están en esa plataforma —
     // se muestran aparte como dato informativo, pero NO entran en el denominador del %.
+    // Para SAMSARA: incluir unidades Para venta/Desenrolado que tengan barrido de SAMSARA
+    const _unsTodosEstatus = DB.getUnidadesList(emp).filter(u => u.activa && !_tieneSiniestroActivo(u));
+
     const statsByPlat = ALL_PLATS.map(p => {
       const k = 'ultima_act_' + p.toLowerCase();
-      const conFecha = uns.filter(u => u[k]);
+      // SAMSARA usa el universo completo (incluyendo Para venta con barrido)
+      // El resto usa solo unidades en operación
+      const _base = p === 'SAMSARA' ? _unsTodosEstatus : uns;
+      const conFecha = _base.filter(u => u[k]);
       // Unidades con falla AFR activa (no siniestro) cuentan como EN LÍNEA — están en operación
       const tieneAFR = u => (u.fallas||[]).some(f => !f.resuelta && !f.esSiniestro);
       const enLinea = conFecha.filter(u => {
