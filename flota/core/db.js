@@ -336,7 +336,7 @@ const DB = (() => {
       // Carga Supabase primero, luego limpia solo las plataformas que vienen de Supabase.
       // El usuario ve datos del localStorage durante la carga, no 0.
       try {
-        const barridoRows = await GPS_SB._getRaw('gps_barridos', 'activa=eq.true');
+        const barridoRows = await GPS_SB._getRaw('gps_barridos', 'activa=eq.true', 2000); // pageSize=2000 para cubrir ETN(~1570) + GHO(~1690)
         // Registrar qué plataformas tiene Supabase y limpiarlas antes de aplicar
         const _sbPlats = {}; // { ETN: Set(['ceiba','samsara',...]) }
         const _ALL_P = ['ceiba','samsara','avl','scania','man','volvo','motive'];
@@ -346,15 +346,11 @@ const DB = (() => {
             if (_eR && _pR) { if (!_sbPlats[_eR]) _sbPlats[_eR] = new Set(); _sbPlats[_eR].add(_pR); }
           });
         }
-        // SIEMPRE limpiar TODO de las empresas activas antes de aplicar Supabase
-        // Esto garantiza que si Supabase tiene 0 registros, localStorage también queda en 0
+        // SIEMPRE limpiar las plataformas de Supabase antes de aplicar
         Object.keys(_s.empresas || {}).forEach(_eR => {
           if (!_s.unidades[_eR]) return;
           Object.values(_s.unidades[_eR]).forEach(u => {
-            // Limpiar TODAS las plataformas si no vienen de Supabase, o solo las que sí vienen
             const _platsASB = _sbPlats[_eR] || new Set();
-            // Si Supabase tiene data para esta empresa, limpiar solo sus plataformas
-            // Si Supabase no tiene NADA para esta empresa, limpiar todas
             const _platsAClear = _platsASB.size > 0 ? _platsASB : new Set(_ALL_P);
             _platsAClear.forEach(p => { delete u['ultima_act_' + p]; });
             let _maxF = null;
