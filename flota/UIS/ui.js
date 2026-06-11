@@ -2244,10 +2244,9 @@ const UI = (() => {
     // Conteos de tarjetas: solo empresa activa
     const todasUns = DB.getUnidadesList(emp).filter(u => u.activa);
 
-    // Excluir "Para venta" Y siniestros activos de los conteos operativos de plataformas
-    const operativas = todasUns.filter(u =>
-      Parsers.categorizarEstatus(u.estatus) !== 'Para venta' && !_tieneSiniestroActivo(u)
-    );
+    // Para venta: se excluye en la tarjeta de cada plataforma individualmente
+    // SAMSARA incluye Para venta si tienen ultima_act_samsara; el resto no.
+    const operativas = todasUns.filter(u => !_tieneSiniestroActivo(u));
 
     // Barra de acciones superior (export + cargar masivo)
     let topBar = `<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
