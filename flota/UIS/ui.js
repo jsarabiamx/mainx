@@ -2570,10 +2570,19 @@ const UI = (() => {
     // Esto corrige el bug donde filtrar por "TAPA" en Samsara mostraba todas las unidades de
     // TAPA aunque no estuvieran en el archivo de Samsara.
     // Unidades "Para venta" se excluyen de los conteos operativos.
-    let uns = DB.getUnidadesList(emp).filter(u =>
-      u.activa && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-    );
-    uns = uns.filter(u => !!u[k]);
+    let uns = DB.getUnidadesList(emp).filter(u => {
+      if (!u.activa) return false;
+      if (plat === 'SAMSARA') return true; // SAMSARA: incluir todos los estatus
+      return Parsers.categorizarEstatus(u.estatus) !== 'Para venta';
+    });
+    if (plat === 'SAMSARA') {
+      uns = uns.filter(u => {
+        const norm = Parsers.normalizarEstatus(u.estatus);
+        return !!u[k] || ['Para venta','Desenrolado','Vendido','Baja'].includes(norm);
+      });
+    } else {
+      uns = uns.filter(u => !!u[k]);
+    }
 
     // Siniestros activos NO aparecen en tabla de Plataformas GPS.
     // Solo aparecen en Resumen y módulo de Fallas.
