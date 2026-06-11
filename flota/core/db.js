@@ -336,7 +336,17 @@ const DB = (() => {
       // Carga Supabase primero, luego limpia solo las plataformas que vienen de Supabase.
       // El usuario ve datos del localStorage durante la carga, no 0.
       try {
-        const barridoRows = await GPS_SB._getRaw('gps_barridos', 'activa=eq.true', 2000); // pageSize=2000 para cubrir ETN(~1570) + GHO(~1690)
+        // Cargar barridos POR EMPRESA para evitar que el paginado corte registros
+        // (ETN ~1570 filas + GHO ~1690 filas = 3259 total, supera el pageSize de 1000)
+        const barridoRows = [];
+        for (const _empB of empresas) {
+          try {
+            const _rows = await GPS_SB._getRaw('gps_barridos',
+              `activa=eq.true&empresa_id=eq.${encodeURIComponent(_empB)}`
+            );
+            if (_rows && _rows.length) barridoRows.push(..._rows);
+          } catch(eB) { console.warn('[DB] barridos empresa', _empB, eB.message); }
+        }
         // Registrar qué plataformas tiene Supabase y limpiarlas antes de aplicar
         const _sbPlats = {}; // { ETN: Set(['ceiba','samsara',...]) }
         const _ALL_P = ['ceiba','samsara','avl','scania','man','volvo','motive'];
