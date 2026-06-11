@@ -129,7 +129,11 @@
     // ═══ TARJETAS HORIZONTALES (una fila, responsive wrap) ═══
     const cardsHTML = ALL_PLATS.map(p=>{
       const k='ultima_act_'+p.toLowerCase();
-      const conFecha=operativas.filter(u=>u[k]);
+      // Para SAMSARA: incluir unidades Para venta/Desenrolado aunque no tengan fecha en memoria
+      const _incEsp = p === 'SAMSARA';
+      const conFecha = operativas.filter(u =>
+        !!u[k] || (_incEsp && ['Para venta','Desenrolado','Vendido','Baja'].includes(Parsers.normalizarEstatus(u.estatus)))
+      );
       // Excluir siniestros de conteos GPS en tarjetas de plataforma
       const conFechaGPS=conFecha.filter(u=>!_tieneSiniestroActivo(u));
       const _dLocalCard=(f)=>{
@@ -230,10 +234,19 @@
     const _esPlataformaTodosEstatus = (plat === 'SAMSARA');
     let scopeUns = DB.getUnidadesList(emp).filter(u => {
       if (!u.activa || _tieneSiniestroActivo(u)) return false;
-      if (_esPlataformaTodosEstatus) return true; // SAMSARA: incluir todas
+      if (_esPlataformaTodosEstatus) return true; // SAMSARA: incluir todas sin importar estatus
       return Parsers.categorizarEstatus(u.estatus) !== 'Para venta';
     });
-    scopeUns = scopeUns.filter(u => !!u[k]);
+    if (_esPlataformaTodosEstatus) {
+      // SAMSARA: incluir unidades CON datos en SAMSARA O que sean PARA VENTA/DESENROLADO
+      // (estatus especiales que pueden tener equipo SAMSARA activo)
+      scopeUns = scopeUns.filter(u =>
+        !!u[k] ||
+        ['Para venta','Desenrolado','Vendido','Baja'].includes(Parsers.normalizarEstatus(u.estatus))
+      );
+    } else {
+      scopeUns = scopeUns.filter(u => !!u[k]);
+    }
 
     // Los selects se pueblan SOLO con valores presentes en el scope (unidades de esta plataforma).
     // Esto hace que TAPA, LEON, ACAY solo aparezcan si hay unidades con datos de esta plataforma en esas bases.
@@ -446,7 +459,15 @@
       if (plat === 'SAMSARA') return true; // SAMSARA: todos los estatus
       return Parsers.categorizarEstatus(u.estatus) !== 'Para venta';
     });
-    uns = uns.filter(u => !!u[k]);
+    if (plat === 'SAMSARA') {
+      // SAMSARA: incluir con datos de SAMSARA + estatus especiales (Para venta, Desenrolado, etc.)
+      uns = uns.filter(u =>
+        !!u[k] ||
+        ['Para venta','Desenrolado','Vendido','Baja'].includes(Parsers.normalizarEstatus(u.estatus))
+      );
+    } else {
+      uns = uns.filter(u => !!u[k]);
+    }
 
     // Siniestros activos NO aparecen en tabla de Plataformas GPS.
     // Sí aparecen en Resumen y en el módulo de Fallas.
