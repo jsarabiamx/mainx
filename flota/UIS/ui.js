@@ -2270,7 +2270,12 @@ const UI = (() => {
     // ═══ TARJETAS HORIZONTALES (una fila, responsive wrap) ═══
     const cardsHTML = ALL_PLATS.map(p=>{
       const k='ultima_act_'+p.toLowerCase();
-      const conFecha=operativas.filter(u=>u[k]);
+      // SAMSARA: incluir cualquier estatus si tiene ultima_act (del barrido)
+      const conFecha = operativas.filter(u => {
+        if (!u[k]) return false;
+        if (p === 'SAMSARA') return true;
+        return Parsers.categorizarEstatus(u.estatus) !== 'Para venta';
+      });
       // Excluir siniestros de conteos GPS en tarjetas de plataforma
       const conFechaGPS=conFecha.filter(u=>!_tieneSiniestroActivo(u));
       const enLinea=conFechaGPS.filter(u=>Math.floor((hoy-new Date(u[k]))/86400000)<=cfg.diasLinea).length;
@@ -2355,10 +2360,12 @@ const UI = (() => {
     //   Esto evita que por ejemplo el filtro TAPA muestre unidades sin Samsara.
     // Scope de unidades: siempre por empresa activa
     let scopeUns;
-    scopeUns = DB.getUnidadesList(emp).filter(u =>
-      u.activa && !_tieneSiniestroActivo(u) && Parsers.categorizarEstatus(u.estatus) !== 'Para venta'
-    );
-    scopeUns = scopeUns.filter(u => !!u[k]);
+    // SAMSARA: incluir Para venta/Desenrolado si tienen ultima_act_samsara (están en el barrido)
+    scopeUns = DB.getUnidadesList(emp).filter(u => {
+      if (!u.activa || _tieneSiniestroActivo(u) || !u[k]) return false;
+      if (plat === 'SAMSARA') return true; // SAMSARA: cualquier estatus si tiene barrido
+      return Parsers.categorizarEstatus(u.estatus) !== 'Para venta';
+    });
 
     // Los selects se pueblan SOLO con valores presentes en el scope (unidades de esta plataforma).
     // Esto hace que TAPA, LEON, ACAY solo aparezcan si hay unidades con datos de esta plataforma en esas bases.
@@ -2570,19 +2577,14 @@ const UI = (() => {
     // Esto corrige el bug donde filtrar por "TAPA" en Samsara mostraba todas las unidades de
     // TAPA aunque no estuvieran en el archivo de Samsara.
     // Unidades "Para venta" se excluyen de los conteos operativos.
+    // SAMSARA: mostrar SOLO unidades con ultima_act_samsara (del archivo de barrido)
+    // Incluye cualquier estatus (Para venta, Desenrolado, etc.) si tienen barrido de SAMSARA
+    // NO incluye unidades de la asignación que no estén en el archivo de barrido
     let uns = DB.getUnidadesList(emp).filter(u => {
-      if (!u.activa) return false;
-      if (plat === 'SAMSARA') return true; // SAMSARA: incluir todos los estatus
+      if (!u.activa || !u[k]) return false; // sin ultima_act → no está en el barrido
+      if (plat === 'SAMSARA') return true;  // SAMSARA: cualquier estatus si tiene barrido
       return Parsers.categorizarEstatus(u.estatus) !== 'Para venta';
     });
-    if (plat === 'SAMSARA') {
-      uns = uns.filter(u => {
-        const norm = Parsers.normalizarEstatus(u.estatus);
-        return !!u[k] || ['Para venta','Desenrolado','Vendido','Baja'].includes(norm);
-      });
-    } else {
-      uns = uns.filter(u => !!u[k]);
-    }
 
     // Siniestros activos NO aparecen en tabla de Plataformas GPS.
     // Solo aparecen en Resumen y módulo de Fallas.
