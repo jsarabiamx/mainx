@@ -532,7 +532,7 @@ const UI = (() => {
     const etqOpts = ['Siniestro','AFR / Falla','Sin SIM','En taller','En alineación','En carrocería','En pintura','Mecánica','Candado','Sin energía','Para venta','Desinstalado','Otro'];
     _renderMs('ms-rf-etq', 'ms-rf-etq', {
       id: 'ms-rf-etq', label: 'Etiqueta', allLabel: 'Todas',
-      options: etqOpts, selected: _rf.etiqueta ? [_rf.etiqueta] : [],
+      options: etqOpts, selected: Array.isArray(_rf.etiqueta) ? _rf.etiqueta : (_rf.etiqueta ? [_rf.etiqueta] : []),
       onChange: 'UI._rf={...UI._rf,etiqueta:UI._msGetSelected("ms-rf-etq"),page:1};UI.renderUnitList()'
     });
   }
@@ -581,18 +581,48 @@ const UI = (() => {
       });
     }
     if(_rf.etiqueta && (Array.isArray(_rf.etiqueta) ? _rf.etiqueta.length : _rf.etiqueta)){
-      const _etqArr = Array.isArray(_rf.etiqueta) ? _rf.etiqueta.map(e=>e.toLowerCase()) : [_rf.etiqueta.toLowerCase()];
+      // Mapear labels del dropdown a keywords de búsqueda
+      const _ETQ_MAP = {
+        'siniestro':     ['siniestro','accidente'],
+        'afr / falla':   ['afr','falla','retarder','daño'],
+        'sin sim':       ['sin sim','sim baja','sim bloqueada','sim sd','sin baja'],
+        'en taller':     ['taller','en taller'],
+        'en alineación': ['alineacion','alineación','alineado'],
+        'en carrocería': ['carroceria','carrocería'],
+        'en pintura':    ['pintura','en pintura'],
+        'mecánica':      ['mecanica','mecánica','motor','en motor'],
+        'candado':       ['candado','con candado','inmovilizado'],
+        'sin energía':   ['sin energia','sin energía','sin luz','sin corriente'],
+        'para venta':    ['para venta','en venta','venta'],
+        'desinstalado':  ['desinstalado','sin equipo','sin dispositivo'],
+        'otro':          ['otro']
+      };
+      const _etqArr = Array.isArray(_rf.etiqueta) ? _rf.etiqueta : [_rf.etiqueta];
+      // Expandir labels a sus keywords
+      const _keywords = [];
+      _etqArr.forEach(label => {
+        const lw = label.toLowerCase();
+        const mapped = _ETQ_MAP[lw];
+        if (mapped) _keywords.push(...mapped);
+        else _keywords.push(lw); // fallback: buscar el label tal cual
+      });
       uns = uns.filter(u => {
         const _uFull = DB.getUnidad(u.num, emp) || u;
         const _fallaMotivos = (_uFull.fallas||[])
           .filter(f => !f.resuelta)
-          .map(f => [f.motivo, f.etiqueta].join(' ').toLowerCase())
+          .map(f => [f.motivo||'', f.etiqueta||'', f.tipo||''].join(' ').toLowerCase())
           .join(' ');
         const _esSiniestro = (_uFull.siniestro || u.siniestro);
         const _sinDesc = (_uFull.siniestroDesc || u.siniestroDesc || '').toLowerCase();
-        const _obsManual = (_uFull.observaciones_manual || '').toLowerCase();
-        const allText = [_fallaMotivos, _esSiniestro?'siniestro':'', _sinDesc, _obsManual].join(' ');
-        return _etqArr.some(eq => allText.includes(eq));
+        const _obs = [
+          _uFull.observaciones_manual || '',
+          _uFull.observaciones || '',
+          _uFull.notas || '',
+          u.observaciones || '',
+          u.notas || ''
+        ].join(' ').toLowerCase();
+        const allText = [_fallaMotivos, _esSiniestro?'siniestro':'', _sinDesc, _obs].join(' ');
+        return _keywords.some(kw => allText.includes(kw));
       });
     }
     if(_rf.search){
