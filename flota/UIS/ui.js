@@ -480,7 +480,7 @@ const UI = (() => {
   }
 
   function _fillFilters(emp) {
-    const uns = DB.getUnidadesList(emp).filter(u => u.activa);
+    const uns = DB.getUnidadesList(emp).filter(u => u.activa && !u._soloBarrido);
     // Empresa (select simple — no multi)
     const selE = $('filter-emp');
     if (selE) selE.innerHTML = DB.getEmpresasList().map(e =>
@@ -542,7 +542,7 @@ const UI = (() => {
     const emp=DB.getEmpresaActiva();
     const cfg=DB.getConfig();
     const hoy=Date.now();
-    let uns=DB.getUnidadesList(emp).filter(u=>u.activa);
+    let uns=DB.getUnidadesList(emp).filter(u=>u.activa && !u._soloBarrido);
     uns=uns.map(u=>({...u,dias:Parsers.diasDesde(u.ultima_act)}));
 
     // Excluir "Para venta" por defecto. Si el usuario filtra explícitamente por "Para venta", sí las muestra.
@@ -3462,7 +3462,8 @@ const UI = (() => {
   function renderAsignacion(){
     const emp=DB.getEmpresaActiva();
     const st=DB.getStats(emp);
-    const uns=DB.getUnidadesList(emp);
+    // ✅ Excluir _soloBarrido: unidades sin asignación, solo con datos de barrido
+    const uns=DB.getUnidadesList(emp).filter(u => !u._soloBarrido);
     const act=uns.filter(u=>u.activa);
     const COLORS=['#3b82f6','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#f97316'];
     const total=act.length||1;
@@ -3502,7 +3503,7 @@ const UI = (() => {
   }
 
   function renderAsigTable(unsList){
-    let lista=unsList||DB.getUnidadesList(DB.getEmpresaActiva()).filter(u=>u.activa);
+    let lista=unsList||DB.getUnidadesList(DB.getEmpresaActiva()).filter(u=>u.activa && !u._soloBarrido);
     if(_asigQ){
       lista = lista.filter(u => _multiTokenMatch(_asigQ, [
         u.num, u.base, u.modelo, u.serie, u.placa, u.cromatica, u.empresa_asig,
