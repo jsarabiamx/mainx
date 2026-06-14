@@ -420,14 +420,17 @@ const DB = (() => {
               // Intentar encontrar la unidad de asignación correspondiente
               const _emp_cfg = (_s.empresas[empR] || {});
               const _sufijo = _emp_cfg.sufijo || '';  // ej. "-A" para AERS
+              const _numInt = String(parseInt(num, 10)); // strip leading zeros
               if (_sufijo) {
                 // Intento 1: num + sufijo  (ej. "700" + "-A" = "700-A")
-                const _key1 = num + _sufijo;
+                u = _s.unidades[empR][num + _sufijo] || null;
                 // Intento 2: strip leading zeros + sufijo (ej. "0703" -> "703-A")
-                const _numInt = String(parseInt(num, 10));
-                const _key2 = _numInt + _sufijo;
-                u = _s.unidades[empR][_key1] || _s.unidades[empR][_key2] || null;
+                if (!u) u = _s.unidades[empR][_numInt + _sufijo] || null;
               }
+              // Intento 3: buscar directo sin sufijo (ej. AERS "18207" sin sufijo)
+              if (!u) u = _s.unidades[empR][_numInt] || null;
+              // Intento 4: agregar prefijo "1" para CEIBA AERS (ej. "8207" -> "18207")
+              if (!u && _numInt.length <= 4) u = _s.unidades[empR]['1' + _numInt] || null;
               if (!u) {
                 // No encontró unidad de asignación: crear entrada de solo-barrido
                 // NO aparece en Resumen/Asignacion (filtrada por _soloBarrido)
@@ -554,12 +557,15 @@ const DB = (() => {
           if (!u) {
             const _emp_cfg = (_s.empresas[empR] || {});
             const _sufijo = _emp_cfg.sufijo || '';
+            const _numInt = String(parseInt(num, 10));
             if (_sufijo) {
-              const _key1 = num + _sufijo;
-              const _numInt = String(parseInt(num, 10));
-              const _key2 = _numInt + _sufijo;
-              u = _s.unidades[empR][_key1] || _s.unidades[empR][_key2] || null;
+              u = _s.unidades[empR][num + _sufijo] || null;
+              if (!u) u = _s.unidades[empR][_numInt + _sufijo] || null;
             }
+            // Intento 3: directo sin sufijo (ej. AERS "18207" sin sufijo -A)
+            if (!u) u = _s.unidades[empR][_numInt] || null;
+            // Intento 4: prefijo "1" para CEIBA AERS (ej. "8207" -> "18207")
+            if (!u && _numInt.length <= 4) u = _s.unidades[empR]['1' + _numInt] || null;
             if (!u) {
               const rawDatos = r.datos_raw || {};
               u = {
@@ -717,15 +723,16 @@ const DB = (() => {
     const store = _empU(emp);
     const k = String(num);
     if (store[k]) return store[k];
-    // Lookup por sufijo: si la empresa tiene sufijo (ej. AERS -> "-A"),
-    // intentar encontrar "num-A" o "numSinCeros-A"
+    const _kInt = String(parseInt(k, 10));
     const _sufijo = (_s.empresas[emp] || {}).sufijo || '';
-    if (_sufijo) {
-      const k1 = k + _sufijo;
-      if (store[k1]) return store[k1];
-      const k2 = String(parseInt(k, 10)) + _sufijo;
-      if (store[k2]) return store[k2];
-    }
+    // Intento 2: num + sufijo (ej. "700" -> "700-A")
+    if (_sufijo && store[k + _sufijo]) return store[k + _sufijo];
+    // Intento 3: strip zeros + sufijo (ej. "0703" -> "703-A")
+    if (_sufijo && store[_kInt + _sufijo]) return store[_kInt + _sufijo];
+    // Intento 4: directo sin sufijo (ej. "18207" existe sin -A)
+    if (store[_kInt]) return store[_kInt];
+    // Intento 5: prefijo "1" (ej. CEIBA "8207" -> "18207")
+    if (_kInt.length <= 4 && store['1' + _kInt]) return store['1' + _kInt];
     return null;
   }
 
