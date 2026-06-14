@@ -959,17 +959,20 @@ const DB = (() => {
     let procesadas = 0, etiquetadas = 0;
     filas.forEach(r => {
       if (!r.num) return;
+      // AERS: resolver número real con sufijo -A si aplica
+      const _uTest = getUnidad(r.num, emp);
+      const numReal = (_uTest && _uTest.num) ? _uTest.num : r.num;
       const datos = {};
       if (r.fecha) {
         datos['ultima_act_' + plataforma.toLowerCase()] = _toLocalStr(r.fecha);
-        const u = getUnidad(r.num, emp);
+        const u = getUnidad(numReal, emp);
         if (!u || !u.ultima_act || new Date(r.fecha) > new Date(u.ultima_act)) {
           datos.ultima_act = _toLocalStr(r.fecha);
         }
         datos.plataforma = plataforma;
       }
       if (Object.keys(datos).length) {
-        upsertUnidad(r.num, { ...datos, _fuente: 'barrido_manual_' + plataforma }, emp);
+        upsertUnidad(numReal, { ...datos, _fuente: 'barrido_manual_' + plataforma }, emp);
         procesadas++;
       }
       if (r.etiqueta) {
