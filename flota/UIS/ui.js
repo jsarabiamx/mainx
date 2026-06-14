@@ -2337,7 +2337,7 @@ const UI = (() => {
         <div onclick="event.stopPropagation()">
         ${esManual
           ? `<label class="plat-card-btn-upload">
-              ↑ Cargar archivo VOLVO
+              ↑ Cargar archivo ${p}
               <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="UI._cargarArchivoPlat('${p}',this.files[0]);this.value=''">
             </label>
             <button class="plat-card-btn-manual" style="margin-top:4px" onclick="UI._abrirCapturaManualPlat('${p}')">+ Captura manual</button>`
