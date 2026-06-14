@@ -939,13 +939,24 @@ const DB = (() => {
 
     const _fallasRestantes = (u.fallas || []).filter(x => !x.resuelta && x.id !== f.id);
     if (_fallasRestantes.length === 0) {
+      // ✅ Limpiar observaciones Y notas al resolver la última falla
       u.observaciones = '';
-      if (window.GPS_SB) GPS_SB.patchObservacionesBarrido(num, emp, null).catch(() => {});
+      u.notas = '';
+      u.observaciones_manual = '';
+      if (window.GPS_SB) {
+        GPS_SB.patchObservacionesBarrido(num, emp, null).catch(() => {});
+        // ✅ También limpiar gps_notas (fuente de verdad para el chip de observación)
+        if (GPS_SB.saveNota) GPS_SB.saveNota(num, emp, '').catch(() => {});
+      }
     } else {
       const _sig = _fallasRestantes[_fallasRestantes.length - 1];
       const _newObs = _sig.esSiniestro ? ('🚨 ' + (_sig.motivo || '')) : (_sig.motivo || '');
       u.observaciones = _newObs;
-      if (window.GPS_SB) GPS_SB.patchObservacionesBarrido(num, emp, _newObs).catch(() => {});
+      u.notas = _newObs;
+      if (window.GPS_SB) {
+        GPS_SB.patchObservacionesBarrido(num, emp, _newObs).catch(() => {});
+        if (GPS_SB.saveNota) GPS_SB.saveNota(num, emp, _newObs).catch(() => {});
+      }
     }
 
     u.etiquetas = u.etiquetas || [];
