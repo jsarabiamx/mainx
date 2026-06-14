@@ -5884,16 +5884,6 @@ const UI = (() => {
     reader.readAsText(file);
   }
 
-  return {
-    // render panels
-    renderResumen, renderUnitList, renderDetalle,
-    renderAsignacion, renderAsigTable,
-    renderBarridos, renderPlataformas,
-    renderReportes, renderHistorial, renderAlertas,
-  /**
-   * _syncBarridosManual — sincronización manual de barridos GPS desde Supabase
-   * Se llama con el botón ↻ del topbar para refrescar datos sin recargar la página
-   */
   async function _syncBarridosManual() {
     const btn = document.getElementById('btn-sync-barridos');
     if (btn) {
@@ -5919,6 +5909,12 @@ const UI = (() => {
     }
   }
 
+  return {
+    // render panels
+    renderResumen, renderUnitList, renderDetalle,
+    renderAsignacion, renderAsigTable,
+    renderBarridos, renderPlataformas,
+    renderReportes, renderHistorial, renderAlertas,
     renderViajes, renderGraficas, renderFallasPanel, renderBarridoManual, renderMaestra,
     // unit actions
     openUnitDetail, openEditarUnidad, openRegistrarFalla,
