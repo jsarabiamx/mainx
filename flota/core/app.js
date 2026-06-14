@@ -487,35 +487,18 @@ const App = (() => {
     const horasDesdeUpdate = ultimaActLocal ? (Date.now() - new Date(ultimaActLocal)) / 3600000 : 999;
     const datosViejos = horasDesdeUpdate > 24;
 
-    if (!hayDatos) {
-      // Sin datos locales: carga completa desde Supabase
-      _showSyncBanner('⏳ Cargando datos desde Supabase...');
+    if (!hayDatos || datosViejos) {
+      // Sin datos locales O datos viejos (>24h): carga completa desde Supabase
+      // initFromSupabase ya incluye el paso de barridos al final
+      if (!hayDatos) _showSyncBanner('⏳ Cargando datos desde Supabase...');
       DB.initFromSupabase().then(ok => {
         _hideSyncBanner();
         if (ok) { UI.renderResumen(); populateEmpresaSelect(); }
       });
-    } else if (datosViejos) {
-      // Datos muy viejos: sincronizar en background (>24h)
-      console.log('[App] Datos locales de', Math.round(horasDesdeUpdate), 'h — sync Supabase en background');
-      setTimeout(() => {
-        DB.initFromSupabase().then(ok => {
-          if (ok) UI.renderResumen();
-        });
-      }, 3000);
-    }
-    // Si hayDatos y son recientes: NO sync de asignaciones — respetar datos locales
-    // PERO siempre sincronizar fallas activas (siniestros, AFR) desde Supabase
-    // Esto garantiza que cualquier dispositivo vea siniestros registrados en otro
-    setTimeout(() => {
-      _syncFallasDesdeInicio();
-    }, 1500);
-
-    // ✅ SIEMPRE sincronizar barridos GPS desde Supabase — independientemente de si
-    // hay datos locales recientes. Los barridos cambian constantemente (se suben diario)
-    // y deben verse en todos los browsers sin importar cuándo fue el último sync.
-    if (!hayDatos) {
-      // Sin datos locales: barridos ya se cargan dentro de initFromSupabase (arriba)
     } else {
+      // Datos locales recientes: solo sincronizar barridos (asignacion ya está en memoria)
+      // Los barridos cambian diariamente y deben sincronizarse siempre
+      // IMPORTANTE: los barridos van DESPUÉS de confirmar que asig está en _s.unidades
       setTimeout(() => {
         DB.syncBarridosFromSupabase().then(ok => {
           if (ok) {
@@ -523,11 +506,14 @@ const App = (() => {
             if (typeof UI.renderPlataformas === 'function') UI.renderPlataformas();
           }
         });
-      }, 2000);
+      }, 1500);
     }
 
-    // Iniciar sincronización en tiempo real de fallas
-    setTimeout(_startFallasSync, 4000);
+    // Siempre sincronizar fallas activas desde Supabase
+    setTimeout(() => { _syncFallasDesdeInicio(); }, 3000);
+
+    // Sincronización en tiempo real de fallas
+    setTimeout(_startFallasSync, 5000);
   }
 
   function _showSyncBanner(msg) {
