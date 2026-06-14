@@ -2845,9 +2845,10 @@ const UI = (() => {
           ? `<td style="font-family:monospace;font-size:10px">${esc(motiveSerieVG||'—')}</td><td style="font-family:monospace;font-size:10px">${esc(motiveSerieCam||'—')}</td>`
           : `<td style="font-family:monospace;font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(idValue)}</td>`
         }
-        <td class="plat-obs-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarObsRapido('${esc(u.num)}','${esc(u.empresa||emp)}','${plat}')" title="Click para editar — ${esc(obsTexto||'sin observación')}">
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${_obsChip||'<span style="color:var(--text3);font-style:italic;font-size:11px">+ agregar observación</span>'}</span>
-          <span class="plat-obs-pencil" style="opacity:0;margin-left:4px;font-size:10px">✎</span>
+        <td class="plat-obs-cell" style="max-width:220px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarObsRapido('${esc(u.num)}','${esc(u.empresa||emp)}','${plat}')" title="Click para editar — ${esc(obsTexto||'sin observación')}">
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:130px;vertical-align:middle">${_obsChip||'<span style="color:var(--text3);font-style:italic;font-size:11px">+ agregar observación</span>'}</span>
+          ${_fallaActiva ? `<button onclick="event.stopPropagation();UI._liberarFallaDesdeTabla('${esc(u.num)}','${esc(u.empresa||emp)}','${plat}')" title="Liberar falla" style="margin-left:4px;background:none;border:1px solid var(--green)44;border-radius:4px;cursor:pointer;color:var(--green);font-size:9px;padding:1px 5px;font-weight:700;vertical-align:middle">✓ Liberar</button>` : ''}
+          <span class="plat-obs-pencil" style="opacity:0;margin-left:2px;font-size:10px">✎</span>
         </td>
         <td class="plat-nota-cell" style="max-width:200px;color:var(--text2);font-size:11px" onclick="event.stopPropagation();UI._editarNotaRapido('${esc(u.num)}','${plat}','${esc(u.empresa||emp)}')">
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:180px;vertical-align:middle">${(() => { const _n=(DB.getUnidad('${esc(u.num)}','${esc(u.empresa||emp)}')||u).notas||''; return _n ? esc(_n) : '<span style=\"color:var(--text3);font-style:italic;font-size:11px\">+ agregar nota</span>'; })()}</span>
@@ -3134,6 +3135,35 @@ const UI = (() => {
    * Se abre un prompt simple (sin re-renderizar toda la tabla mientras se escribe,
    * para no perder foco). Al guardar actualiza la unidad y refresca la tabla.
    */
+  async function _liberarFallaDesdeTabla(num, emp, plat) {
+    const u = DB.getUnidad(num, emp);
+    if (!u) return;
+    const fallaActiva = (u.fallas || []).find(f => !f.resuelta);
+    if (!fallaActiva) {
+      // Sin falla activa: solo limpiar obs/notas
+      DB.upsertUnidad(num, { observaciones: '', notas: '', observaciones_manual: '', _fuente: 'edit_obs_inline' }, emp);
+      if (window.GPS_SB && GPS_SB.saveNota) GPS_SB.saveNota(num, emp, '').catch(() => {});
+      if (_platExpandida === plat) _refreshPlatTable(plat);
+      renderResumen();
+      toast('Observación limpiada', 'success');
+      return;
+    }
+    // Confirmar liberación
+    const motivo = await _uiPrompt({
+      title: `✓ Liberar falla — Unidad ${num}`,
+      message: `Falla: "${fallaActiva.motivo || fallaActiva.etiqueta || 'GPS MAL'}". Descripción de la solución (opcional):`,
+      placeholder: 'Ej: Se reemplazó antena GPS, sistema restaurado...',
+      defaultValue: '', icon: '✅', okText: '✓ Liberar falla'
+    });
+    if (motivo === null) return; // cancelado
+    const ok = DB.resolverFalla(num, emp, fallaActiva.id, motivo);
+    if (ok) {
+      if (_platExpandida === plat) _refreshPlatTable(plat);
+      renderResumen();
+      toast('Falla liberada correctamente', 'success');
+    }
+  }
+
   async function _editarObsRapido(num, emp, plat) {
     const u = DB.getUnidad(num, emp);
     if (!u) { toast('Unidad no encontrada','error'); return; }
@@ -5875,7 +5905,7 @@ const UI = (() => {
     _recalcularDiasManual, _guardarCapturaManualPlat, _editarCapturaManuaRow,
     _updatePlatFechaConISO,
     // v7.1: tabs del detalle inline y guardar observaciones in-situ
-    _cambiarPlatDetailTab, _guardarObsInline, _editarObsRapido, _eliminarUnidadDePlat,
+    _cambiarPlatDetailTab, _guardarObsInline, _editarObsRapido, _liberarFallaDesdeTabla, _eliminarUnidadDePlat,
     // v7.2: multi-select dropdowns
     _msToggle, _msOnCheck, _msSelectAll, _msFilterOptions,
     // alertas
