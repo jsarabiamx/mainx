@@ -935,13 +935,33 @@ const Parsers = (() => {
 
     for (let i = hIdx + 1; i < rows.length; i++) {
       const row = rows[i];
-      if (!Array.isArray(row) || row[colId] === undefined || row[colId] === null || row[colId] === '') continue;
+      if (!Array.isArray(row)) continue;
 
       const rawId = String(row[colId] || '').trim();
-      const num = cleanNum(rawId);
-      if (!num || isNaN(Number(num))) continue;
-      const n = Number(num);
-      if (n < 100 || n > 99999) continue;
+      const rawSerie = String(row[colSerie] || '').trim();
+
+      // Determinar identificador de unidad
+      let num = '';
+      let _sinUnidad = false;
+
+      if (rawId) {
+        const cleaned = cleanNum(rawId);
+        const n = Number(cleaned);
+        if (cleaned && !isNaN(n) && n >= 100 && n <= 99999) {
+          num = cleaned; // ID numérico normal
+        } else {
+          num = rawId; // ID no numérico (raro), usar como está
+        }
+      } else if (rawSerie) {
+        // Sin ID de unidad pero tiene número de serie → dispositivo sin asignar
+        // Usar el serial como identificador temporal con prefijo SIN-
+        num = 'SIN-' + rawSerie;
+        _sinUnidad = true;
+      } else {
+        continue; // Sin ID ni serie → saltar
+      }
+
+      if (!num) continue;
 
       // Fecha: usar col N (última actividad) si existe, sino col G (fecha ubicación)
       const rawFechaAct = row[colFecha] || '';
@@ -970,12 +990,13 @@ const Parsers = (() => {
           empresa:   grupo || '',
           estado:    estado || '',
           // Dispositivos
-          serieGateway:  esGateway ? serie  : '',
+          serieGateway:  esGateway ? serie  : (rawSerie || ''),
           modeloGateway: esGateway ? modelo : '',
           serieDashcam:  esDashcam ? serie  : '',
           modeloDashcam: esDashcam ? modelo : '',
           dispositivos:  [{ tipo: disp, serie, modelo, estado, fecha: fechaMejor ? fechaMejor.toISOString() : null }],
-          plataforma: 'MOTIVE'
+          plataforma: 'MOTIVE',
+          _sinUnidad: _sinUnidad  // true = dispositivo sin número de unidad asignado
         };
       } else {
         const ent = agrupado[num];
