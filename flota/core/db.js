@@ -9,7 +9,7 @@ const DB = (() => {
     empresaActiva: 'ETN',
     empresas: {
       ETN:        { nombre:'ETN',        color:'#3b82f6' },
-      AERS:       { nombre:'AERS',       color:'#10b981' },
+      AERS:       { nombre:'AERS',       color:'#10b981', sufijo:'-A' },
       GHO:        { nombre:'GHO',        color:'#8b5cf6' },
       AMEALCENSEN:{ nombre:'AMEALCENSEN',color:'#f59e0b' },
       SAME:       { nombre:'SAME',       color:'#ef4444' }
@@ -57,6 +57,10 @@ const DB = (() => {
           });
         });
         d._cleanedObsNotas = true;
+      }
+      // Migración: añadir sufijo a AERS si no lo tiene (para lookup barrido-asignacion)
+      if (d.empresas && d.empresas['AERS'] && !d.empresas['AERS'].sufijo) {
+        d.empresas['AERS'].sufijo = '-A';
       }
       // Migración defensiva
       if (!d.catalogos) d.catalogos = schema().catalogos;
@@ -128,7 +132,7 @@ const DB = (() => {
         _s.empresas = {
           ETN:  { nombre:'ETN',  color:'#3b82f6' },
           GHO:  { nombre:'GHO',  color:'#8b5cf6' },
-          AERS: { nombre:'AERS', color:'#10b981' },
+          AERS: { nombre:'AERS', color:'#10b981', sufijo:'-A' },
           SAME: { nombre:'SAME', color:'#ef4444' }
         };
       }
@@ -392,20 +396,36 @@ const DB = (() => {
             if (!_s.unidades[empR]) _s.unidades[empR] = {};
             let u = _s.unidades[empR][num];
             if (!u) {
-              // Crear unidad desde barrido (_soloBarrido:true)
-              // Estas unidades NO aparecen en Resumen/Asignacion (filtradas en getStats/UI)
-              // pero SÍ aparecen en Plataformas y Barridos GPS
-              const rawDatos = r.datos_raw || {};
-              u = {
-                num, economico: num,
-                cromatica: rawDatos.cromatica || '', estatus: rawDatos.estatus || '',
-                modelo: rawDatos.modelo || '', rol: '', base: rawDatos.base || '',
-                empresa_asig: empR, activa: true,
-                fallas: [], historialFallas: [], historial: [],
-                siniestro: false, siniestroDesc: '', fallaCount: 0,
-                _soloBarrido: true, _fuente: 'supabase_barrido'
-              };
-              _s.unidades[empR][num] = u;
+              // ── Lookup por sufijo de empresa ─────────────────────────────
+              // Algunas empresas (ej. AERS) usan sufijo en asignación: "700-A"
+              // pero el barrido viene sin sufijo: "700" o con ceros: "0703"
+              // Intentar encontrar la unidad de asignación correspondiente
+              const _emp_cfg = (_s.empresas[empR] || {});
+              const _sufijo = _emp_cfg.sufijo || '';  // ej. "-A" para AERS
+              if (_sufijo) {
+                // Intento 1: num + sufijo  (ej. "700" + "-A" = "700-A")
+                const _key1 = num + _sufijo;
+                // Intento 2: strip leading zeros + sufijo (ej. "0703" -> "703-A")
+                const _numInt = String(parseInt(num, 10));
+                const _key2 = _numInt + _sufijo;
+                u = _s.unidades[empR][_key1] || _s.unidades[empR][_key2] || null;
+              }
+              if (!u) {
+                // No encontró unidad de asignación: crear entrada de solo-barrido
+                // NO aparece en Resumen/Asignacion (filtrada por _soloBarrido)
+                // SÍ aparece en Plataformas y Barridos GPS
+                const rawDatos = r.datos_raw || {};
+                u = {
+                  num, economico: num,
+                  cromatica: rawDatos.cromatica || '', estatus: rawDatos.estatus || '',
+                  modelo: rawDatos.modelo || '', rol: '', base: rawDatos.base || '',
+                  empresa_asig: empR, activa: true,
+                  fallas: [], historialFallas: [], historial: [],
+                  siniestro: false, siniestroDesc: '', fallaCount: 0,
+                  _soloBarrido: true, _fuente: 'supabase_barrido'
+                };
+                _s.unidades[empR][num] = u;
+              }
             }
 
             const fechaStr = r.ultima_conexion || null;
@@ -549,7 +569,22 @@ const DB = (() => {
 
   function getUnidades(emp) { return _empU(emp); }
   function getUnidadesList(emp) { return Object.values(_empU(emp)); }
-  function getUnidad(num, emp) { return _empU(emp)[String(num)] || null; }
+  function getUnidad(num, emp) {
+    emp = emp || _s.empresaActiva;
+    const store = _empU(emp);
+    const k = String(num);
+    if (store[k]) return store[k];
+    // Lookup por sufijo: si la empresa tiene sufijo (ej. AERS -> "-A"),
+    // intentar encontrar "num-A" o "numSinCeros-A"
+    const _sufijo = (_s.empresas[emp] || {}).sufijo || '';
+    if (_sufijo) {
+      const k1 = k + _sufijo;
+      if (store[k1]) return store[k1];
+      const k2 = String(parseInt(k, 10)) + _sufijo;
+      if (store[k2]) return store[k2];
+    }
+    return null;
+  }
 
   function upsertUnidad(num, datos, emp) {
     emp = emp || _s.empresaActiva;
