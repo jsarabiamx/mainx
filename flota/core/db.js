@@ -133,9 +133,6 @@ const DB = (() => {
         };
       }
       const empresas = Object.keys(_s.empresas);
-      // Track which empresas actually have asignacion rows in Supabase
-      // Used later in barridos step to avoid creating phantom units
-      const _empresasConAsignacion = new Set();
       for (const emp of empresas) {
         // ── 1. Asignaciones ───────────────────────────────────────────────
         const asigRows = await GPS_SB._getRaw('gps_asignaciones',
@@ -186,8 +183,6 @@ const DB = (() => {
             };
           });
 
-          // ✅ Marcar esta empresa como que tiene asignacion en Supabase
-          _empresasConAsignacion.add(emp);
           // Asignación atómica: reemplazar solo cuando todo está listo
           _s.unidades[emp] = _nuevasUnidades;
           if (!_s.asignaciones) _s.asignaciones = {};
@@ -397,21 +392,12 @@ const DB = (() => {
             if (!_s.unidades[empR]) _s.unidades[empR] = {};
             let u = _s.unidades[empR][num];
             if (!u) {
-              // ✅ FIX: Solo crear unidades "fantasma" de barrido si la empresa
-              // tiene una asignación activa en Supabase. Si no tiene asignación
-              // (fue borrada), no crear unidades visibles desde barridos.
-              if (!_empresasConAsignacion.has(empR)) return;
-              const rawDatos = r.datos_raw || {};
-              u = {
-                num, economico: num,
-                cromatica: rawDatos.cromatica || '', estatus: rawDatos.estatus || '',
-                modelo: rawDatos.modelo || '', rol: '', base: rawDatos.base || '',
-                empresa_asig: empR, activa: true,
-                fallas: [], historialFallas: [], historial: [],
-                siniestro: false, siniestroDesc: '', fallaCount: 0,
-                _soloBarrido: true, _fuente: 'supabase_barrido'
-              };
-              _s.unidades[empR][num] = u;
+              // ✅ FIX: NUNCA crear unidades nuevas desde barridos.
+              // - Si la empresa NO tiene asignación: no crear unidades fantasma.
+              // - Si la empresa SÍ tiene asignación: los barridos pueden tener nums
+              //   distintos al sufijo -A (ej. "700" vs "700-A") y generarían duplicados.
+              // Los barridos solo deben actualizar ultima_act_* en unidades ya existentes.
+              return;
             }
 
             const fechaStr = r.ultima_conexion || null;
