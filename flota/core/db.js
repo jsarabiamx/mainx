@@ -392,12 +392,20 @@ const DB = (() => {
             if (!_s.unidades[empR]) _s.unidades[empR] = {};
             let u = _s.unidades[empR][num];
             if (!u) {
-              // ✅ FIX: NUNCA crear unidades nuevas desde barridos.
-              // - Si la empresa NO tiene asignación: no crear unidades fantasma.
-              // - Si la empresa SÍ tiene asignación: los barridos pueden tener nums
-              //   distintos al sufijo -A (ej. "700" vs "700-A") y generarían duplicados.
-              // Los barridos solo deben actualizar ultima_act_* en unidades ya existentes.
-              return;
+              // Crear unidad desde barrido (_soloBarrido:true)
+              // Estas unidades NO aparecen en Resumen/Asignacion (filtradas en getStats/UI)
+              // pero SÍ aparecen en Plataformas y Barridos GPS
+              const rawDatos = r.datos_raw || {};
+              u = {
+                num, economico: num,
+                cromatica: rawDatos.cromatica || '', estatus: rawDatos.estatus || '',
+                modelo: rawDatos.modelo || '', rol: '', base: rawDatos.base || '',
+                empresa_asig: empR, activa: true,
+                fallas: [], historialFallas: [], historial: [],
+                siniestro: false, siniestroDesc: '', fallaCount: 0,
+                _soloBarrido: true, _fuente: 'supabase_barrido'
+              };
+              _s.unidades[empR][num] = u;
             }
 
             const fechaStr = r.ultima_conexion || null;
@@ -1138,7 +1146,9 @@ const DB = (() => {
   function getStats(emp) {
     emp = emp || _s.empresaActiva;
     const cfg = _s.config;
-    const todas = Object.values(_empU(emp));
+    // ✅ Excluir unidades _soloBarrido de stats de Resumen/Asignacion
+    // Son unidades sin asignación creadas solo para datos GPS de barridos
+    const todas = Object.values(_empU(emp)).filter(u => !u._soloBarrido);
     const activas = todas.filter(u => u.activa);
     const operativas = activas.filter(u => Parsers.categorizarEstatus(u.estatus) !== 'Para venta');
     const paraVenta  = activas.filter(u => Parsers.categorizarEstatus(u.estatus) === 'Para venta');
