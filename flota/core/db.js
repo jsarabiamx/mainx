@@ -500,6 +500,122 @@ const DB = (() => {
     }
   }
 
+  /**
+   * syncBarridosFromSupabase — sincroniza SOLO los barridos GPS desde Supabase.
+   * Se llama SIEMPRE en startup para que cualquier browser vea los barridos más recientes,
+   * incluso si ya tiene datos locales recientes de asignación.
+   */
+  async function syncBarridosFromSupabase() {
+    if (!window.GPS_SB) return false;
+    try {
+      const empresas = Object.keys(_s.empresas || {});
+      if (!empresas.length) return false;
+
+      const barridoRows = [];
+      for (const _empB of empresas) {
+        try {
+          const _rows = await GPS_SB._getRaw('gps_barridos',
+            `activa=eq.true&empresa_id=eq.${encodeURIComponent(_empB)}`
+          );
+          if (_rows && _rows.length) barridoRows.push(..._rows);
+        } catch(eB) { console.warn('[DB] syncBarridos empresa', _empB, eB.message); }
+      }
+
+      const _sbPlats = {};
+      const _ALL_P = ['ceiba','samsara','avl','scania','man','volvo','motive'];
+      if (barridoRows && barridoRows.length > 0) {
+        barridoRows.forEach(r => {
+          const _eR = String(r.empresa_id || ''), _pR = (r.plataforma||'').toLowerCase();
+          if (_eR && _pR) { if (!_sbPlats[_eR]) _sbPlats[_eR] = new Set(); _sbPlats[_eR].add(_pR); }
+        });
+      }
+      // Limpiar plataformas antes de aplicar (Supabase es fuente de verdad para barridos)
+      Object.keys(_s.empresas || {}).forEach(_eR => {
+        if (!_s.unidades[_eR]) return;
+        Object.values(_s.unidades[_eR]).forEach(u => {
+          const _platsASB = _sbPlats[_eR] || new Set();
+          const _platsAClear = _platsASB.size > 0 ? _platsASB : new Set(_ALL_P);
+          _platsAClear.forEach(p => { delete u['ultima_act_' + p]; });
+          let _maxF = null;
+          _ALL_P.forEach(pp => { const f = u['ultima_act_'+pp]; if (f && (!_maxF || new Date(f)>new Date(_maxF))) _maxF=f; });
+          u.ultima_act = _maxF;
+        });
+      });
+
+      if (barridoRows && barridoRows.length > 0) {
+        const idFieldByPlat = { CEIBA:'dvr_ceiba', SAMSARA:'vin_samsara', MAN:'placa_man', SCANIA:'placa_scania' };
+        barridoRows.forEach(r => {
+          const num = String(r.num_economico);
+          const empR = String(r.empresa_id || '');
+          const plat = (r.plataforma || '').toUpperCase();
+          const platKey = 'ultima_act_' + plat.toLowerCase();
+          const raw = r.datos_raw || {};
+
+          if (!empR || !_s.empresas[empR]) return;
+          if (!_s.unidades[empR]) _s.unidades[empR] = {};
+          let u = _s.unidades[empR][num];
+          if (!u) {
+            const _emp_cfg = (_s.empresas[empR] || {});
+            const _sufijo = _emp_cfg.sufijo || '';
+            if (_sufijo) {
+              const _key1 = num + _sufijo;
+              const _numInt = String(parseInt(num, 10));
+              const _key2 = _numInt + _sufijo;
+              u = _s.unidades[empR][_key1] || _s.unidades[empR][_key2] || null;
+            }
+            if (!u) {
+              const rawDatos = r.datos_raw || {};
+              u = {
+                num, economico: num,
+                cromatica: rawDatos.cromatica || '', estatus: rawDatos.estatus || '',
+                modelo: rawDatos.modelo || '', rol: '', base: rawDatos.base || '',
+                empresa_asig: empR, activa: true,
+                fallas: [], historialFallas: [], historial: [],
+                siniestro: false, siniestroDesc: '', fallaCount: 0,
+                _soloBarrido: true, _fuente: 'supabase_barrido'
+              };
+              _s.unidades[empR][num] = u;
+            }
+          }
+          const fechaStr = r.ultima_conexion || null;
+          if (fechaStr) {
+            if (!u[platKey] || new Date(fechaStr) > new Date(u[platKey])) u[platKey] = fechaStr;
+            if (!u.ultima_act || new Date(fechaStr) > new Date(u.ultima_act)) u.ultima_act = fechaStr;
+          } else if (r.tiene_datos === false || r.ultima_conexion === null) {
+            delete u[platKey];
+            const PLATS2 = ['ceiba','samsara','avl','scania','man','volvo','motive'];
+            let maxF = null;
+            PLATS2.forEach(pp => { const f2 = u['ultima_act_' + pp]; if (f2 && (!maxF || new Date(f2) > new Date(maxF))) maxF = f2; });
+            u.ultima_act = maxF;
+          }
+          const idField = idFieldByPlat[plat];
+          if (idField && raw.serie && !u[idField]) u[idField] = raw.serie;
+          const obsBarrido = r.observaciones || null;
+          if (obsBarrido && !u.observaciones) u.observaciones = obsBarrido;
+          if (r.notas && !u._notaDeSupabase) u.notas = r.notas;
+          const desKey = 'desinstalacion_' + plat.toLowerCase();
+          if (r.desinstalado) {
+            u[desKey] = { fecha: r.desinstalacion_fecha || null, comentario: r.desinstalacion_comentario || '', ts: r.desinstalacion_ts || null };
+          } else if (u[desKey]) { delete u[desKey]; }
+          if (plat === 'SAMSARA') { if (raw.estadoSamsara) u.estado_samsara = raw.estadoSamsara; }
+          if (plat === 'MOTIVE') {
+            if (raw.serieGateway) u.motive_vg = raw.serieGateway;
+            if (raw.serieDashcam) u.motive_cam = raw.serieDashcam;
+            if (raw.estado) u.estado_motive = raw.estado;
+            if (raw.empresa) u.empresa_motive = raw.empresa;
+            u._motiveRaw = raw;
+          }
+        });
+      }
+      save();
+      console.log('[DB] syncBarridosFromSupabase: OK —', barridoRows.length, 'barridos');
+      return true;
+    } catch(e) {
+      console.warn('[DB] syncBarridosFromSupabase error:', e);
+      return false;
+    }
+  }
+
   function save() {
     try {
       localStorage.setItem(KEY, JSON.stringify(_s));
@@ -1528,6 +1644,7 @@ const DB = (() => {
     registrarBarridoManual,
     eliminarDatosPlataforma,
     getSims, saveSim, deleteSim, getSimStats,
+    syncBarridosFromSupabase,
     resetEmpresa, exportData, importData, save
   };
 })();
