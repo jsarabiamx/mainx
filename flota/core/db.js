@@ -266,6 +266,8 @@ const DB = (() => {
               _s.unidades[emp][num].notas = r.nota;
               // La nota es la fuente de verdad para observaciones — sobreescribe IDs numéricos
               _s.unidades[emp][num].observaciones = r.nota;
+              // Marcar que esta unidad ya tiene nota de Supabase gps_notas (prioridad máxima)
+              _s.unidades[emp][num]._notaDeSupabase = true;
               // Limpiar cualquier ID numérico que hubiera quedado en notas anteriores
               if (_s.unidades[emp][num].notas && /^\d{5,}$/.test(String(_s.unidades[emp][num].notas).trim())) {
                 _s.unidades[emp][num].notas = r.nota;
@@ -301,8 +303,11 @@ const DB = (() => {
               if (r.motor)         existing.motor         = r.motor;
               if (r.asientos)      existing.asientos      = r.asientos;
               if (r.mes_asig)      existing.mes           = r.mes_asig;
-              if (r.observaciones) existing.observaciones = r.observaciones;
-              if (r.notas)         existing.notas         = r.notas;
+              // gps_notas es la fuente de verdad para observaciones/notas (se cargó antes)
+              // gps_unidades NO sobreescribe notas porque pueden ser más antiguas que gps_notas
+              // Solo aplicar si la unidad no tiene nota de gps_notas aún
+              if (r.observaciones && !existing._notaDeSupabase) existing.observaciones = r.observaciones;
+              if (r.notas         && !existing._notaDeSupabase) existing.notas         = r.notas;
               existing._fuente = 'supabase_merged';
             } else {
               // Unidad nueva — no viene de asignación masiva, fue creada manualmente
@@ -412,7 +417,8 @@ const DB = (() => {
             if (idField && raw.serie && !u[idField]) u[idField] = raw.serie;
             const obsBarrido = r.observaciones || null;
             if (obsBarrido && !u.observaciones) u.observaciones = obsBarrido;
-            if (r.notas) u.notas = r.notas;
+            // Solo aplicar nota del barrido si no hay nota más reciente de gps_notas
+            if (r.notas && !u._notaDeSupabase) u.notas = r.notas;
             const desKey = 'desinstalacion_' + plat.toLowerCase();
             if (r.desinstalado) {
               u[desKey] = {
