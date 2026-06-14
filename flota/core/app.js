@@ -252,14 +252,25 @@ const App = (() => {
     const emp = DB.getEmpresaActiva();
     const n = DB.getAsignaciones(emp).length;
     if (n === 0) { UI.toast('No hay historial que eliminar','info'); return; }
-    if (!confirm(`¿Eliminar el historial de ${n} asignaciones de ${emp}?\n\nLas unidades se mantendrán intactas, solo se borra el log.`)) return;
+    if (!confirm(`¿Eliminar el historial de ${n} registros de carga de ${emp}?\n\nLas unidades y barridos GPS se mantendrán intactos.\nSolo se borra el log de cargas previas.`)) return;
+    // Solo borrar el historial de cargas (log), NO las unidades ni los barridos
     DB.eliminarTodasAsignaciones(emp);
-    // Borrar también en Supabase
+    // NO borrar gps_asignaciones en Supabase — eso borraría las unidades actuales
+    // El historial local es solo el log de cuántas veces se cargó el archivo
+    UI.toast('Historial de cargas eliminado','info');
+    nav(null, 'panel-config');
+  }
+
+  function _eliminarAsignacionCompleta() {
+    // Este botón SÍ borra toda la asignación (unidades) de Supabase y localStorage
+    const emp = DB.getEmpresaActiva();
+    if (!confirm(`¿Eliminar TODA la asignación de ${emp} de Supabase?\n\nEsto borrará todas las unidades. Deberás volver a cargar el Excel.`)) return;
+    if (!confirm(`CONFIRMACIÓN FINAL — Esta acción NO se puede deshacer.\n¿Seguro que deseas borrar toda la asignación de ${emp}?`)) return;
     if (window.GPS_SB && GPS_SB._delete) {
       GPS_SB._delete('gps_asignaciones', `empresa_id=eq.${encodeURIComponent(emp)}`)
-        .catch(e => console.warn('[Supabase] Error borrando historial asignaciones:', e));
+        .then(() => { UI.toast(`Asignación de ${emp} eliminada de Supabase. Recarga y carga el Excel nuevamente.`,'warn',6000); })
+        .catch(e => UI.toast('Error al eliminar: ' + e.message,'error'));
     }
-    UI.toast('Historial de asignaciones eliminado','info');
     nav(null, 'panel-config');
   }
 
