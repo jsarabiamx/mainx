@@ -138,8 +138,7 @@ const DB = (() => {
         const asigRows = await GPS_SB._getRaw('gps_asignaciones',
           `empresa_id=eq.${encodeURIComponent(emp)}&activa=eq.true&order=mes_label.desc,num_economico`
         );
-        // Siempre inicializar unidades para esta empresa — incluso si no hay asignaciones
-        // (GHO puede tener solo barridos sin asignación subida aún)
+        // Siempre inicializar unidades para esta empresa
         if (!_s.unidades) _s.unidades = {};
         if (!_s.unidades[emp]) _s.unidades[emp] = {};
         if (asigRows && asigRows.length > 0) {
@@ -191,6 +190,13 @@ const DB = (() => {
           if (_s.asignaciones[emp].length === 0) {
             _s.asignaciones[emp] = [{ id: Date.now(), mes: mesReciente, fecha: new Date().toISOString(), empresa: emp, total: filas.length, creadas: filas.length, actualizadas: 0, inactivadas: 0 }];
           }
+        } else {
+          // ✅ FIX: Supabase devolvió 0 filas para esta empresa — limpiar localStorage
+          // Esto corrige el caso donde el delete se hizo en otro browser con código viejo
+          // y el localStorage local aún tiene unidades huérfanas
+          _s.unidades[emp] = {};
+          _s.asignaciones[emp] = [];
+          save();
         }
 
         // ── 3. Fallas activas ─────────────────────────────────────────────
