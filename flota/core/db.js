@@ -1381,7 +1381,15 @@ const DB = (() => {
     const hoy = Date.now();
     let enLinea = 0, atencion = 0, fuera = 0, sinDatos = 0;
     const operativasGPS = operativas.filter(u => !u.siniestro);
+    // ✅ Unidad con AFR (por falla formal o por observaciones/notas) cuenta como EN LÍNEA
+    const _uTieneAFR = u => {
+      if ((u.fallas||[]).some(f => !f.resuelta && !f.esSiniestro)) return true;
+      const _obs = ((u.notas||'') + ' ' + (u.observaciones||'') + ' ' + (u.observaciones_manual||'')).toUpperCase();
+      const _etqs = (u.etiquetas||[]).map(e => String(e.etiqueta||e||'').toUpperCase()).join(' ');
+      return _obs.includes('AFR') || _obs.includes('FALLA') || _etqs.includes('AFR') || _etqs.includes('FALLA');
+    };
     operativasGPS.forEach(u => {
+      if (_uTieneAFR(u)) { enLinea++; return; } // AFR → en línea (en operación con falla)
       if (!u.ultima_act) { sinDatos++; return; }
       const d = Math.floor((hoy - new Date(u.ultima_act)) / 86400000);
       if (d <= cfg.diasLinea) enLinea++;
