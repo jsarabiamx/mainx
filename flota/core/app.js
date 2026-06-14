@@ -188,9 +188,9 @@ const App = (() => {
         <!-- Gestión de asignaciones -->
         <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:16px">
           <div style="font-size:13px;font-weight:600;margin-bottom:8px">📋 Historial de asignaciones</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Historial de cargas mensuales de ${empActiva}: ${DB.getAsignaciones(empActiva).length} registros</div>
-          <button class="act-btn" style="color:var(--yellow)" onclick="App._eliminarHistorialAsignaciones()">🗑 Eliminar historial de asignaciones</button>
-          <div style="font-size:10px;color:var(--text3);margin-top:5px">(Esto NO elimina las unidades, solo el log del historial)</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Asignación de ${empActiva}: ${DB.getUnidadesList(empActiva).filter(u=>u.activa).length} unidades · ${DB.getAsignaciones(empActiva).length} cargas en historial</div>
+          <button class="act-btn" style="color:var(--yellow)" onclick="App._eliminarHistorialAsignaciones()">🗑 Eliminar asignación de ${empActiva}</button>
+          <div style="font-size:10px;color:var(--text3);margin-top:5px">(Elimina las unidades de ${empActiva} de Supabase y localStorage. Los barridos GPS se mantienen.)</div>
           <hr style="border-color:var(--border);margin:12px 0">
           <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--red)">⚠ Eliminar asignación completa</div>
           <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Borra TODAS las unidades de ${empActiva} en Supabase y localStorage. Deberás volver a cargar el Excel de asignación.</div>
@@ -254,14 +254,21 @@ const App = (() => {
 
   function _eliminarHistorialAsignaciones() {
     const emp = DB.getEmpresaActiva();
-    const n = DB.getAsignaciones(emp).length;
-    if (n === 0) { UI.toast('No hay historial que eliminar','info'); return; }
-    if (!confirm(`¿Eliminar el historial de ${n} registros de carga de ${emp}?\n\nLas unidades y barridos GPS se mantendrán intactos.\nSolo se borra el log de cargas previas.`)) return;
-    // Solo borrar el historial de cargas (log), NO las unidades ni los barridos
+    // Contar historial local + unidades activas en localStorage
+    const nAsigs = DB.getAsignaciones(emp).length;
+    const nUnids = DB.getUnidadesList(emp).filter(u => u.activa).length;
+    const n = nAsigs || nUnids; // si hay unidades aunque no haya historial
+    if (n === 0) { UI.toast('No hay asignaciones que eliminar','info'); return; }
+    if (!confirm(`¿Eliminar la asignación de ${emp}?\n\n${nUnids} unidades serán eliminadas.\nLos barridos GPS se mantendrán intactos.`)) return;
     DB.eliminarTodasAsignaciones(emp);
-    // NO borrar gps_asignaciones en Supabase — eso borraría las unidades actuales
-    // El historial local es solo el log de cuántas veces se cargó el archivo
-    UI.toast('Historial de cargas eliminado','info');
+    // Borrar también en Supabase gps_asignaciones (igual que ETN y GHO)
+    if (window.GPS_SB && GPS_SB._delete) {
+      GPS_SB._delete('gps_asignaciones', `empresa_id=eq.${encodeURIComponent(emp)}`)
+        .catch(e => console.warn('[Supabase] Error borrando asignaciones:', e));
+      GPS_SB._delete('gps_unidades', `empresa_id=eq.${encodeURIComponent(emp)}`)
+        .catch(e => console.warn('[Supabase] Error borrando unidades:', e));
+    }
+    UI.toast(`Asignación de ${emp} eliminada`,'warn');
     nav(null, 'panel-config');
   }
 
