@@ -2773,13 +2773,18 @@ const UI = (() => {
       const _etiquetaFalla = _fallaActiva ? (_fallaActiva.motivo || _fallaActiva.etiqueta || '') : '';
       const _siniestroLabel = (_uConFallas.siniestro || u.siniestro)
         ? ((_uConFallas.siniestroDesc||u.siniestroDesc) ? `🚨 ${_uConFallas.siniestroDesc||u.siniestroDesc}` : '🚨 SINIESTRO') : '';
-      // u.observaciones_manual: campo exclusivo para lo que el usuario escribe desde la tabla
-      // u.observaciones: puede venir de asignación (nombre técnico) — NO usar para este display
-      // Solo usar _obsManual si fue escrito via _editarObsRapido (marcado con _fuente)
+      // Prioridad de fuentes para el chip de observación:
+      // 1. notas (gps_notas en Supabase — fuente de verdad, se sincroniza entre browsers)
+      // 2. observaciones_manual (editado directamente desde la tabla)
+      // 3. observaciones con _fuente edit_obs
+      // 4. siniestro / etiqueta de falla
       const _uFuente = _uConFallas._fuente || u._fuente || '';
-      const _obsRawBruta = (_uConFallas.observaciones_manual || 
-        (_uFuente.includes('edit_obs') ? (_uConFallas.observaciones || u.observaciones || '') : '')
-      ).trim();
+      const _notaFuente = (_uConFallas.notas || u.notas || '').trim();
+      const _obsManualFuente = (_uConFallas.observaciones_manual || '').trim();
+      const _obsFuente = _uFuente.includes('edit_obs')
+        ? (_uConFallas.observaciones || u.observaciones || '').trim()
+        : '';
+      const _obsRawBruta = _notaFuente || _obsManualFuente || _obsFuente;
       const _obsRaw = _obsRawBruta || _siniestroLabel || _etiquetaFalla || '';
       const obsTexto = _obsRaw;
       const _obsChip = (() => {
