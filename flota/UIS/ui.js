@@ -2824,7 +2824,11 @@ const UI = (() => {
         <td style="width:28px;text-align:center" onclick="event.stopPropagation()">
           <input type="checkbox" class="plat-row-chk" data-num="${esc(u.num)}" ${isChecked?'checked':''} style="cursor:pointer;width:14px;height:14px" onchange="UI._onPlatCheckRow('${esc(u.num)}','${plat}',this.checked)">
         </td>
-        <td style="font-weight:700">${esc(u.num)}</td>
+        <td style="font-weight:700">${
+          u._sinUnidad || (u.num && u.num.startsWith('SIN-'))
+            ? `<span style="font-size:10px;background:var(--yellow)22;color:var(--yellow);border:1px solid var(--yellow)44;border-radius:4px;padding:2px 6px;font-family:monospace" title="Dispositivo sin unidad asignada — Serial: ${esc(u.motive_vg||u.num.replace('SIN-',''))}">PENDIENTE</span>`
+            : esc(u.num)
+        }</td>
         <td>${esc(u.base||'—')}</td>
         <td>${esc(u.cromatica||'—')}</td>
         <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.modelo||'—')}</td>
