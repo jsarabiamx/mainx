@@ -191,6 +191,10 @@ const App = (() => {
           <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Historial de cargas mensuales de ${empActiva}: ${DB.getAsignaciones(empActiva).length} registros</div>
           <button class="act-btn" style="color:var(--yellow)" onclick="App._eliminarHistorialAsignaciones()">🗑 Eliminar historial de asignaciones</button>
           <div style="font-size:10px;color:var(--text3);margin-top:5px">(Esto NO elimina las unidades, solo el log del historial)</div>
+          <hr style="border-color:var(--border);margin:12px 0">
+          <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--red)">⚠ Eliminar asignación completa</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Borra TODAS las unidades de ${empActiva} en Supabase y localStorage. Deberás volver a cargar el Excel de asignación.</div>
+          <button class="act-btn-danger" onclick="App._eliminarAsignacionCompleta()">🗑 Eliminar toda la asignación de ${empActiva}</button>
         </div>
 
         <!-- Eliminar datos por plataforma (doble confirmación) -->
@@ -623,7 +627,7 @@ const App = (() => {
   document.addEventListener('DOMContentLoaded', init);
 
   return {
-    nav, populateEmpresaSelect, renderManual, renderConfig, _filterManual, _syncFallasDesdeInicio,
+    nav, populateEmpresaSelect, renderManual, renderConfig, _filterManual, _syncFallasDesdeInicio, _eliminarAsignacionCompleta,
     _editarEmpresa, _eliminarEmpresa, _nuevaEmpresa,
     _eliminarHistorialAsignaciones, _eliminarDatosPlataforma, _borrarEmpresa
   };
