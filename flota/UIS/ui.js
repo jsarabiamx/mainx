@@ -2835,8 +2835,12 @@ const UI = (() => {
         <td>${estatusCell}</td>
         ${incluyeEstadoCol ? `<td>${estadoSamsaraCell}</td>` : ''}
         ${esMotive ? `<td>${motiveEstadoCell}</td><td style="font-size:11px">${esc(motiveEmpresa||'—')}</td>` : ''}
-        <td style="font-size:11px">${fecha?Parsers.fmtDate(fecha):'<span style="color:var(--text3)">Sin datos</span>'}</td>
-        <td>${isDesinstalado ? '<span style="background:var(--border2);color:var(--text3);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:700">DESINS.</span>' : diasBadge(d)}</td>
+        <td style="font-size:11px">${
+          fecha === 'PENDIENTE'
+            ? '<span style="color:var(--yellow);font-size:10px;font-weight:700">Sin instalar</span>'
+            : fecha ? Parsers.fmtDate(fecha) : '<span style="color:var(--text3)">Sin datos</span>'
+        }</td>
+        <td>${isDesinstalado ? '<span style="background:var(--border2);color:var(--text3);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:700">DESINS.</span>' : (fecha === 'PENDIENTE' ? '<span style="color:var(--yellow);font-size:10px">—</span>' : diasBadge(d))}</td>
         ${esMotive
           ? `<td style="font-family:monospace;font-size:10px">${esc(motiveSerieVG||'—')}</td><td style="font-family:monospace;font-size:10px">${esc(motiveSerieCam||'—')}</td>`
           : `<td style="font-family:monospace;font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(idValue)}</td>`
