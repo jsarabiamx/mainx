@@ -454,14 +454,19 @@ const DB = (() => {
               if (!u[platKey] || new Date(fechaStr) > new Date(u[platKey])) u[platKey] = fechaStr;
               if (!u.ultima_act || new Date(fechaStr) > new Date(u.ultima_act)) u.ultima_act = fechaStr;
             } else if (r.tiene_datos === false || r.ultima_conexion === null) {
-              delete u[platKey];
-              const PLATS2 = ['ceiba','samsara','avl','scania','man','volvo','motive'];
-              let maxF = null;
-              PLATS2.forEach(pp => {
-                const f2 = u['ultima_act_' + pp];
-                if (f2 && (!maxF || new Date(f2) > new Date(maxF))) maxF = f2;
-              });
-              u.ultima_act = maxF;
+              if (u._sinUnidad || String(u.num||'').startsWith('SIN-')) {
+                u[platKey] = 'PENDIENTE';
+                u.ultima_act = u.ultima_act || 'PENDIENTE';
+              } else {
+                delete u[platKey];
+                const PLATS2 = ['ceiba','samsara','avl','scania','man','volvo','motive'];
+                let maxF = null;
+                PLATS2.forEach(pp => {
+                  const f2 = u['ultima_act_' + pp];
+                  if (f2 && (!maxF || new Date(f2) > new Date(maxF))) maxF = f2;
+                });
+                u.ultima_act = maxF;
+              }
             }
             const idField = idFieldByPlat[plat];
             if (idField && raw.serie && !u[idField]) u[idField] = raw.serie;
@@ -585,11 +590,17 @@ const DB = (() => {
             if (!u[platKey] || new Date(fechaStr) > new Date(u[platKey])) u[platKey] = fechaStr;
             if (!u.ultima_act || new Date(fechaStr) > new Date(u.ultima_act)) u.ultima_act = fechaStr;
           } else if (r.tiene_datos === false || r.ultima_conexion === null) {
-            delete u[platKey];
-            const PLATS2 = ['ceiba','samsara','avl','scania','man','volvo','motive'];
-            let maxF = null;
-            PLATS2.forEach(pp => { const f2 = u['ultima_act_' + pp]; if (f2 && (!maxF || new Date(f2) > new Date(maxF))) maxF = f2; });
-            u.ultima_act = maxF;
+            // ✅ SIN-: dispositivo pendiente de instalación → marcar PENDIENTE para que aparezca
+            if (u._sinUnidad || String(u.num||'').startsWith('SIN-')) {
+              u[platKey] = 'PENDIENTE';
+              u.ultima_act = u.ultima_act || 'PENDIENTE';
+            } else {
+              delete u[platKey];
+              const PLATS2 = ['ceiba','samsara','avl','scania','man','volvo','motive'];
+              let maxF = null;
+              PLATS2.forEach(pp => { const f2 = u['ultima_act_' + pp]; if (f2 && (!maxF || new Date(f2) > new Date(maxF))) maxF = f2; });
+              u.ultima_act = maxF;
+            }
           }
           const idField = idFieldByPlat[plat];
           if (idField && raw.serie && !u[idField]) u[idField] = raw.serie;
