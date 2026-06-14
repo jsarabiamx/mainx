@@ -1401,19 +1401,23 @@ const DB = (() => {
   }
 
   /**
-   * eliminarTodasAsignaciones — borra el historial de asignaciones (sin tocar unidades)
-   * ✅ FIX: también borra en Supabase para que initFromSupabase no restaure las filas
+   * eliminarTodasAsignaciones — borra el historial de asignaciones Y las unidades del localStorage
+   * ✅ también borra en Supabase gps_asignaciones y gps_unidades
    */
   function eliminarTodasAsignaciones(emp) {
     emp = emp || _s.empresaActiva;
     const count = (_s.asignaciones[emp] || []).length;
+    // ✅ FIX: también limpiar unidades del localStorage para que no queden huérfanas
     _s.asignaciones[emp] = [];
-    _logGlobal('reset', `Historial de asignaciones eliminado (${count} registros)`, emp);
+    _s.unidades[emp] = {};
+    _logGlobal('reset', `Historial de asignaciones eliminado (${count} registros) — unidades borradas de localStorage`, emp);
     save();
-    // ✅ FIX: borrar también en Supabase
+    // ✅ borrar también en Supabase
     if (window.GPS_SB) {
       GPS_SB._delete('gps_asignaciones', `empresa_id=eq.${encodeURIComponent(emp)}`)
         .catch(e => console.warn('[DB] eliminarTodasAsignaciones Supabase:', e));
+      GPS_SB._delete('gps_unidades', `empresa_id=eq.${encodeURIComponent(emp)}`)
+        .catch(e => console.warn('[DB] eliminarTodasAsignaciones gps_unidades:', e));
     }
     return count;
   }
