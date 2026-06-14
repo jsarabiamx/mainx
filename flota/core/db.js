@@ -1226,6 +1226,14 @@ const DB = (() => {
           if (r.serieDashcam) datos.motive_cam = r.serieDashcam;
           if (r.estado)       datos.estado_motive = r.estado;
           if (r.empresa)      datos.empresa_motive = r.empresa;
+          // ✅ Si existía una entrada SIN- con el mismo serial, fusionar y eliminar
+          const _sGW = r.serieGateway || r.serieDashcam || '';
+          if (_sGW) {
+            const _sinKey = 'SIN-' + _sGW;
+            if (_s.unidades[empTarget] && _s.unidades[empTarget][_sinKey]) {
+              delete _s.unidades[empTarget][_sinKey];
+            }
+          }
         }
         upsertUnidad(r.num, { ...datos, _fuente: 'barrido_' + plataforma }, empTarget);
         actualizadas++;
@@ -1240,6 +1248,16 @@ const DB = (() => {
           if (r.serieDashcam) extras.motive_cam = r.serieDashcam;
           if (r.estado)       extras.estado_motive = r.estado;
           if (r.empresa)      extras.empresa_motive = r.empresa;
+          // ✅ Dispositivo MOTIVE sin unidad asignada: guardar con serial como ID temporal
+          if (r._sinUnidad && r.num && r.num.startsWith('SIN-')) {
+            extras._sinUnidad = true;
+            extras.num = r.num;  // "SIN-AABL36UF519525"
+            extras.economico = r.num;
+            extras.empresa_asig = empTarget;
+            // El serial real es la parte después de "SIN-"
+            const _serieReal = r.num.replace('SIN-', '');
+            extras.motive_vg = extras.motive_vg || _serieReal;
+          }
         }
         upsertUnidad(r.num, extras, empTarget);
       }
@@ -1333,7 +1351,7 @@ const DB = (() => {
     const cfg = _s.config;
     // ✅ Excluir unidades _soloBarrido de stats de Resumen/Asignacion
     // Son unidades sin asignación creadas solo para datos GPS de barridos
-    const todas = Object.values(_empU(emp)).filter(u => !u._soloBarrido);
+    const todas = Object.values(_empU(emp)).filter(u => !u._soloBarrido && !u._sinUnidad);
     const activas = todas.filter(u => u.activa);
     const operativas = activas.filter(u => Parsers.categorizarEstatus(u.estatus) !== 'Para venta');
     const paraVenta  = activas.filter(u => Parsers.categorizarEstatus(u.estatus) === 'Para venta');
