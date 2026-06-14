@@ -260,15 +260,13 @@ const App = (() => {
     const n = nAsigs || nUnids; // si hay unidades aunque no haya historial
     if (n === 0) { UI.toast('No hay asignaciones que eliminar','info'); return; }
     if (!confirm(`¿Eliminar la asignación de ${emp}?\n\n${nUnids} unidades serán eliminadas.\nLos barridos GPS se mantendrán intactos.`)) return;
+    // DB.eliminarTodasAsignaciones ya borra _s.asignaciones[emp] Y _s.unidades[emp] del localStorage
+    // y también hace DELETE en gps_asignaciones + gps_unidades en Supabase
     DB.eliminarTodasAsignaciones(emp);
-    // Borrar también en Supabase gps_asignaciones (igual que ETN y GHO)
-    if (window.GPS_SB && GPS_SB._delete) {
-      GPS_SB._delete('gps_asignaciones', `empresa_id=eq.${encodeURIComponent(emp)}`)
-        .catch(e => console.warn('[Supabase] Error borrando asignaciones:', e));
-      GPS_SB._delete('gps_unidades', `empresa_id=eq.${encodeURIComponent(emp)}`)
-        .catch(e => console.warn('[Supabase] Error borrando unidades:', e));
-    }
     UI.toast(`Asignación de ${emp} eliminada`,'warn');
+    // ✅ FIX: refrescar todos los paneles para que no queden datos viejos en pantalla
+    if (typeof UI.renderResumen === 'function')   UI.renderResumen();
+    if (typeof UI.renderAsignacion === 'function') UI.renderAsignacion();
     nav(null, 'panel-config');
   }
 
