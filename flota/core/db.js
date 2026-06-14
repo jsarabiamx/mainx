@@ -148,7 +148,7 @@ const DB = (() => {
     try {
       if (!_s.empresas || Object.keys(_s.empresas).length === 0) {
         _s.empresas = {
-          ETN:  { nombre:'ETN',  color:'#3b82f6' },
+          ETN:  { nombre:'ETN',  color:'#3b82f6', cromaticasExcluidasGraficas:['MIGRACIÓN','MIGRACION','TURISMO','UNIDADES EN RENTA'] },
           GHO:  { nombre:'GHO',  color:'#8b5cf6' },
           AERS: { nombre:'AERS', color:'#10b981', sufijo:'-A' },
           SAME: { nombre:'SAME', color:'#ef4444' }
@@ -1592,6 +1592,7 @@ const DB = (() => {
 
   /* ─── CONFIG ─────────────────────────────────────────── */
   function getConfig() { return _s.config; }
+  function getEmpresasConfig() { return _s.empresas || {}; }
   function setConfig(updates) { Object.assign(_s.config, updates); save(); }
 
   /* ─── RESET / EXPORT / IMPORT ────────────────────────── */
@@ -1698,7 +1699,7 @@ const DB = (() => {
     getAsignaciones, saveAsignacion, eliminarTodasAsignaciones,
     addLog, getHistorialGlobal,
     getStats, getReporte, getAlertas, getFallasStats,
-    getConfig, setConfig,
+    getConfig, getEmpresasConfig, setConfig,
     getCatalogo, addCatalogo, removeCatalogo,
     getViajes, saveViaje, eliminarViaje, getViajeActivoDe,
     setEtiquetaUnidad, removeEtiquetaUnidad,
