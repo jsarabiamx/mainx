@@ -450,6 +450,9 @@ const APP = (() => {
     const toggle  = document.getElementById('viewToggle');
     const main    = document.getElementById('mainContent');
 
+    // ✅ Persistir la elección de mundo para restaurar al recargar
+    localStorage.setItem('cctv_active_world', world);
+
     if (world === 'flota') {
       btnPC && btnPC.classList.remove('active');
       btnFL && btnFL.classList.add('active');
@@ -525,4 +528,10 @@ const APP = (() => {
   };
 })();
 
-document.addEventListener('DOMContentLoaded', APP.init);
+document.addEventListener('DOMContentLoaded', () => {
+  APP.init().then ? APP.init().then(() => {
+    // ✅ Restaurar el último mundo activo al recargar la página
+    const lastWorld = localStorage.getItem('cctv_active_world');
+    if (lastWorld === 'flota') APP.setWorld('flota');
+  }) : (() => { APP.init(); const lw = localStorage.getItem('cctv_active_world'); if (lw === 'flota') APP.setWorld('flota'); })();
+});
