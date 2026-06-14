@@ -510,6 +510,22 @@ const App = (() => {
       _syncFallasDesdeInicio();
     }, 1500);
 
+    // ✅ SIEMPRE sincronizar barridos GPS desde Supabase — independientemente de si
+    // hay datos locales recientes. Los barridos cambian constantemente (se suben diario)
+    // y deben verse en todos los browsers sin importar cuándo fue el último sync.
+    if (!hayDatos) {
+      // Sin datos locales: barridos ya se cargan dentro de initFromSupabase (arriba)
+    } else {
+      setTimeout(() => {
+        DB.syncBarridosFromSupabase().then(ok => {
+          if (ok) {
+            if (typeof UI.renderResumen === 'function') UI.renderResumen();
+            if (typeof UI.renderPlataformas === 'function') UI.renderPlataformas();
+          }
+        });
+      }, 2000);
+    }
+
     // Iniciar sincronización en tiempo real de fallas
     setTimeout(_startFallasSync, 4000);
   }
