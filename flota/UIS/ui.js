@@ -5890,6 +5890,35 @@ const UI = (() => {
     renderAsignacion, renderAsigTable,
     renderBarridos, renderPlataformas,
     renderReportes, renderHistorial, renderAlertas,
+  /**
+   * _syncBarridosManual — sincronización manual de barridos GPS desde Supabase
+   * Se llama con el botón ↻ del topbar para refrescar datos sin recargar la página
+   */
+  async function _syncBarridosManual() {
+    const btn = document.getElementById('btn-sync-barridos');
+    if (btn) {
+      btn.style.animation = 'spin 1s linear infinite';
+      btn.style.opacity = '0.6';
+    }
+    try {
+      const ok = await DB.syncBarridosFromSupabase();
+      if (ok) {
+        renderResumen();
+        if (typeof renderPlataformas === 'function') renderPlataformas();
+        toast('Barridos sincronizados ✓', 'success');
+      } else {
+        toast('Sin conexión a Supabase', 'warn');
+      }
+    } catch(e) {
+      toast('Error al sincronizar', 'error');
+    } finally {
+      if (btn) {
+        btn.style.animation = '';
+        btn.style.opacity = '1';
+      }
+    }
+  }
+
     renderViajes, renderGraficas, renderFallasPanel, renderBarridoManual, renderMaestra,
     // unit actions
     openUnitDetail, openEditarUnidad, openRegistrarFalla,
@@ -5918,7 +5947,7 @@ const UI = (() => {
     _recalcularDiasManual, _guardarCapturaManualPlat, _editarCapturaManuaRow,
     _updatePlatFechaConISO,
     // v7.1: tabs del detalle inline y guardar observaciones in-situ
-    _cambiarPlatDetailTab, _guardarObsInline, _editarObsRapido, _liberarFallaDesdeTabla, _eliminarUnidadDePlat,
+    _cambiarPlatDetailTab, _guardarObsInline, _editarObsRapido, _liberarFallaDesdeTabla, _eliminarUnidadDePlat, _syncBarridosManual,
     // v7.2: multi-select dropdowns
     _msToggle, _msOnCheck, _msSelectAll, _msFilterOptions,
     // alertas
