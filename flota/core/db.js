@@ -62,27 +62,24 @@ const DB = (() => {
       if (d.empresas && d.empresas['AERS'] && !d.empresas['AERS'].sufijo) {
         d.empresas['AERS'].sufijo = '-A';
       }
-      // Migración: purgar unidades huérfanas sin sufijo en empresas que usan sufijo
-      // Estas son entradas legacy guardadas como barrido antes del sistema _soloBarrido
-      // Si la empresa usa sufijo "-A" y la clave no termina en "-A", eliminar si
-      // no tiene base/cromatica/modelo (es puramente un barrido sin datos de asignacion)
-      if (!d._purgadoSufijoLegacy) {
-        Object.keys(d.empresas || {}).forEach(emp => {
-          const _suf = (d.empresas[emp] || {}).sufijo;
-          if (!_suf || !d.unidades || !d.unidades[emp]) return;
-          const store = d.unidades[emp];
-          Object.keys(store).forEach(k => {
-            if (!k.endsWith(_suf)) {
-              const u = store[k];
-              // Eliminar si: es _soloBarrido, o no tiene base Y no tiene cromatica Y no tiene modelo
-              if (u._soloBarrido || (!u.base && !u.cromatica && !u.modelo && !u.estatus)) {
-                delete store[k];
-              }
+      // Migración: purgar unidades _soloBarrido de empresas con sufijo en CADA carga
+      // Esto evita que syncBarridosFromSupabase acumule entradas soloBarrido en localStorage
+      // que luego aparezcan en Asignacion/Resumen. Las entradas _soloBarrido nunca deben
+      // persistir en localStorage — se regeneran desde Supabase en cada startup.
+      Object.keys(d.empresas || {}).forEach(emp => {
+        const _suf = (d.empresas[emp] || {}).sufijo;
+        if (!_suf || !d.unidades || !d.unidades[emp]) return;
+        const store = d.unidades[emp];
+        Object.keys(store).forEach(k => {
+          if (!k.endsWith(_suf)) {
+            const u = store[k];
+            if (u._soloBarrido || (!u.base && !u.cromatica && !u.modelo && !u.estatus)) {
+              delete store[k];
             }
-          });
+          }
         });
-        d._purgadoSufijoLegacy = true;
-      }
+      });
+      delete d._purgadoSufijoLegacy; // forzar re-ejecución si existía el flag
       // Migración defensiva
       if (!d.catalogos) d.catalogos = schema().catalogos;
       if (!d.catalogos.bases) d.catalogos.bases = schema().catalogos.bases;
@@ -607,7 +604,16 @@ const DB = (() => {
           }
         });
       }
-      save();
+      // ✅ NO guardar en localStorage: los _soloBarrido no deben persistir
+      // Se regeneran desde Supabase en cada startup via syncBarridosFromSupabase()
+      // Solo guardamos los cambios en unidades que YA tienen asignación (no soloBarrido)
+      const _anyRealMerge = barridoRows.some(r => {
+        const _empR = String(r.empresa_id || '');
+        const _num = String(r.num_economico);
+        const _u = (_s.unidades[_empR] || {})[_num];
+        return _u && !_u._soloBarrido; // merge real = unidad de asignación actualizada
+      });
+      if (_anyRealMerge) save();
       console.log('[DB] syncBarridosFromSupabase: OK —', barridoRows.length, 'barridos');
       return true;
     } catch(e) {
