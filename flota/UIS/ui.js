@@ -574,14 +574,8 @@ const UI = (() => {
     if(_rf.dias && _rf.dias.length){
       uns=uns.filter(u=>{
         const d=u.dias;
-        // ✅ AFR → En línea sin importar días
-        const _uAFR = ((u.fallas||[]).some(f=>!f.resuelta&&!f.esSiniestro)) ||
-          ((u.notas||'')+(u.observaciones||'')).toUpperCase().includes('AFR') ||
-          ((u.notas||'')+(u.observaciones||'')).toUpperCase().includes('FALLA') ||
-          (u.etiquetas||[]).some(e=>String(e.etiqueta||e||'').toUpperCase().includes('AFR'));
-        const bucket = _uAFR ? 'En línea (<2d)'
-                     : d===null||d>cfg.diasAtencion ? 'Fuera de línea'
-                     : d>cfg.diasLinea              ? 'Atención (2-4d)'
+        const bucket = d===null||d>cfg.diasAtencion ? 'Fuera de línea'
+                     : d>cfg.diasLinea             ? 'Atención (2-4d)'
                      :                               'En línea (<2d)';
         return _rf.dias.includes(bucket);
       });
@@ -4266,11 +4260,24 @@ const UI = (() => {
 
     // Excluir de gráficas: Para venta, siniestros, fuera de operación, desenrolado, fuera de servicio
     const _estatusExcluidos = new Set(['Para venta','Fuera de operación','Desenrolado','Fuera de servicio','Entregado','Baja','Siniestro']);
+    // Cromáticas excluidas de gráficas por empresa (rentadas/charter que solo activan en viaje)
+    // Se configuran en DB.getEmpresaConfig() o en la config de empresa
+    const _empCfg = DB.getEmpresasConfig ? DB.getEmpresasConfig()[emp] : {};
+    const _cromaticasExcl = new Set(
+      (_empCfg && _empCfg.cromaticasExcluidasGraficas) ||
+      (emp === 'ETN' ? ['MIGRACIÓN', 'MIGRACION', 'TURISMO', 'UNIDADES EN RENTA'] : [])
+    );
     const uns = DB.getUnidadesList(emp).filter(u => {
       if (!u.activa) return false;
       if (_tieneSiniestroActivo(u)) return false;
       const cat = Parsers.categorizarEstatus(u.estatus);
       if (_estatusExcluidos.has(cat)) return false;
+      // ✅ Excluir cromáticas de unidades rentadas/charter (siempre fuera salvo en viaje)
+      if (_cromaticasExcl.size > 0 && u.cromatica) {
+        const _crom = u.cromatica.toUpperCase().trim()
+          .normalize('NFD').replace(/[̀-ͯ]/g,''); // strip accents for comparison
+        if (_cromaticasExcl.has(_crom) || _cromaticasExcl.has(u.cromatica.toUpperCase().trim())) return false;
+      }
       return true;
     });
 
@@ -4290,34 +4297,20 @@ const UI = (() => {
       // El resto usa solo unidades en operación
       const _base = p === 'SAMSARA' ? _unsTodosEstatus : uns;
       const conFecha = _base.filter(u => u[k]);
-      // Unidades con falla AFR activa cuentan como EN LÍNEA — están en operación
-      // También se detecta AFR por observaciones/notas aunque no tengan falla registrada formalmente
-      const _tieneAFRFormal = u => (u.fallas||[]).some(f => !f.resuelta && !f.esSiniestro);
-      const _tieneAFRPorObs = u => {
-        const _obs = ((u.notas||'') + ' ' + (u.observaciones||'') + ' ' + (u.observaciones_manual||'')).toUpperCase();
-        const _etqs = (u.etiquetas||[]).map(e => String(e.etiqueta||e||'').toUpperCase()).join(' ');
-        return _obs.includes('AFR') || _obs.includes('FALLA') ||
-               _etqs.includes('AFR') || _etqs.includes('FALLA');
-      };
-      const tieneAFR = u => _tieneAFRFormal(u) || _tieneAFRPorObs(u);
+      // Unidades con falla AFR activa (no siniestro) cuentan como EN LÍNEA — están en operación
+      const tieneAFR = u => (u.fallas||[]).some(f => !f.resuelta && !f.esSiniestro);
       const enLinea = conFecha.filter(u => {
-        if (tieneAFR(u)) return true; // AFR activo → en línea (en operación, solo con falla)
-        const _fecha = u[k];
-        if (!_fecha || _fecha === 'PENDIENTE') return false;
-        return Math.floor((hoy - new Date(_fecha))/86400000) <= cfg.diasLinea;
+        if (tieneAFR(u)) return true; // AFR activo → en línea
+        return Math.floor((hoy - new Date(u[k]))/86400000) <= cfg.diasLinea;
       }).length;
       const atencion = conFecha.filter(u => {
         if (tieneAFR(u)) return false; // AFR no cuenta como atención
-        const _fecha = u[k];
-        if (!_fecha || _fecha === 'PENDIENTE') return false;
-        const d = Math.floor((hoy - new Date(_fecha))/86400000);
+        const d = Math.floor((hoy - new Date(u[k]))/86400000);
         return d > cfg.diasLinea && d <= cfg.diasAtencion;
       }).length;
       const fueraEstricto = conFecha.filter(u => {
         if (tieneAFR(u)) return false; // AFR no cuenta como fuera
-        const _fecha = u[k];
-        if (!_fecha || _fecha === 'PENDIENTE') return false;
-        return Math.floor((hoy - new Date(_fecha))/86400000) > cfg.diasAtencion;
+        return Math.floor((hoy - new Date(u[k]))/86400000) > cfg.diasAtencion;
       }).length;
       const sinEquipo = uns.length - conFecha.length;           // unidades sin este dispositivo (informativo)
       const totalPlat = conFecha.length;                        // universo REAL de esta plataforma
