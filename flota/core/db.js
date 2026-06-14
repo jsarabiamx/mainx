@@ -133,6 +133,9 @@ const DB = (() => {
         };
       }
       const empresas = Object.keys(_s.empresas);
+      // Track which empresas actually have asignacion rows in Supabase
+      // Used later in barridos step to avoid creating phantom units
+      const _empresasConAsignacion = new Set();
       for (const emp of empresas) {
         // ── 1. Asignaciones ───────────────────────────────────────────────
         const asigRows = await GPS_SB._getRaw('gps_asignaciones',
@@ -183,6 +186,8 @@ const DB = (() => {
             };
           });
 
+          // ✅ Marcar esta empresa como que tiene asignacion en Supabase
+          _empresasConAsignacion.add(emp);
           // Asignación atómica: reemplazar solo cuando todo está listo
           _s.unidades[emp] = _nuevasUnidades;
           if (!_s.asignaciones) _s.asignaciones = {};
@@ -392,6 +397,10 @@ const DB = (() => {
             if (!_s.unidades[empR]) _s.unidades[empR] = {};
             let u = _s.unidades[empR][num];
             if (!u) {
+              // ✅ FIX: Solo crear unidades "fantasma" de barrido si la empresa
+              // tiene una asignación activa en Supabase. Si no tiene asignación
+              // (fue borrada), no crear unidades visibles desde barridos.
+              if (!_empresasConAsignacion.has(empR)) return;
               const rawDatos = r.datos_raw || {};
               u = {
                 num, economico: num,
