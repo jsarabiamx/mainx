@@ -572,6 +572,11 @@ const DB = (() => {
             // Intento 4: prefijo "1" para CEIBA AERS (ej. "8207" -> "18207")
             if (!u && _numInt.length <= 4) u = _s.unidades[empR]['1' + _numInt] || null;
             if (!u) {
+              // ✅ Solo crear _soloBarrido si la empresa ya tiene unidades de asignación en memoria
+              // Si no hay asig cargada, los barridos crearían unidades vacías (sin base/crom/modelo)
+              // Cuando initFromSupabase cargue la asig después, el próximo sync los cruzará bien
+              const _tieneAsig = Object.values(_s.unidades[empR] || {}).some(x => !x._soloBarrido && !x._sinUnidad);
+              if (!_tieneAsig) return; // empresa sin asig en memoria → skip, esperar init
               const rawDatos = r.datos_raw || {};
               u = {
                 num, economico: num,
