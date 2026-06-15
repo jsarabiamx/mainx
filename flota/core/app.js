@@ -482,7 +482,12 @@ const App = (() => {
 
     // ── Carga desde Supabase ──────────────────────────────────────────────
     // Solo sincronizar si: (a) no hay datos locales, o (b) los datos tienen >24h sin actualizar
-    const hayDatos = DB.getUnidadesList(DB.getEmpresaActiva()).length > 0;
+    // ✅ Verificar que TODAS las empresas tienen datos, no solo la activa
+    // Si una empresa tiene 0 unidades, initFromSupabase debe ejecutarse para cargarla
+    const _todasEmpresas = Object.keys(DB.getEmpresasConfig ? DB.getEmpresasConfig() : {});
+    const hayDatos = _todasEmpresas.length > 0
+      ? _todasEmpresas.every(emp => DB.getUnidadesList(emp).filter(u => !u._soloBarrido && !u._sinUnidad).length > 0)
+      : DB.getUnidadesList(DB.getEmpresaActiva()).length > 0;
     const ultimaActLocal = DB.getUltimaActualizacion ? DB.getUltimaActualizacion() : null;
     const horasDesdeUpdate = ultimaActLocal ? (Date.now() - new Date(ultimaActLocal)) / 3600000 : 999;
     const datosViejos = horasDesdeUpdate > 24;
