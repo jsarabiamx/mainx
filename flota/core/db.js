@@ -1241,6 +1241,11 @@ const DB = (() => {
       const platKey = 'ultima_act_' + plataforma.toLowerCase();
 
       if (u) {
+        // ✅ FIX CRÍTICO: usar la clave REAL de la unidad (u.num, ej. "1070-A"),
+        // NO r.num (el número del barrido, ej. "1070"). Sin esto, upsertUnidad
+        // crea una unidad nueva con clave "1070" en vez de actualizar "1070-A",
+        // generando duplicados visibles en Asignación.
+        const _claveReal = u.num || r.num;
         const datos = { plataforma };
         if (r.fecha) {
           datos[platKey] = _toLocalStr(r.fecha);
@@ -1262,7 +1267,7 @@ const DB = (() => {
             }
           }
         }
-        upsertUnidad(r.num, { ...datos, _fuente: 'barrido_' + plataforma }, empTarget);
+        upsertUnidad(_claveReal, { ...datos, _fuente: 'barrido_' + plataforma }, empTarget);
         actualizadas++;
       } else {
         noEncontradas++;
